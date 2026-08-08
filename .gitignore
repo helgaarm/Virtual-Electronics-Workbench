@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+data/*.sqlite
+data/*.sqlite-*
+*.log
+.DS_Store
+.vite/
+playwright-report/
+test-results/
