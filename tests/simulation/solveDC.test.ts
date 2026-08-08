@@ -17,6 +17,8 @@ describe('MNA DC solver', () => {
     expect(result.status).toBe('ok');
     expect(result.nodeVoltages.vcc).toBeCloseTo(5, 9);
     expect(result.componentCurrents.R1).toBeCloseTo(0.005, 8);
+    expect(result.componentCurrents.V1).toBeCloseTo(-0.005, 8);
+    expect(result.componentPowers.V1).toBeCloseTo(-0.025, 8);
   });
 
   it('solves a 1 kΩ / 1 kΩ voltage divider', () => {
@@ -35,6 +37,23 @@ describe('MNA DC solver', () => {
     ]));
     expect(result.status).toBe('error');
     expect(result.errors[0].code).toBe('DIRECT_SHORT');
+  });
+
+  it('keeps a reverse-biased LED off', () => {
+    const result = solveDC(circuit(['gnd', 'negative'], [
+      { id: 'V1', kind: 'voltage-source', positiveNodeId: 'negative', negativeNodeId: 'gnd', voltageV: -5 },
+      { id: 'D1', kind: 'led', positiveNodeId: 'negative', negativeNodeId: 'gnd', forwardVoltageV: 1.9, onResistanceOhms: 12 },
+    ]));
+    expect(result.status).toBe('warning');
+    expect(result.componentCurrents.D1).toBe(0);
+    expect(result.iterations).toBe(1);
+  });
+
+  it('solves an empty grounded circuit without fabricating measurements', () => {
+    const result = solveDC(circuit(['gnd'], []));
+    expect(result.status).toBe('ok');
+    expect(result.nodeVoltages).toEqual({ gnd: 0 });
+    expect(result.componentCurrents).toEqual({});
   });
 
   it('powers the starter LED and reacts to the physical switch', () => {

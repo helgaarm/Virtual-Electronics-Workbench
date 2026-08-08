@@ -1,10 +1,14 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
-import type { PlacedComponent } from '../../domain/components/types';
+import { isComponentAnchored, type PlacedComponent } from '../../domain/components/types';
 import { RESISTOR_BAND_HEX, resistorColorBands } from '../../domain/components/resistorBands';
 import type { BreadboardDefinition } from '../../domain/physical/breadboard';
+import { PHYSICAL_PACKAGES } from '../../domain/physical/packages';
 import type { SimulationResult } from '../../domain/circuit/types';
-import { CylinderBetween } from '../scene/geometry';
+import { routeJumperWire } from '../../domain/physical/wireRouting';
+import { CylinderBetween, SmoothTube } from '../scene/geometry';
+import { createJumperCurve } from '../scene/wireGeometry';
 
 interface Props {
   board: BreadboardDefinition;
@@ -12,6 +16,7 @@ interface Props {
   result: SimulationResult;
   selectedComponentId?: string;
   onSelect: (id: string) => void;
+  onBeginDrag?: (id: string, point: THREE.Vector3, pointerId: number) => void;
 }
 
 function point(board: BreadboardDefinition, holeId: string, yOffset = 0): THREE.Vector3 {
@@ -26,43 +31,51 @@ function AxialResistor({
   board,
   selected,
   onSelect,
+  onBeginDrag,
 }: {
   component: Extract<PlacedComponent, { kind: 'resistor' }>;
   board: BreadboardDefinition;
   selected: boolean;
   onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
+  const physicalPackage = PHYSICAL_PACKAGES.resistor;
   const start = point(board, component.terminalHoleIds.a, 0.4);
   const end = point(board, component.terminalHoleIds.b, 0.4);
   const transform = useMemo(() => {
     const direction = end.clone().sub(start);
-    const length = direction.length();
     return {
-      position: start.clone().add(end).multiplyScalar(0.5).add(new THREE.Vector3(0, 3.7, 0)),
+      position: start.clone().add(end).multiplyScalar(0.5).add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0)),
       quaternion: new THREE.Quaternion().setFromUnitVectors(
         new THREE.Vector3(0, 1, 0),
         new THREE.Vector3(direction.x, 0, direction.z).normalize(),
       ),
-      bodyLength: Math.min(9.2, Math.max(6.4, length - 3)),
     };
-  }, [end, start]);
+  }, [end, physicalPackage.mountingHeightMm, start]);
   const bands = resistorColorBands(component.resistanceOhms, component.tolerancePercent);
-  const raisedStart = start.clone().add(new THREE.Vector3(0, 3.7, 0));
-  const raisedEnd = end.clone().add(new THREE.Vector3(0, 3.7, 0));
+  const bodyLength = physicalPackage.dimensionsMm.x;
+  const bodyRadius = physicalPackage.dimensionsMm.y / 2;
+  const bodyDirection = new THREE.Vector3(end.x - start.x, 0, end.z - start.z).normalize();
+  const bodyStart = transform.position.clone().addScaledVector(bodyDirection, -bodyLength / 2);
+  const bodyEnd = transform.position.clone().addScaledVector(bodyDirection, bodyLength / 2);
+  const startShoulder = start.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm * 0.58, 0));
+  const endShoulder = end.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm * 0.58, 0));
 
   return (
-    <group onClick={(event) => { event.stopPropagation(); onSelect(); }}>
-      <CylinderBetween start={start} end={raisedStart} radius={0.28} color="#b9bec0" metalness={0.75} />
-      <CylinderBetween start={raisedStart} end={raisedEnd} radius={0.28} color="#b9bec0" metalness={0.75} />
-      <CylinderBetween start={raisedEnd} end={end} radius={0.28} color="#b9bec0" metalness={0.75} />
+    <group
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+    >
+      <SmoothTube points={[start, startShoulder, bodyStart]} radius={physicalPackage.leadDiameterMm / 2} color="#b9bec0" metalness={0.75} />
+      <SmoothTube points={[end, endShoulder, bodyEnd]} radius={physicalPackage.leadDiameterMm / 2} color="#b9bec0" metalness={0.75} />
       <group position={transform.position} quaternion={transform.quaternion}>
         <mesh castShadow>
-          <capsuleGeometry args={[1.25, transform.bodyLength - 2.5, 6, 16]} />
+          <capsuleGeometry args={[bodyRadius, bodyLength - bodyRadius * 2, 6, 16]} />
           <meshStandardMaterial color={selected ? '#ead69d' : '#d7bf82'} roughness={0.66} emissive={selected ? '#3478c7' : '#000000'} emissiveIntensity={selected ? 0.12 : 0} />
         </mesh>
         {bands.map((band, index) => (
-          <mesh key={`${band}-${index}`} position={[0, -transform.bodyLength / 2 + 1.35 + index * 1.25, 0]}>
-            <cylinderGeometry args={[1.31, 1.31, 0.54, 18]} />
+          <mesh key={`${band}-${index}`} position={[0, -bodyLength / 2 + 1.05 + index * 1.05, 0]}>
+            <cylinderGeometry args={[bodyRadius + 0.06, bodyRadius + 0.06, 0.5, 18]} />
             <meshStandardMaterial color={RESISTOR_BAND_HEX[band]} roughness={0.62} />
           </mesh>
         ))}
@@ -77,114 +90,350 @@ function LedMesh({
   current,
   selected,
   onSelect,
+  onBeginDrag,
 }: {
   component: Extract<PlacedComponent, { kind: 'led' }>;
   board: BreadboardDefinition;
   current: number;
   selected: boolean;
   onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
+  const physicalPackage = PHYSICAL_PACKAGES.led;
   const anode = point(board, component.terminalHoleIds.anode, 0.3);
   const cathode = point(board, component.terminalHoleIds.cathode, 0.3);
   const midpoint = anode.clone().add(cathode).multiplyScalar(0.5);
-  const body = midpoint.clone().add(new THREE.Vector3(0, 5.7, 0));
-  const active = current > 0.0005;
+  const body = midpoint.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const terminalDirection = cathode.clone().sub(anode);
+  const horizontal = new THREE.Vector3(terminalDirection.x, 0, terminalDirection.z).normalize();
+  const anodeContact = body.clone().addScaledVector(horizontal, -0.72).add(new THREE.Vector3(0, -1.45, 0));
+  const cathodeContact = body.clone().addScaledVector(horizontal, 0.72).add(new THREE.Vector3(0, -1.75, 0));
+  const rotationY = -Math.atan2(terminalDirection.z, terminalDirection.x);
+  const brightness = THREE.MathUtils.clamp(current / 0.008, 0, 1);
+  const active = brightness > 0.02;
   const ledColors: Record<typeof component.color, string> = {
     red: '#d93232', green: '#49a858', yellow: '#e9bf32', blue: '#397ed4', white: '#eceee9',
   };
+  const lightColors: Record<typeof component.color, string> = {
+    red: '#ff2c20', green: '#4dff72', yellow: '#ffd83d', blue: '#3f8cff', white: '#f4fbff',
+  };
+  const lensColor = ledColors[component.color];
+  const lightColor = lightColors[component.color];
   return (
-    <group onClick={(event) => { event.stopPropagation(); onSelect(); }}>
-      <CylinderBetween start={anode} end={body.clone().add(new THREE.Vector3(-0.72, -1.4, 0))} radius={0.22} color="#b8bec0" metalness={0.72} />
-      <CylinderBetween start={cathode} end={body.clone().add(new THREE.Vector3(0.72, -1.9, 0))} radius={0.22} color="#b8bec0" metalness={0.72} />
-      <mesh position={body} castShadow>
-        <capsuleGeometry args={[2.35, 2.4, 8, 20]} />
-        <meshPhysicalMaterial
-          color={ledColors[component.color]}
-          transparent
-          opacity={0.78}
-          roughness={0.24}
-          transmission={0.2}
-          emissive={active ? ledColors[component.color] : selected ? '#3478c7' : '#000000'}
-          emissiveIntensity={active ? 0.9 : selected ? 0.18 : 0}
-        />
-      </mesh>
+    <group
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+    >
+      <SmoothTube points={[anode, anode.clone().add(new THREE.Vector3(0, 1.35, 0)), anodeContact]} radius={physicalPackage.leadDiameterMm / 2} color="#b8bec0" metalness={0.82} />
+      <SmoothTube points={[cathode, cathode.clone().add(new THREE.Vector3(0, 1.35, 0)), cathodeContact]} radius={physicalPackage.leadDiameterMm / 2} color="#b8bec0" metalness={0.82} />
+
+      <group position={body} rotation={[0, rotationY, 0]}>
+        <mesh position={[0, -1.65, 0]} castShadow>
+          <cylinderGeometry args={[2.72, 2.72, 0.5, 40]} />
+          <meshPhysicalMaterial
+            color={lensColor}
+            transparent
+            opacity={0.68}
+            roughness={0.16}
+            clearcoat={0.9}
+            clearcoatRoughness={0.08}
+            transmission={0.16}
+            emissive={active ? lightColor : selected ? '#3478c7' : '#000000'}
+            emissiveIntensity={active ? 0.5 + brightness * 1.5 : selected ? 0.2 : 0}
+          />
+        </mesh>
+
+        <mesh castShadow>
+          <cylinderGeometry args={[2.46, 2.46, 3.6, 40]} />
+          <meshPhysicalMaterial
+            color={lensColor}
+            transparent
+            opacity={0.58}
+            roughness={0.12}
+            clearcoat={1}
+            clearcoatRoughness={0.06}
+            transmission={0.28}
+            thickness={0.8}
+            ior={1.48}
+            emissive={active ? lightColor : selected ? '#3478c7' : '#000000'}
+            emissiveIntensity={active ? 0.45 + brightness * 1.35 : selected ? 0.18 : 0}
+          />
+        </mesh>
+
+        <mesh position={[0, 1.8, 0]} castShadow>
+          <sphereGeometry args={[2.46, 40, 24, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshPhysicalMaterial
+            color={lensColor}
+            transparent
+            opacity={0.56}
+            roughness={0.1}
+            clearcoat={1}
+            clearcoatRoughness={0.05}
+            transmission={0.32}
+            thickness={0.9}
+            ior={1.48}
+            emissive={active ? lightColor : selected ? '#3478c7' : '#000000'}
+            emissiveIntensity={active ? 0.55 + brightness * 1.5 : selected ? 0.18 : 0}
+          />
+        </mesh>
+
+        <mesh position={[-0.72, -0.72, 0]}>
+          <boxGeometry args={[0.28, 1.85, 0.4]} />
+          <meshStandardMaterial color="#b7bcbd" roughness={0.28} metalness={0.86} />
+        </mesh>
+        <mesh position={[0.72, -0.6, 0]}>
+          <boxGeometry args={[0.38, 2.1, 0.55]} />
+          <meshStandardMaterial color="#c3c7c7" roughness={0.25} metalness={0.9} />
+        </mesh>
+        <mesh position={[0.45, 0.12, 0]}>
+          <cylinderGeometry args={[0.6, 0.92, 0.85, 24]} />
+          <meshStandardMaterial color="#c7cbca" roughness={0.22} metalness={0.88} />
+        </mesh>
+        <mesh position={[0, 0.38, 0]}>
+          <boxGeometry args={[0.68, 0.28, 0.68]} />
+          <meshBasicMaterial
+            color={active ? lightColor : '#5d6060'}
+            toneMapped={false}
+          />
+        </mesh>
+
+        <mesh position={[2.38, -0.35, 0]}>
+          <boxGeometry args={[0.14, 2.5, 2.1]} />
+          <meshStandardMaterial color="#b8bec0" transparent opacity={0.2} roughness={0.4} />
+        </mesh>
+
+        {active && (
+          <>
+            <mesh position={[0, 1.65, 0]}>
+              <sphereGeometry args={[3.15, 30, 20]} />
+              <meshBasicMaterial
+                color={lightColor}
+                transparent
+                opacity={0.08 + brightness * 0.13}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+                toneMapped={false}
+              />
+            </mesh>
+            <pointLight
+              position={[0, 2.1, 0]}
+              color={lightColor}
+              intensity={12 + brightness * 24}
+              distance={24}
+              decay={2}
+            />
+          </>
+        )}
+      </group>
     </group>
   );
 }
 
-function WireMesh({ component, board, selected, onSelect }: {
+function WireMesh({ component, board, components, selected, onSelect, onBeginDrag }: {
   component: Extract<PlacedComponent, { kind: 'jumper-wire' }>;
   board: BreadboardDefinition;
+  components: PlacedComponent[];
   selected: boolean;
   onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
+  const route = routeJumperWire(board, component, components);
+  const routeSignature = route.map((routePoint) => `${routePoint.x},${routePoint.y},${routePoint.z}`).join(';');
   const geometry = useMemo(() => {
-    const start = point(board, component.terminalHoleIds.a, 0.2);
-    const end = point(board, component.terminalHoleIds.b, 0.2);
-    const distance = start.distanceTo(end);
-    const rise = Math.min(14, 5 + distance * 0.16);
-    const curve = new THREE.CatmullRomCurve3([
-      start,
-      start.clone().add(new THREE.Vector3(0, rise, 0)),
-      start.clone().add(end).multiplyScalar(0.5).add(new THREE.Vector3(0, rise + 1, 0)),
-      end.clone().add(new THREE.Vector3(0, rise, 0)),
-      end,
-    ]);
-    return new THREE.TubeGeometry(curve, 32, selected ? 0.58 : 0.48, 8, false);
-  }, [board, component, selected]);
+    const stableRoute = routeSignature.split(';').filter(Boolean).map((entry) => {
+      const [x, y, z] = entry.split(',').map(Number);
+      return { x, y, z };
+    });
+    const curve = createJumperCurve(stableRoute);
+    return curve
+      ? new THREE.TubeGeometry(curve, Math.max(72, stableRoute.length * 18), selected ? 0.58 : 0.48, 16, false)
+      : undefined;
+  }, [routeSignature, selected]);
+  useEffect(() => () => geometry?.dispose(), [geometry]);
+  if (!geometry) return null;
   return (
-    <mesh geometry={geometry} onClick={(event) => { event.stopPropagation(); onSelect(); }} castShadow>
+    <mesh
+      geometry={geometry}
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+      castShadow
+    >
       <meshStandardMaterial color={component.color} roughness={0.68} emissive={selected ? '#2e76d0' : '#000000'} emissiveIntensity={0.2} />
     </mesh>
   );
 }
 
-function SimpleComponent({ component, board, selected, onSelect }: {
-  component: Exclude<PlacedComponent, { kind: 'resistor' | 'led' | 'jumper-wire' }>;
+function TactileSwitchMesh({ component, board, selected, onSelect, onBeginDrag }: {
+  component: Extract<PlacedComponent, { kind: 'switch' }>;
   board: BreadboardDefinition;
   selected: boolean;
   onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
+  const physicalPackage = PHYSICAL_PACKAGES.switch;
+  const start = point(board, component.terminalHoleIds.a, 0.25);
+  const end = point(board, component.terminalHoleIds.b, 0.25);
+  const midpoint = start.clone().add(end).multiplyScalar(0.5);
+  const direction = end.clone().sub(start);
+  const horizontal = new THREE.Vector3(direction.x, 0, direction.z).normalize();
+  const bodyCenter = midpoint.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const halfBody = physicalPackage.dimensionsMm.x / 2;
+  const bodyBottomY = bodyCenter.y - physicalPackage.dimensionsMm.y / 2;
+  const leftShoulder = start.clone().add(new THREE.Vector3(0, 1.15, 0));
+  const rightShoulder = end.clone().add(new THREE.Vector3(0, 1.15, 0));
+  const leftContact = bodyCenter.clone().addScaledVector(horizontal, -halfBody - 0.15);
+  const rightContact = bodyCenter.clone().addScaledVector(horizontal, halfBody + 0.15);
+  leftContact.y = bodyBottomY + 0.5;
+  rightContact.y = bodyBottomY + 0.5;
+  const rotationY = -Math.atan2(direction.z, direction.x);
+  const actuatorHeight = component.closed ? 0.72 : 1.28;
+  const actuatorY = physicalPackage.dimensionsMm.y / 2 + 0.52 + actuatorHeight / 2;
+  const detailPositions = [
+    [-2.05, -2.05], [-2.05, 2.05], [2.05, -2.05], [2.05, 2.05],
+  ] as const;
+
+  return (
+    <group
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+    >
+      <SmoothTube points={[start, leftShoulder, leftContact]} radius={physicalPackage.leadDiameterMm / 2} color="#aeb4b5" metalness={0.92} />
+      <SmoothTube points={[end, rightShoulder, rightContact]} radius={physicalPackage.leadDiameterMm / 2} color="#aeb4b5" metalness={0.92} />
+
+      <group position={bodyCenter} rotation={[0, rotationY, 0]}>
+        <RoundedBox
+          args={[
+            physicalPackage.dimensionsMm.x,
+            physicalPackage.dimensionsMm.y,
+            physicalPackage.dimensionsMm.z,
+          ]}
+          radius={0.48}
+          smoothness={8}
+          bevelSegments={5}
+          castShadow
+        >
+          <meshStandardMaterial
+            color={selected ? '#394d59' : '#202527'}
+            roughness={0.48}
+            metalness={0.08}
+            emissive={selected ? '#3478c7' : '#000000'}
+            emissiveIntensity={selected ? 0.2 : 0}
+          />
+        </RoundedBox>
+
+        <RoundedBox
+          args={[5.35, 0.46, 5.35]}
+          radius={0.34}
+          smoothness={6}
+          bevelSegments={4}
+          position={[0, physicalPackage.dimensionsMm.y / 2 + 0.16, 0]}
+          castShadow
+        >
+          <meshStandardMaterial color="#a8acad" roughness={0.3} metalness={0.78} />
+        </RoundedBox>
+
+        <mesh position={[0, physicalPackage.dimensionsMm.y / 2 + 0.43, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[1.55, 0.18, 12, 40]} />
+          <meshStandardMaterial color="#6f7475" roughness={0.34} metalness={0.72} />
+        </mesh>
+
+        <mesh position={[0, actuatorY, 0]} castShadow>
+          <cylinderGeometry args={[1.32, 1.4, actuatorHeight, 36]} />
+          <meshStandardMaterial color="#34393a" roughness={0.4} metalness={0.12} />
+        </mesh>
+
+        {detailPositions.map(([x, z]) => (
+          <mesh
+            key={`${x}-${z}`}
+            position={[x, physicalPackage.dimensionsMm.y / 2 + 0.43, z]}
+          >
+            <cylinderGeometry args={[0.16, 0.16, 0.09, 16]} />
+            <meshStandardMaterial color="#d1d3d2" roughness={0.25} metalness={0.9} />
+          </mesh>
+        ))}
+
+        {[-1, 1].map((side) => (
+          <RoundedBox
+            key={side}
+            args={[2.25, 0.6, 0.36]}
+            radius={0.12}
+            smoothness={3}
+            position={[0, 0.45, side * (physicalPackage.dimensionsMm.z / 2 + 0.08)]}
+          >
+            <meshStandardMaterial color="#989d9e" roughness={0.32} metalness={0.82} />
+          </RoundedBox>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: {
+  component: Exclude<PlacedComponent, { kind: 'resistor' | 'led' | 'jumper-wire' | 'switch' }>;
+  board: BreadboardDefinition;
+  selected: boolean;
+  onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
+}) {
+  const physicalPackage = PHYSICAL_PACKAGES[component.kind];
   const entries = Object.values(component.terminalHoleIds);
   const start = point(board, entries[0], 0.3);
   const end = point(board, entries[1] ?? entries[0], 0.3);
   const midpoint = start.clone().add(end).multiplyScalar(0.5);
   if (component.kind === 'ground') {
     return (
-      <group position={[midpoint.x, midpoint.y + 2.1, midpoint.z]} onClick={(event) => { event.stopPropagation(); onSelect(); }}>
-        <mesh><cylinderGeometry args={[0.3, 0.3, 3.4, 10]} /><meshStandardMaterial color="#aeb4b6" metalness={0.7} /></mesh>
+      <group
+        position={[midpoint.x, midpoint.y + physicalPackage.mountingHeightMm, midpoint.z]}
+        onClick={(event) => { event.stopPropagation(); onSelect(); }}
+        onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+      >
+        <mesh castShadow><cylinderGeometry args={[physicalPackage.leadDiameterMm / 2, physicalPackage.leadDiameterMm / 2, 3.4, 28]} /><meshStandardMaterial color="#aeb4b6" metalness={0.7} /></mesh>
         <mesh position={[0, 2, 0]}><coneGeometry args={[2, 2.2, 3]} /><meshStandardMaterial color={selected ? '#3478c7' : '#4b5252'} /></mesh>
       </group>
     );
   }
   const isPower = component.kind === 'voltage-source';
-  const height = isPower ? 5.2 : component.closed ? 3.4 : 4.6;
+  const height = physicalPackage.mountingHeightMm;
+  const direction = end.clone().sub(start);
+  const rotationY = -Math.atan2(direction.z, direction.x);
   return (
-    <group onClick={(event) => { event.stopPropagation(); onSelect(); }}>
-      <CylinderBetween start={start} end={start.clone().add(new THREE.Vector3(0, height, 0))} radius={0.25} color="#afb5b7" metalness={0.7} />
-      <CylinderBetween start={end} end={end.clone().add(new THREE.Vector3(0, height, 0))} radius={0.25} color="#afb5b7" metalness={0.7} />
-      <mesh position={[midpoint.x, midpoint.y + height, midpoint.z]} castShadow>
-        <boxGeometry args={[isPower ? 8 : 6.5, isPower ? 4.8 : 3.2, isPower ? 5 : 5]} />
+    <group
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+    >
+      <CylinderBetween start={start} end={start.clone().add(new THREE.Vector3(0, height, 0))} radius={physicalPackage.leadDiameterMm / 2} color="#afb5b7" metalness={0.7} />
+      <CylinderBetween start={end} end={end.clone().add(new THREE.Vector3(0, height, 0))} radius={physicalPackage.leadDiameterMm / 2} color="#afb5b7" metalness={0.7} />
+      <RoundedBox
+        args={[physicalPackage.dimensionsMm.x, physicalPackage.dimensionsMm.y, physicalPackage.dimensionsMm.z]}
+        radius={isPower ? 0.85 : 0.5}
+        smoothness={6}
+        bevelSegments={4}
+        position={[midpoint.x, midpoint.y + height, midpoint.z]}
+        rotation={[0, rotationY, 0]}
+        castShadow
+      >
         <meshStandardMaterial color={selected ? '#7fa9d4' : isPower ? '#5d7187' : '#32383b'} roughness={0.55} />
-      </mesh>
-      {component.kind === 'switch' && (
-        <mesh position={[midpoint.x, midpoint.y + height + 2.3, midpoint.z]}>
-          <cylinderGeometry args={[1.55, 1.55, component.closed ? 1.2 : 2.1, 18]} />
-          <meshStandardMaterial color={component.closed ? '#4eaa69' : '#949b9d'} />
-        </mesh>
-      )}
+      </RoundedBox>
     </group>
   );
 }
 
-export function ComponentMeshes({ board, components, result, selectedComponentId, onSelect }: Props) {
+export function ComponentMeshes({ board, components, result, selectedComponentId, onSelect, onBeginDrag }: Props) {
   return (
     <>
       {components.map((component) => {
-        const common = { board, selected: component.id === selectedComponentId, onSelect: () => onSelect(component.id) };
+        const common = {
+          board,
+          selected: component.id === selectedComponentId,
+          onSelect: () => onSelect(component.id),
+          onBeginDrag: onBeginDrag && !isComponentAnchored(component)
+            ? (point: THREE.Vector3, pointerId: number) => onBeginDrag(component.id, point, pointerId)
+            : undefined,
+        };
         if (component.kind === 'resistor') return <AxialResistor key={component.id} component={component} {...common} />;
         if (component.kind === 'led') return <LedMesh key={component.id} component={component} current={result.componentCurrents[component.id] ?? 0} {...common} />;
-        if (component.kind === 'jumper-wire') return <WireMesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'jumper-wire') return <WireMesh key={component.id} component={component} components={components} {...common} />;
+        if (component.kind === 'switch') return <TactileSwitchMesh key={component.id} component={component} {...common} />;
         return <SimpleComponent key={component.id} component={component} {...common} />;
       })}
     </>

@@ -8,7 +8,7 @@ Phase A provides the true-3D, millimetre-based breadboard and physical editing f
 
 | Layer | Responsibility | Must not own |
 | --- | --- | --- |
-| Physical domain | holes, strips, occupancy, package leads, rotations | electrical solving, meshes |
+| Physical domain | holes, strips, occupancy, package dimensions and lead metadata, rotations | electrical solving, meshes |
 | Electrical domain | nodes, terminals, idealized components | hole coordinates, React state |
 | Circuit extraction | map strips, wires, switches and leads into electrical nodes | rendering |
 | Simulation | MNA matrix/stamps and structured results | project/UI state |
@@ -17,7 +17,17 @@ Phase A provides the true-3D, millimetre-based breadboard and physical editing f
 | State/UI | commands and orchestration | solver algorithms |
 | Persistence | versioned project JSON in SQLite | domain behavior |
 
-The project JSON is a stable boundary. SQLite stores the complete versioned document plus indexed metadata. This allows the backend storage to change later without changing editor or simulation code.
+The project JSON is a stable but untrusted boundary. The client validates API responses and the server exhaustively validates nested values, component discriminators, holes, occupancy, limits, and schema versions before a document reaches SQLite. SQLite stores the complete validated document plus indexed metadata. Revision numbers are advanced transactionally and stale revisions receive HTTP 409 instead of overwriting a newer document.
+
+## Local API contract
+
+- `GET /api/health` reports the SQLite service status.
+- `GET /api/projects` returns validated project summaries.
+- `GET /api/projects/:id` returns one complete versioned project or 404.
+- `PUT /api/projects/:id` requires matching URL/body IDs and the current revision. It returns the saved document with the next revision, 400 for invalid input, or 409 for a stale/future version.
+- `DELETE /api/projects/:id` removes one project or returns 404.
+
+JSON bodies are limited to 2 MB. Schema version 1 documents migrate to version 2 with revision zero; unsupported future schemas are rejected explicitly.
 
 ## Chosen libraries
 
@@ -29,10 +39,10 @@ The project JSON is a stable boundary. SQLite stores the complete versioned docu
 
 ## Major risks
 
-- Browser picking across many holes: repeated hole meshes are currently modest; move to instancing before larger boards or multiple boards.
+- Browser picking across many holes: holes are instanced, but larger or multiple boards will still need profiling and spatial indexing.
 - MNA non-linearity: the Phase B LED uses a documented piecewise-linear iteration, not a semiconductor-accurate SPICE model.
 - Mechanical interaction: snapping/occupancy is discrete. It prevents contradictory terminal occupancy but is not a rigid-body engine.
-- SQLite concurrency: a synchronous connection is sufficient for a local single-user app. A collaborative service will need a transactional async design.
+- SQLite concurrency: `BEGIN IMMEDIATE` plus optimistic document revisions protects the local multi-tab workflow. A collaborative service will still need a transactional async design and user-facing merge semantics.
 - Project evolution: migrations are mandatory whenever persisted shapes change.
 
 ## Milestones

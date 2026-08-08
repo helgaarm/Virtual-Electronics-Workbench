@@ -4,6 +4,21 @@ import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import { railHoleId, terminalHoleId } from '../domain/physical/breadboard';
 import { nextQuarterTurn, rotatePoint } from '../domain/physical/geometry';
 import { buildOccupancy } from '../domain/physical/occupancy';
+import { leadSpanViolation } from '../domain/physical/packages';
+
+function holePairHasValidSpan(
+  board: BreadboardDefinition,
+  kind: ComponentKind,
+  firstHoleId: string,
+  secondHoleId: string,
+): boolean {
+  const first = board.holes.find((hole) => hole.id === firstHoleId);
+  const second = board.holes.find((hole) => hole.id === secondHoleId);
+  return Boolean(first && second && !leadSpanViolation(kind, Math.hypot(
+    second.positionMm.x - first.positionMm.x,
+    second.positionMm.z - first.positionMm.z,
+  )));
+}
 
 function nextLabel(kind: ComponentKind, components: PlacedComponent[]): string {
   const prefix: Record<ComponentKind, string> = {
@@ -45,21 +60,24 @@ export function createPlacedComponent(
   components: PlacedComponent[],
 ): PlacedComponent | undefined {
   const label = nextLabel(kind, components);
-  const base = { id: `${label}-${globalThis.crypto.randomUUID()}`, label, rotation: 0 as const };
+  const base = {
+    id: `${label}-${globalThis.crypto.randomUUID()}`,
+    label,
+    rotation: 0 as const,
+    anchored: true,
+  };
 
   if (kind === 'voltage-source') {
-    const positive = vacant(
-      components,
-      Array.from({ length: board.columns }, (_, index) =>
-        railHoleId(board.id, 'top', 'positive', index + 1),
-      ),
-    );
-    const negative = vacant(
-      components,
-      Array.from({ length: board.columns }, (_, index) =>
-        railHoleId(board.id, 'top', 'negative', index + 1),
-      ),
-    );
+    const occupied = buildOccupancy(components);
+    const positiveCandidates = Array.from({ length: board.columns }, (_, index) =>
+      railHoleId(board.id, 'top', 'positive', index + 1));
+    const negativeCandidates = Array.from({ length: board.columns }, (_, index) =>
+      railHoleId(board.id, 'top', 'negative', index + 1));
+    const positive = positiveCandidates.find((candidate) =>
+      !occupied.has(candidate) && negativeCandidates.some((negativeCandidate) =>
+        !occupied.has(negativeCandidate) && holePairHasValidSpan(board, kind, candidate, negativeCandidate)));
+    const negative = positive && negativeCandidates.find((candidate) =>
+      !occupied.has(candidate) && holePairHasValidSpan(board, kind, positive, candidate));
     if (!positive || !negative) return undefined;
     return { ...base, kind, voltageV: 5, terminalHoleIds: { positive, negative } };
   }
@@ -81,7 +99,10 @@ export function createPlacedComponent(
   const secondCandidates = Array.from({ length: board.columns }, (_, index) =>
     terminalHoleId(board.id, kind === 'switch' ? 'A' : 'E', ((preferredSecondColumn + index - 1) % board.columns) + 1),
   );
-  const second = secondCandidates.find((id) => id !== first && !occupied.has(id));
+  const second = secondCandidates.find((id) => {
+    if (id === first || occupied.has(id)) return false;
+    return holePairHasValidSpan(board, kind, first, id);
+  });
   if (!second) return undefined;
 
   switch (kind) {
@@ -149,6 +170,51 @@ export function rotatePlacedComponent(
     [secondName]: candidate.hole.id,
   };
   return { ...component, rotation, terminalHoleIds } as PlacedComponent;
+}
+
+export function movePlacedComponent(
+  board: BreadboardDefinition,
+  component: PlacedComponent,
+  anchorHoleId: string,
+  allComponents: PlacedComponent[],
+): PlacedComponent | undefined {
+  const terminals = terminalEntries(component);
+  const anchor = board.holes.find((hole) => hole.id === terminals[0]?.[1]);
+  const destination = board.holes.find((hole) => hole.id === anchorHoleId);
+  if (!anchor || !destination || anchor.kind !== destination.kind) return undefined;
+
+  const occupied = buildOccupancy(allComponents.filter((candidate) => candidate.id !== component.id));
+  const selectedHoleIds = new Set<string>();
+  const terminalHoleIds: Record<string, string> = {};
+  const offset = {
+    x: destination.positionMm.x - anchor.positionMm.x,
+    z: destination.positionMm.z - anchor.positionMm.z,
+  };
+
+  for (const [terminalName, holeId] of terminals) {
+    const original = board.holes.find((hole) => hole.id === holeId);
+    if (!original) return undefined;
+    const target = {
+      x: original.positionMm.x + offset.x,
+      z: original.positionMm.z + offset.z,
+    };
+    const candidate = board.holes
+      .filter((hole) =>
+        hole.kind === original.kind &&
+        !occupied.has(hole.id) &&
+        !selectedHoleIds.has(hole.id),
+      )
+      .map((hole) => ({
+        hole,
+        distance: Math.hypot(hole.positionMm.x - target.x, hole.positionMm.z - target.z),
+      }))
+      .sort((left, right) => left.distance - right.distance)[0];
+    if (!candidate || candidate.distance > board.pitchMm * 0.55) return undefined;
+    terminalHoleIds[terminalName] = candidate.hole.id;
+    selectedHoleIds.add(candidate.hole.id);
+  }
+
+  return { ...component, terminalHoleIds } as PlacedComponent;
 }
 
 export function paletteDescription(kind: ComponentKind): string {

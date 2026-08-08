@@ -11,8 +11,8 @@ The application opens with a working **Light an LED** example: a 5 V source, clo
 - True Three.js scene with orbit, pan, zoom, top, 3D, fit, and reset views.
 - 30-column solderless breadboard generated at a real 2.54 mm pitch.
 - Separate A–E and F–J terminal strips, centre groove, split positive/negative rails, real hole entities, and optional connection highlighting.
-- Procedural axial resistor with calculated four-band markings, physical leads, selection, discrete rotation, re-snapping, and occupancy protection.
-- Physical 5 mm LED, power source, ground, tactile switch, and naturally raised jumper wire.
+- Procedural axial resistor with calculated four-band markings (including gold/silver low-ohm multipliers), fixed package dimensions, physical leads, selection, drag-to-snap, discrete rotation, and occupancy protection.
+- Physical 5 mm LED, power source, ground, tactile switch, and obstacle-aware raised jumper wires that bend around component packages.
 - Empty workbench, parts drawer, property inspector, delete, undo, and redo.
 
 ### Phase B — DC electronics
@@ -20,9 +20,11 @@ The application opens with a working **Light an LED** example: a 5 V source, clo
 - Physical-hole/strip/wire/switch topology extraction into an independent electrical circuit.
 - Modified Nodal Analysis solver for ideal DC voltage sources and resistors.
 - Piecewise-linear educational LED model with subtle current-driven illumination.
-- Open/closed switch behavior, live component V/I/P values, probe voltage, and structured direct-short errors.
+- Open/closed switch behavior, typed component V/I/P measurements, probe voltage, unavailable/disconnected states, and structured direct-short errors.
 - Shared Build and Test & Analysis project state.
-- Versioned project documents stored in a real SQLite database through a small local API.
+- Four built-in classic starter projects: switched LED, voltage divider, series LEDs, and parallel indicators.
+- Exhaustively validated, versioned project documents stored in a real SQLite database through a small local API.
+- Optimistic revisions that reject stale-tab writes instead of silently replacing newer work.
 - New, Save, Save As, list, and Open flows.
 
 Oscilloscope, signal generation, capacitors, and transient waveforms intentionally remain later phases. No waveform is fabricated.
@@ -62,12 +64,15 @@ Optional environment variables:
 npm run check
 ```
 
-This runs strict linting, 18 unit/integration tests, TypeScript project checking, and the Vite production build. Tests cover breadboard topology, rail splits, occupancy, resistor bands, physical rotation/snapping, Ohm’s law, voltage division, source shorts, switch/LED behavior, document versioning, SQLite CRUD, and the HTTP API.
+This runs strict linting, the unit/integration test suite, TypeScript project checking, and the Vite production build. Tests cover breadboard topology, rail splits, occupancy, jumper obstacle routing, starter-project validity, drag/rotation snapping, resistor bands, measurement states, extraction, Ohm’s law, voltage division, source behavior, switch/LED behavior, document migration and validation, save races, API validation, stale-write conflicts, and in-memory plus on-disk SQLite durability.
 
 ## Interaction notes
 
 - Drag empty space to orbit; wheel/trackpad zooms; the camera controls also support pan.
 - Add parts from the left drawer. The editor chooses compatible free holes.
+- Choose a classic circuit under **Start projects** and load it as a fresh unsaved workbench.
+- Drag a part in 3D to preview compatible snapped holes, then release to commit a valid placement.
+- Components are anchored by default so selection cannot move them. Use **Unanchor** in the inspector before dragging, rotating, or changing terminal holes, then anchor the part again when finished.
 - Select a part in 3D, then change values or exact terminal holes in the inspector.
 - **Rotate** moves the second lead to a physically compatible hole at the same spacing; it refuses an impossible or occupied target.
 - Select a hole with **Show breadboard connections** enabled to highlight its internal metal strip.
@@ -81,4 +86,8 @@ SQLite data is durable on disk once Save is used. A normal computer sleep state 
 
 Start with [docs/architecture.md](docs/architecture.md) and [AGENTS.md](AGENTS.md). Solver assumptions are in [docs/simulation.md](docs/simulation.md); physical scale/topology is in [docs/physical-model.md](docs/physical-model.md).
 
-This is an educational simulator foundation, not SPICE and not a safety tool. The LED is simplified, disconnected nodes use a tiny numerical conductance, mechanical collision is discrete, and reactive/transient behavior is not part of Phase B.
+This is an educational simulator foundation, not SPICE and not a safety tool. The LED is simplified, disconnected nodes use a tiny numerical conductance, mechanical collision is discrete, and reactive/transient behavior is not part of Phase B. Jumper routing provides visual clearance around component packages; it is not a general collision solver and does not route around other jumper wires.
+
+## License and dependencies
+
+The application source is licensed under the [MIT License](LICENSE). The installed production dependency graph uses permissive MIT, ISC, Apache-2.0, and BSD-3-Clause terms; one package omits its package metadata but includes an MIT license file. Redistributable dependency notices and terms are collected in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and can be refreshed with `npm run licenses:generate`. See [docs/dependency-review.md](docs/dependency-review.md) for the dated security, freshness, and license review.

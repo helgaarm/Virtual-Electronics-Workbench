@@ -1,10 +1,11 @@
 import type { PlacedComponent } from './components/types';
 import { railHoleId, terminalHoleId } from './physical/breadboard';
 
-export const PROJECT_SCHEMA_VERSION = 1 as const;
+export const PROJECT_SCHEMA_VERSION = 2 as const;
 
 export interface WorkbenchProject {
   version: typeof PROJECT_SCHEMA_VERSION;
+  revision: number;
   id: string;
   name: string;
   createdAt: string;
@@ -40,6 +41,7 @@ export function createEmptyProject(name = 'Untitled workbench'): WorkbenchProjec
   const now = nowIso();
   return {
     version: PROJECT_SCHEMA_VERSION,
+    revision: 0,
     id: newProjectId(),
     name,
     createdAt: now,

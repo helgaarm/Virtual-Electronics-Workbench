@@ -4,6 +4,7 @@ interface ComponentBase {
   id: string;
   label: string;
   rotation: QuarterTurn;
+  anchored?: boolean;
 }
 
 export interface VoltageSourceComponent extends ComponentBase {
@@ -53,6 +54,10 @@ export type PlacedComponent =
   | JumperWireComponent;
 
 export type ComponentKind = PlacedComponent['kind'];
+
+export function isComponentAnchored(component: PlacedComponent): boolean {
+  return component.anchored !== false;
+}
 
 export function terminalEntries(component: PlacedComponent): Array<[string, string]> {
   return Object.entries(component.terminalHoleIds);

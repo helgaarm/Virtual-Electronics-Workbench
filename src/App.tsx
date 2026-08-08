@@ -1,31 +1,51 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentKind, PlacedComponent } from './domain/components/types';
-import { terminalEntries } from './domain/components/types';
+import { isComponentAnchored, terminalEntries } from './domain/components/types';
 import { connectedHoleIds, createBreadboardDefinition } from './domain/physical/breadboard';
-import { buildOccupancy } from './domain/physical/occupancy';
-import { createEmptyProject, createLedExampleProject, type WorkbenchProject } from './domain/project';
+import { buildOccupancy, validateOccupancy } from './domain/physical/occupancy';
+import { createEmptyProject, type WorkbenchProject } from './domain/project';
+import {
+  createStarterProject,
+  STARTER_PROJECTS,
+  type StarterProjectId,
+} from './domain/starterProjects';
+import { measureComponent } from './measurement/dcMeasurements';
 import { ApiProjectRepository } from './persistence/apiProjectRepository';
 import type { ProjectSummary } from './persistence/projectRepository';
 import { simulateProject } from './simulation';
-import { createPlacedComponent, rotatePlacedComponent } from './state/workbenchActions';
+import { createPlacedComponent, movePlacedComponent, rotatePlacedComponent } from './state/workbenchActions';
+import {
+  isProjectDirty,
+  projectBaseline,
+  reconcileSavedProject,
+  type SavedBaseline,
+} from './state/projectSaveState';
 import { AnalysisWorkspace } from './ui/AnalysisWorkspace';
 import { Inspector } from './ui/Inspector';
 import { Palette } from './ui/Palette';
 import { WorkbenchCanvas } from './workbench/scene/WorkbenchCanvas';
 import './styles.css';
 
-type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+type SaveState = 'idle' | 'saving' | 'error';
+
+function nextEditTimestamp(previous: string): string {
+  return new Date(Math.max(Date.now(), Date.parse(previous) + 1)).toISOString();
+}
 
 export default function App() {
   const repository = useMemo(() => new ApiProjectRepository(), []);
-  const [project, setProject] = useState<WorkbenchProject>(() => createLedExampleProject());
+  const [project, setProject] = useState<WorkbenchProject>(() => createStarterProject('switched-led'));
   const [selectedComponentId, setSelectedComponentId] = useState<string>('R1');
   const [selectedHoleId, setSelectedHoleId] = useState<string>();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [openProjectId, setOpenProjectId] = useState('');
+  const [starterProjectId, setStarterProjectId] = useState<StarterProjectId>('switched-led');
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [savedBaseline, setSavedBaseline] = useState<SavedBaseline>();
   const [notice, setNotice] = useState('Example loaded — the LED is powered through 220 Ω.');
   const [cameraResetKey, setCameraResetKey] = useState(0);
+  const [draggingComponentId, setDraggingComponentId] = useState<string>();
+  const [dragCandidateHoleId, setDragCandidateHoleId] = useState<string>();
   const past = useRef<WorkbenchProject[]>([]);
   const future = useRef<WorkbenchProject[]>([]);
 
@@ -35,13 +55,36 @@ export default function App() {
   );
   const simulation = useMemo(() => simulateProject(project), [project]);
   const selectedComponent = project.components.find((component) => component.id === selectedComponentId);
+  const selectedMeasurement = useMemo(
+    () => selectedComponent
+      ? measureComponent(selectedComponent, simulation.extraction, simulation.result)
+      : undefined,
+    [selectedComponent, simulation],
+  );
+  const isDirty = isProjectDirty(project, savedBaseline);
+  const dragPreview = useMemo(() => {
+    if (!draggingComponentId || !dragCandidateHoleId) return undefined;
+    const component = project.components.find((candidate) => candidate.id === draggingComponentId);
+    return component
+      ? movePlacedComponent(board, component, dragCandidateHoleId, project.components)
+      : undefined;
+  }, [board, dragCandidateHoleId, draggingComponentId, project.components]);
+  const renderedComponents = useMemo(
+    () => dragPreview
+      ? project.components.map((component) => component.id === dragPreview.id ? dragPreview : component)
+      : project.components,
+    [dragPreview, project.components],
+  );
   const occupiedHoleIds = useMemo(
-    () => new Set(buildOccupancy(project.components).keys()),
-    [project.components],
+    () => new Set(buildOccupancy(renderedComponents).keys()),
+    [renderedComponents],
   );
   const highlightedHoleIds = useMemo(
-    () => new Set(project.view.showConnections && selectedHoleId ? connectedHoleIds(board, selectedHoleId) : []),
-    [board, project.view.showConnections, selectedHoleId],
+    () => new Set([
+      ...(project.view.showConnections && selectedHoleId ? connectedHoleIds(board, selectedHoleId) : []),
+      ...(dragPreview ? terminalEntries(dragPreview).map(([, holeId]) => holeId) : []),
+    ]),
+    [board, dragPreview, project.view.showConnections, selectedHoleId],
   );
 
   const refreshProjects = useCallback(async () => {
@@ -68,7 +111,7 @@ export default function App() {
 
   const applyProject = useCallback((updater: (current: WorkbenchProject) => WorkbenchProject) => {
     setProject((current) => {
-      const next = { ...updater(current), updatedAt: new Date().toISOString() };
+      const next = { ...updater(current), updatedAt: nextEditTimestamp(current.updatedAt) };
       past.current = [...past.current.slice(-49), current];
       future.current = [];
       setSaveState('idle');
@@ -111,6 +154,9 @@ export default function App() {
         if (event.shiftKey) redo(); else undo();
       } else if (!editing && (event.key === 'Delete' || event.key === 'Backspace')) {
         removeSelected();
+      } else if (event.key === 'Escape') {
+        setDraggingComponentId(undefined);
+        setDragCandidateHoleId(undefined);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -129,15 +175,19 @@ export default function App() {
   };
 
   const updateComponent = (updated: PlacedComponent) => {
-    const otherOccupancy = buildOccupancy(project.components.filter((component) => component.id !== updated.id));
-    const conflicting = terminalEntries(updated).find(([, holeId]) => otherOccupancy.has(holeId));
-    if (conflicting) {
-      setNotice(`${conflicting[1].split(':').at(-1)} is already occupied.`);
+    const nextComponents = project.components.map((component) => component.id === updated.id ? updated : component);
+    const issue = validateOccupancy(board, nextComponents)
+      .find((candidate) => candidate.componentId === updated.id);
+    if (issue?.code === 'HOLE_OCCUPIED') {
+      setNotice(`${issue.holeId.split(':').at(-1)} is already occupied.`);
       return;
     }
-    const ownHoles = terminalEntries(updated).map(([, holeId]) => holeId);
-    if (new Set(ownHoles).size !== ownHoles.length) {
+    if (issue?.code === 'DUPLICATE_TERMINAL') {
       setNotice('Two leads cannot occupy the same hole.');
+      return;
+    }
+    if (issue) {
+      setNotice(issue.message);
       return;
     }
     applyProject((current) => ({
@@ -148,6 +198,10 @@ export default function App() {
 
   const rotateSelected = () => {
     if (!selectedComponent) return;
+    if (isComponentAnchored(selectedComponent)) {
+      setNotice('Unanchor the component before rotating it.');
+      return;
+    }
     const rotated = rotatePlacedComponent(board, selectedComponent, project.components);
     if (!rotated) {
       setNotice('Rotation needs a compatible free hole at the same lead spacing.');
@@ -157,14 +211,39 @@ export default function App() {
     setNotice(`${selectedComponent.label} rotated 90° and re-snapped.`);
   };
 
+  const cancelDrag = useCallback(() => {
+    setDraggingComponentId(undefined);
+    setDragCandidateHoleId(undefined);
+  }, []);
+
+  const dropComponent = (holeId: string | undefined) => {
+    const component = project.components.find((candidate) => candidate.id === draggingComponentId);
+    const moved = component && holeId
+      ? movePlacedComponent(board, component, holeId, project.components)
+      : undefined;
+    if (moved) {
+      updateComponent(moved);
+      setNotice(`${moved.label} snapped into place.`);
+    } else {
+      setNotice('That placement does not have compatible free holes.');
+    }
+    cancelDrag();
+  };
+
   const save = async (value = project) => {
     setSaveState('saving');
     try {
-      const updated = { ...value, updatedAt: new Date().toISOString() };
-      const saved = await repository.save(updated);
-      setProject(saved);
-      setSaveState('saved');
-      setNotice(`Saved “${saved.name}” to SQLite.`);
+      const saved = await repository.save(value);
+      setProject((current) => reconcileSavedProject(current, value, saved));
+      const advanceHistoryRevision = (entry: WorkbenchProject) =>
+        entry.id === value.id && entry.revision === value.revision
+          ? { ...entry, revision: saved.revision }
+          : entry;
+      past.current = past.current.map(advanceHistoryRevision);
+      future.current = future.current.map(advanceHistoryRevision);
+      setSavedBaseline(projectBaseline(saved));
+      setSaveState('idle');
+      setNotice(`Saved “${saved.name}” snapshot to SQLite.`);
       await refreshProjects();
     } catch (error) {
       setSaveState('error');
@@ -180,6 +259,7 @@ export default function App() {
       name: `${project.name} copy`,
       createdAt: now,
       updatedAt: now,
+      revision: 0,
     };
     past.current = [];
     future.current = [];
@@ -189,13 +269,19 @@ export default function App() {
 
   const openSaved = async () => {
     if (!openProjectId) return;
+    if (isDirty && !window.confirm('Discard unsaved changes and open this project?')) return;
+    if (saveState === 'saving') return;
     try {
       const loaded = await repository.get(openProjectId);
       if (!loaded) throw new Error('Project no longer exists.');
       past.current = [];
       future.current = [];
       setProject(loaded);
+      setSavedBaseline(projectBaseline(loaded));
+      setSaveState('idle');
       setSelectedComponentId(loaded.components[0]?.id ?? '');
+      setSelectedHoleId(undefined);
+      cancelDrag();
       setNotice(`Opened “${loaded.name}” from SQLite.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Open failed.');
@@ -203,14 +289,38 @@ export default function App() {
   };
 
   const newWorkbench = () => {
+    if (isDirty && !window.confirm('Discard unsaved changes and create a new workbench?')) return;
+    if (saveState === 'saving') return;
     past.current = [];
     future.current = [];
     setProject(createEmptyProject());
+    setSavedBaseline(undefined);
+    setSaveState('idle');
     setSelectedComponentId('');
+    setSelectedHoleId(undefined);
+    cancelDrag();
     setNotice('New empty workbench created. Add a part to begin.');
   };
 
+  const loadStarterProject = () => {
+    if (saveState === 'saving') return;
+    if (isDirty && !window.confirm('Discard unsaved changes and load this starter project?')) return;
+    const loaded = createStarterProject(starterProjectId);
+    const definition = STARTER_PROJECTS.find((candidate) => candidate.id === starterProjectId);
+    past.current = [];
+    future.current = [];
+    setProject(loaded);
+    setSavedBaseline(undefined);
+    setSaveState('idle');
+    setSelectedComponentId(loaded.components.find((component) => component.kind === 'resistor')?.id ?? loaded.components[0]?.id ?? '');
+    setSelectedHoleId(undefined);
+    cancelDrag();
+    setCameraResetKey((key) => key + 1);
+    setNotice(`${definition?.name ?? 'Starter project'} loaded as a new unsaved workbench.`);
+  };
+
   const statusText = simulation.result.errors[0]?.message ?? notice;
+  const activeVoltageSource = project.components.find((component) => component.kind === 'voltage-source');
 
   return (
     <div className="app-shell">
@@ -223,9 +333,9 @@ export default function App() {
         <div className="header-actions">
           <button className="icon-button" onClick={undo} title="Undo (Ctrl+Z)">↶</button>
           <button className="icon-button" onClick={redo} title="Redo (Ctrl+Shift+Z)">↷</button>
-          <button className="quiet-button" onClick={newWorkbench}>New</button>
-          <button className="quiet-button" onClick={() => void saveAs()}>Save as</button>
-          <button className="save-button" onClick={() => void save()} disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved ✓' : 'Save'}</button>
+          <button className="quiet-button" onClick={newWorkbench} disabled={saveState === 'saving'}>New</button>
+          <button className="quiet-button" onClick={() => void saveAs()} disabled={saveState === 'saving'}>Save as</button>
+          <button className="save-button" onClick={() => void save()} disabled={saveState === 'saving' || !isDirty}>{saveState === 'saving' ? 'Saving…' : isDirty ? 'Save' : 'Saved ✓'}</button>
         </div>
         <button className={project.powerOn ? 'power-toggle on' : 'power-toggle'} onClick={() => applyProject((current) => ({ ...current, powerOn: !current.powerOn }))} aria-pressed={project.powerOn}>
           <span className="power-icon">⏻</span><span><small>OUTPUT</small><strong>{project.powerOn ? 'ON' : 'OFF'}</strong></span>
@@ -234,7 +344,21 @@ export default function App() {
 
       <div className="project-bar">
         <label className="project-name"><span>Project</span><input value={project.name} onChange={(event) => applyProject((current) => ({ ...current, name: event.target.value }))} /></label>
-        <div className="open-project"><label htmlFor="saved-projects">SQLite projects</label><select id="saved-projects" value={openProjectId} onChange={(event) => setOpenProjectId(event.target.value)}><option value="">No saved projects</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button onClick={() => void openSaved()} disabled={!openProjectId}>Open</button></div>
+        <div className="project-loaders">
+          <div className="starter-project">
+            <label htmlFor="starter-projects">Start projects</label>
+            <select
+              id="starter-projects"
+              value={starterProjectId}
+              title={STARTER_PROJECTS.find((item) => item.id === starterProjectId)?.description}
+              onChange={(event) => setStarterProjectId(event.target.value as StarterProjectId)}
+            >
+              {STARTER_PROJECTS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <button onClick={loadStarterProject} disabled={saveState === 'saving'}>Load</button>
+          </div>
+          <div className="open-project"><label htmlFor="saved-projects">SQLite projects</label><select id="saved-projects" value={openProjectId} onChange={(event) => setOpenProjectId(event.target.value)}><option value="">No saved projects</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button onClick={() => void openSaved()} disabled={!openProjectId || saveState === 'saving'}>Open</button></div>
+        </div>
       </div>
 
       {project.workspace === 'build' ? (
@@ -249,7 +373,7 @@ export default function App() {
               <WorkbenchCanvas
                 key={cameraResetKey}
                 board={board}
-                components={project.components}
+                components={renderedComponents}
                 result={simulation.result}
                 cameraPreset={project.view.cameraPreset}
                 selectedComponentId={selectedComponentId}
@@ -259,6 +383,11 @@ export default function App() {
                 onSelectComponent={(id) => { setSelectedComponentId(id); setSelectedHoleId(undefined); }}
                 onSelectHole={(id) => { setSelectedHoleId(id); setSelectedComponentId(''); setNotice(`${id.split(':').at(-1)} selected.`); }}
                 onClearSelection={() => { setSelectedComponentId(''); setSelectedHoleId(undefined); }}
+                draggingComponentId={draggingComponentId}
+                onBeginDrag={(id) => { setDraggingComponentId(id); setDragCandidateHoleId(undefined); }}
+                onDragCandidate={setDragCandidateHoleId}
+                onDropComponent={dropComponent}
+                onCancelDrag={cancelDrag}
               />
               {project.components.length === 0 && <div className="empty-workbench"><strong>Build something.</strong><span>Add a component from the parts drawer to start.</span></div>}
               <div className="board-scale">2.54 mm pitch <span /> real-world scale</div>
@@ -267,22 +396,21 @@ export default function App() {
           <Inspector
             component={selectedComponent}
             board={board}
-            result={simulation.result}
-            terminalNodes={selectedComponent ? simulation.extraction.componentTerminalNodes[selectedComponent.id] : undefined}
+            measurement={selectedMeasurement}
             onUpdate={updateComponent}
             onRotate={rotateSelected}
             onDelete={removeSelected}
           />
         </main>
       ) : (
-        <AnalysisWorkspace project={project} board={board} simulation={simulation} cameraResetKey={cameraResetKey} onSwitchToBuild={() => applyProject((current) => ({ ...current, workspace: 'build' }))} />
+        <AnalysisWorkspace project={project} board={board} simulation={simulation} onSwitchToBuild={() => applyProject((current) => ({ ...current, workspace: 'build' }))} />
       )}
 
       <footer className={`status-bar status-${simulation.result.status}`}>
         <span className="status-dot" />
         <strong>{project.powerOn ? 'Simulation active' : 'Output off'}</strong>
         <span className="status-separator" />
-        <span>{project.powerOn ? '5 V DC' : '0 V'}</span>
+        <span>{project.powerOn && activeVoltageSource ? `${activeVoltageSource.voltageV.toFixed(2)} V DC` : '0 V'}</span>
         <span className="status-message">{statusText}</span>
         <span className="sqlite-status">SQLite persistence</span>
       </footer>

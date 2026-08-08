@@ -1,4 +1,4 @@
-import type { SimulationResult } from '../domain/circuit/types';
+import type { SimulationEngine, SimulationResult } from '../domain/circuit/types';
 import type { WorkbenchProject } from '../domain/project';
 import { extractCircuit, type CircuitExtraction } from './circuitBuilder';
 import { solveDC } from './dc/solveDC';
@@ -8,7 +8,12 @@ export interface ProjectSimulation {
   result: SimulationResult;
 }
 
-export function simulateProject(project: WorkbenchProject): ProjectSimulation {
+export const dcSimulationEngine: SimulationEngine = { solveDC };
+
+export function simulateProject(
+  project: WorkbenchProject,
+  engine: SimulationEngine = dcSimulationEngine,
+): ProjectSimulation {
   const extraction = extractCircuit(project);
   if (extraction.errors.length > 0) {
     return {
@@ -24,7 +29,7 @@ export function simulateProject(project: WorkbenchProject): ProjectSimulation {
       },
     };
   }
-  const result = solveDC(extraction.circuit);
+  const result = engine.solveDC(extraction.circuit);
   return {
     extraction,
     result: {

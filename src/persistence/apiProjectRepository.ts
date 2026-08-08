@@ -2,9 +2,23 @@ import type { WorkbenchProject } from '../domain/project';
 import { migrateProjectDocument } from './migrations';
 import type { ProjectRepository, ProjectSummary } from './projectRepository';
 
+export class ProjectConflictClientError extends Error {
+  constructor(public readonly currentRevision?: number) {
+    super('This project was changed in another window. Reload it or use Save as.');
+  }
+}
+
 async function responseJson(response: Response): Promise<unknown> {
   const body = (await response.json()) as unknown;
   if (!response.ok) {
+    if (response.status === 409) {
+      const currentRevision =
+        typeof body === 'object' && body && 'currentRevision' in body &&
+        typeof body.currentRevision === 'number'
+          ? body.currentRevision
+          : undefined;
+      if (currentRevision !== undefined) throw new ProjectConflictClientError(currentRevision);
+    }
     const message =
       typeof body === 'object' && body && 'error' in body ? String(body.error) : response.statusText;
     throw new Error(message);
@@ -18,7 +32,23 @@ export class ApiProjectRepository implements ProjectRepository {
   async list(): Promise<ProjectSummary[]> {
     const body = await responseJson(await fetch(this.baseUrl));
     if (!Array.isArray(body)) throw new Error('Invalid project list response.');
-    return body as ProjectSummary[];
+    return body.map((value, index) => {
+      if (
+        typeof value !== 'object' || value === null ||
+        !('id' in value) || typeof value.id !== 'string' ||
+        !('name' in value) || typeof value.name !== 'string' ||
+        !('createdAt' in value) || typeof value.createdAt !== 'string' ||
+        !('updatedAt' in value) || typeof value.updatedAt !== 'string'
+      ) {
+        throw new Error(`Invalid project summary at index ${index}.`);
+      }
+      return {
+        id: value.id,
+        name: value.name,
+        createdAt: value.createdAt,
+        updatedAt: value.updatedAt,
+      };
+    });
   }
 
   async get(id: string): Promise<WorkbenchProject | undefined> {

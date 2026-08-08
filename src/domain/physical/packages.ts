@@ -1,0 +1,73 @@
+import type { ComponentKind } from '../components/types';
+import type { QuarterTurn } from './geometry';
+
+export interface PhysicalPackageDefinition {
+  packageType: string;
+  dimensionsMm: { x: number; y: number; z: number };
+  leadDiameterMm: number;
+  leadSpanMm?: { minimum: number; maximum: number };
+  mountingHeightMm: number;
+  allowedOrientations: readonly QuarterTurn[];
+}
+
+const QUARTER_TURNS = [0, 90, 180, 270] as const;
+
+export const PHYSICAL_PACKAGES: Record<ComponentKind, PhysicalPackageDefinition> = {
+  'voltage-source': {
+    packageType: 'BENCH_DC_SOURCE',
+    dimensionsMm: { x: 8, y: 4.8, z: 5 },
+    leadDiameterMm: 0.5,
+    leadSpanMm: { minimum: 3, maximum: 8 },
+    mountingHeightMm: 5.2,
+    allowedOrientations: QUARTER_TURNS,
+  },
+  ground: {
+    packageType: 'GROUND_POST',
+    dimensionsMm: { x: 4, y: 5.6, z: 4 },
+    leadDiameterMm: 0.5,
+    mountingHeightMm: 2.1,
+    allowedOrientations: QUARTER_TURNS,
+  },
+  resistor: {
+    packageType: 'AXIAL_RESISTOR_0_25W',
+    dimensionsMm: { x: 6.5, y: 2.5, z: 2.5 },
+    leadDiameterMm: 0.56,
+    leadSpanMm: { minimum: 6.5, maximum: 20.32 },
+    mountingHeightMm: 3.7,
+    allowedOrientations: QUARTER_TURNS,
+  },
+  led: {
+    packageType: 'LED_5MM',
+    dimensionsMm: { x: 5, y: 7, z: 5 },
+    leadDiameterMm: 0.44,
+    leadSpanMm: { minimum: 2, maximum: 5.08 },
+    mountingHeightMm: 5.7,
+    allowedOrientations: QUARTER_TURNS,
+  },
+  switch: {
+    packageType: 'TACTILE_SWITCH_6MM',
+    dimensionsMm: { x: 6.2, y: 3.4, z: 6.2 },
+    leadDiameterMm: 0.5,
+    leadSpanMm: { minimum: 6, maximum: 12.7 },
+    mountingHeightMm: 3.25,
+    allowedOrientations: QUARTER_TURNS,
+  },
+  'jumper-wire': {
+    packageType: 'JUMPER_WIRE_22AWG',
+    dimensionsMm: { x: 0.96, y: 0.96, z: 0.96 },
+    leadDiameterMm: 0.5,
+    mountingHeightMm: 5,
+    allowedOrientations: QUARTER_TURNS,
+  },
+};
+
+export function leadSpanViolation(
+  kind: ComponentKind,
+  spanMm: number,
+): 'too-short' | 'too-long' | undefined {
+  const limits = PHYSICAL_PACKAGES[kind].leadSpanMm;
+  if (!limits) return undefined;
+  if (spanMm + Number.EPSILON < limits.minimum) return 'too-short';
+  if (spanMm - Number.EPSILON > limits.maximum) return 'too-long';
+  return undefined;
+}

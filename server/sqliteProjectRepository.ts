@@ -13,6 +13,12 @@ interface ProjectRow {
   document: string;
 }
 
+export class ProjectConflictError extends Error {
+  constructor(public readonly current?: WorkbenchProject) {
+    super('The project has changed since it was opened. Reload it or save a copy.');
+  }
+}
+
 export class SqliteProjectRepository {
   private readonly database: DatabaseSync;
 
@@ -67,23 +73,39 @@ export class SqliteProjectRepository {
 
   save(value: unknown): WorkbenchProject {
     const project = migrateProjectDocument(value);
-    this.database
-      .prepare(
-        `INSERT INTO projects (id, name, created_at, updated_at, document)
-         VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET
-           name = excluded.name,
-           updated_at = excluded.updated_at,
-           document = excluded.document`,
-      )
-      .run(
-        project.id,
-        project.name,
-        project.createdAt,
-        project.updatedAt,
-        JSON.stringify(project),
-      );
-    return project;
+    this.database.exec('BEGIN IMMEDIATE');
+    try {
+      const existing = this.get(project.id);
+      if (existing ? existing.revision !== project.revision : project.revision !== 0) {
+        throw new ProjectConflictError(existing);
+      }
+      const saved: WorkbenchProject = {
+        ...project,
+        revision: project.revision + 1,
+        createdAt: existing?.createdAt ?? project.createdAt,
+      };
+      this.database
+        .prepare(
+          `INSERT INTO projects (id, name, created_at, updated_at, document)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name,
+             updated_at = excluded.updated_at,
+             document = excluded.document`,
+        )
+        .run(
+          saved.id,
+          saved.name,
+          saved.createdAt,
+          saved.updatedAt,
+          JSON.stringify(saved),
+        );
+      this.database.exec('COMMIT');
+      return saved;
+    } catch (error) {
+      this.database.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   remove(id: string): boolean {

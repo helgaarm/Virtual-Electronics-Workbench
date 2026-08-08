@@ -1,6 +1,7 @@
 import type { WorkbenchProject } from '../domain/project';
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import type { ProjectSimulation } from '../simulation';
+import { measureComponent, measureProbeVoltage, type MeasurementValue } from '../measurement/dcMeasurements';
 import { formatCurrent, formatVoltage } from './format';
 import { WorkbenchCanvas } from '../workbench/scene/WorkbenchCanvas';
 
@@ -8,17 +9,16 @@ interface Props {
   project: WorkbenchProject;
   board: BreadboardDefinition;
   simulation: ProjectSimulation;
-  cameraResetKey: number;
   onSwitchToBuild: () => void;
+}
+
+function voltageText(reading: MeasurementValue): string {
+  return reading.status === 'valid' && reading.value !== undefined ? formatVoltage(reading.value) : '—';
 }
 
 export function AnalysisWorkspace({ project, board, simulation, onSwitchToBuild }: Props) {
   const probe = project.probes[0];
-  const positiveNode = probe ? simulation.extraction.holeToNodeId[probe.positiveHoleId] : undefined;
-  const referenceNode = probe ? simulation.extraction.holeToNodeId[probe.referenceHoleId] : undefined;
-  const probeVoltage = positiveNode && referenceNode
-    ? (simulation.result.nodeVoltages[positiveNode] ?? 0) - (simulation.result.nodeVoltages[referenceNode] ?? 0)
-    : 0;
+  const probeVoltage = measureProbeVoltage(probe, simulation.extraction, simulation.result);
 
   return (
     <main className="analysis-layout">
@@ -30,8 +30,8 @@ export function AnalysisWorkspace({ project, board, simulation, onSwitchToBuild 
       </aside>
       <section className="analysis-main">
         <div className="meter-card">
-          <div className="meter-top"><span>DC VOLTAGE</span><span className="meter-status">● LIVE</span></div>
-          <div className="meter-value">{formatVoltage(probeVoltage)}</div>
+          <div className="meter-top"><span>DC VOLTAGE</span><span className={`meter-status meter-${probeVoltage.status}`}>● {probeVoltage.status === 'valid' ? 'LIVE' : probeVoltage.status.replace('-', ' ').toUpperCase()}</span></div>
+          <div className="meter-value" title={probeVoltage.reason}>{voltageText(probeVoltage)}</div>
           <div className="meter-probes">
             <span><i className="probe-dot blue" /> + {probe?.positiveHoleId.split(':').at(-1) ?? 'Not connected'}</span>
             <span><i className="probe-dot black" /> COM {probe?.referenceHoleId.split(':').at(-1) ?? 'Not connected'}</span>
@@ -41,13 +41,18 @@ export function AnalysisWorkspace({ project, board, simulation, onSwitchToBuild 
           <section className="analysis-table panel">
             <div className="panel-heading"><span className="eyebrow">Circuit telemetry</span><h2>Component readings</h2></div>
             <div className="reading-table" role="table">
-              {project.components.filter((component) => simulation.result.componentCurrents[component.id] !== undefined).map((component) => (
-                <div className="reading-row" role="row" key={component.id}>
-                  <strong>{component.label}</strong>
-                  <span>{component.kind.replace('-', ' ')}</span>
-                  <b>{formatCurrent(simulation.result.componentCurrents[component.id])}</b>
-                </div>
-              ))}
+              {project.components.map((component) => {
+                const componentReading = measureComponent(component, simulation.extraction, simulation.result);
+                return (
+                  <div className="reading-row" role="row" key={component.id} title={componentReading.current.reason}>
+                    <strong>{component.label}</strong>
+                    <span>{component.kind.replace('-', ' ')}</span>
+                    <b>{componentReading.current.status === 'valid' && componentReading.current.value !== undefined
+                      ? formatCurrent(componentReading.current.value)
+                      : 'N/A'}</b>
+                  </div>
+                );
+              })}
             </div>
           </section>
           <section className="mini-board panel" aria-label="Live board view">

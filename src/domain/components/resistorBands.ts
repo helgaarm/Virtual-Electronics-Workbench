@@ -25,6 +25,21 @@ const DIGIT_COLORS: ResistorBandColor[] = [
   'white',
 ];
 
+const MULTIPLIER_COLORS: Record<number, ResistorBandColor> = {
+  [-2]: 'silver',
+  [-1]: 'gold',
+  0: 'black',
+  1: 'brown',
+  2: 'red',
+  3: 'orange',
+  4: 'yellow',
+  5: 'green',
+  6: 'blue',
+  7: 'violet',
+  8: 'grey',
+  9: 'white',
+};
+
 function toleranceColor(tolerancePercent: number): ResistorBandColor {
   if (tolerancePercent <= 1) return 'brown';
   if (tolerancePercent <= 2) return 'red';
@@ -40,15 +55,21 @@ export function resistorColorBands(
     throw new Error('Resistance must be a positive finite number.');
   }
 
-  const exponent = Math.floor(Math.log10(resistanceOhms)) - 1;
-  const normalized = Math.round(resistanceOhms / 10 ** exponent);
-  const twoDigits = Math.min(99, Math.max(10, normalized));
-  const multiplierIndex = Math.max(0, Math.min(9, exponent));
+  let exponent = Math.floor(Math.log10(resistanceOhms)) - 1;
+  let twoDigits = Math.round(resistanceOhms / 10 ** exponent);
+  if (twoDigits === 100) {
+    twoDigits = 10;
+    exponent += 1;
+  }
+  const multiplier = MULTIPLIER_COLORS[exponent];
+  if (!multiplier || twoDigits < 10 || twoDigits > 99) {
+    throw new Error('Resistance is outside the supported four-band range (0.1 Ω to 99 GΩ).');
+  }
 
   return [
     DIGIT_COLORS[Math.floor(twoDigits / 10)],
     DIGIT_COLORS[twoDigits % 10],
-    DIGIT_COLORS[multiplierIndex],
+    multiplier,
     toleranceColor(tolerancePercent),
   ];
 }

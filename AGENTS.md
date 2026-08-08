@@ -32,7 +32,7 @@ The authoritative flow is:
 ## Adding a component
 
 1. Define its electrical terminals/properties in `src/domain/circuit`.
-2. Define its package dimensions and leads in `src/domain/physical`.
+2. Define its package dimensions, lead diameter, mounting height, and allowed orientations in `src/domain/physical`; derive renderer-only lead anchors from those values when needed.
 3. Add circuit-extraction stamps in `src/simulation/circuitBuilder.ts`.
 4. Add a renderer in `src/workbench/components` that consumes domain state only.
 5. Add unit tests for the model and solver behavior.

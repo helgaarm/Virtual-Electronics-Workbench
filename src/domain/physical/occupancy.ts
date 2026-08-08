@@ -1,9 +1,10 @@
 import type { PlacedComponent } from '../components/types';
 import { terminalEntries } from '../components/types';
 import type { BreadboardDefinition } from './breadboard';
+import { leadSpanViolation, PHYSICAL_PACKAGES } from './packages';
 
 export interface OccupancyIssue {
-  code: 'UNKNOWN_HOLE' | 'HOLE_OCCUPIED' | 'DUPLICATE_TERMINAL';
+  code: 'UNKNOWN_HOLE' | 'HOLE_OCCUPIED' | 'DUPLICATE_TERMINAL' | 'LEAD_SPAN_OUT_OF_RANGE';
   message: string;
   componentId: string;
   holeId: string;
@@ -54,6 +55,29 @@ export function validateOccupancy(
       }
       local.add(holeId);
       occupied.set(holeId, component.id);
+    }
+    const terminals = terminalEntries(component);
+    const limits = PHYSICAL_PACKAGES[component.kind].leadSpanMm;
+    if (limits && terminals.length >= 2) {
+      const first = board.holes.find((hole) => hole.id === terminals[0][1]);
+      const second = board.holes.find((hole) => hole.id === terminals[1][1]);
+      const span = first && second
+        ? Math.hypot(
+          second.positionMm.x - first.positionMm.x,
+          second.positionMm.z - first.positionMm.z,
+        )
+        : undefined;
+      const violation = span === undefined ? undefined : leadSpanViolation(component.kind, span);
+      if (violation) {
+        issues.push({
+          code: 'LEAD_SPAN_OUT_OF_RANGE',
+          message: violation === 'too-short'
+            ? `${component.label} needs at least ${limits.minimum} mm between its leads.`
+            : `${component.label} allows at most ${limits.maximum} mm between its leads.`,
+          componentId: component.id,
+          holeId: terminals[1][1],
+        });
+      }
     }
   }
 
