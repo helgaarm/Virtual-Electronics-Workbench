@@ -34,6 +34,7 @@ function nextLabel(kind: ComponentKind, components: PlacedComponent[]): string {
     switch: 'S',
     'jumper-wire': 'W',
     ne555: 'U',
+    tmp36: 'T',
   };
   let index = 1;
   const labels = new Set(components.map((component) => component.label));
@@ -126,6 +127,24 @@ export function createPlacedComponent(
     return undefined;
   }
 
+  if (kind === 'tmp36') {
+    const occupied = buildOccupancy(components);
+    for (let column = 1; column <= board.columns - 2; column += 1) {
+      const required = Array.from({ length: 3 }, (_, index) => terminalHoleId(board.id, 'E', column + index));
+      if (required.some((holeId) => occupied.has(holeId))) continue;
+      return {
+        ...base,
+        kind,
+        deviceId: 'tmp36',
+        packageId: 'TO-92-inline',
+        simulationModel: 'temperature-controlled-source',
+        temperatureC: 25,
+        terminalHoleIds: { vs: required[0], vout: required[1], gnd: required[2] },
+      };
+    }
+    return undefined;
+  }
+
   const first = vacantTerminal(board, components, 'E');
   if (!first) return undefined;
   const firstColumn = Number.parseInt(first.match(/(\d+)$/)?.[1] ?? '1', 10);
@@ -179,7 +198,7 @@ export function rotatePlacedComponent(
   allComponents: PlacedComponent[],
 ): PlacedComponent | undefined {
   const terminals = terminalEntries(component);
-  if (component.kind === 'ne555') {
+  if (component.kind === 'ne555' || component.kind === 'tmp36') {
     const holes = terminals.map(([, holeId]) => board.holes.find((hole) => hole.id === holeId));
     if (holes.some((hole) => !hole)) return undefined;
     const positions = holes.map((hole) => hole!);
@@ -305,5 +324,6 @@ export function paletteDescription(kind: ComponentKind): string {
   if (kind === 'switch') return 'Tactile · SPST';
   if (kind === 'jumper-wire') return 'Flexible lead';
   if (kind === 'ne555') return 'Integrated Circuits · Timers · DIP-8';
+  if (kind === 'tmp36') return 'Temperature sensor · TO-92 · 25 °C';
   return componentDisplayName(kind);
 }

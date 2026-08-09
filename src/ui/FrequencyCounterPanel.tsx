@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { WorkbenchProject } from '../domain/project';
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import type { FrequencyCounterTerminal } from '../domain/instruments/types';
@@ -30,7 +31,10 @@ function periodText(seconds: number | undefined): string {
 
 export function FrequencyCounterPanel({ project, board, extraction, runtime, onEditProject }: Props) {
   const settings = project.frequencyCounter;
-  const reading = measureFrequencyCounter(settings, extraction, runtime.samples);
+  const reading = useMemo(
+    () => measureFrequencyCounter(settings, extraction, runtime.samples),
+    [extraction, runtime.samples, settings],
+  );
   const activeHoleId = settings.activeTerminal === 'input'
     ? settings.inputHoleId
     : settings.referenceHoleId;

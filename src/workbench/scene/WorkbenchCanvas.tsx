@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { memo, Suspense, useEffect, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -35,7 +35,7 @@ interface Props {
 }
 
 function CameraRig({ preset, board }: { preset: '3d' | 'top'; board: BreadboardDefinition }) {
-  const { camera, controls } = useThree();
+  const { camera, controls, invalidate } = useThree();
   useEffect(() => {
     const position = preset === 'top'
       ? new THREE.Vector3(0, 125, 0.01)
@@ -47,7 +47,8 @@ function CameraRig({ preset, board }: { preset: '3d' | 'top'; board: BreadboardD
       (controls.target as THREE.Vector3).set(0, 0, 0);
       (controls as unknown as { update: () => void }).update();
     }
-  }, [board.depthMm, board.widthMm, camera, controls, preset]);
+    invalidate();
+  }, [board.depthMm, board.widthMm, camera, controls, invalidate, preset]);
   return null;
 }
 
@@ -89,7 +90,7 @@ function PlacementPlane({ board, onCandidate, onDrop, dragOrigin, anchorOffset, 
   );
 }
 
-export function WorkbenchCanvas(props: Props) {
+function WorkbenchCanvasView(props: Props) {
   const [dragOrigin, setDragOrigin] = useState<THREE.Vector3>();
   const [anchorOffset, setAnchorOffset] = useState<THREE.Vector3>();
   const [activePointerId, setActivePointerId] = useState<number>();
@@ -117,9 +118,10 @@ export function WorkbenchCanvas(props: Props) {
   }, [activePointerId, draggingComponentId, onCancelDrag]);
   return (
     <Canvas
+      frameloop="demand"
       camera={{ position: [65, 70, 70], fov: 38, near: 0.1, far: 600 }}
       shadows
-      dpr={[1, 1.8]}
+      dpr={[1, 1.35]}
       gl={{ antialias: true, alpha: false }}
       onPointerMissed={props.draggingComponentId ? props.onCancelDrag : props.onClearSelection}
     >
@@ -170,10 +172,33 @@ export function WorkbenchCanvas(props: Props) {
             onCancel={props.onCancelDrag ?? props.onClearSelection}
           />
         )}
-        <ContactShadows position={[0, -3.25, 0]} opacity={0.28} scale={150} blur={2.4} far={16} />
+        <ContactShadows position={[0, -3.25, 0]} opacity={0.28} scale={150} blur={2.2} far={16} frames={1} resolution={512} />
       </Suspense>
       <OrbitControls makeDefault enabled={!props.draggingComponentId} enableDamping dampingFactor={0.08} minDistance={45} maxDistance={190} maxPolarAngle={Math.PI / 2.05} />
       <CameraRig preset={props.cameraPreset} board={props.board} />
     </Canvas>
   );
 }
+
+/** Keeps the expensive scene reconciler behind a stable component boundary. */
+function sameVisibleCurrents(previous: Props, next: Props): boolean {
+  return next.components.every((component) => component.kind !== 'led' || (
+    Math.round((previous.result.componentCurrents[component.id] ?? 0) * 4_000)
+      === Math.round((next.result.componentCurrents[component.id] ?? 0) * 4_000)
+  ));
+}
+
+export const WorkbenchCanvas = memo(WorkbenchCanvasView, (previous, next) => (
+  previous.board === next.board
+  && previous.components === next.components
+  && previous.cameraPreset === next.cameraPreset
+  && previous.selectedComponentId === next.selectedComponentId
+  && previous.selectedHoleId === next.selectedHoleId
+  && previous.highlightedHoleIds === next.highlightedHoleIds
+  && previous.connectionGuideHoleIds === next.connectionGuideHoleIds
+  && previous.occupiedHoleIds === next.occupiedHoleIds
+  && previous.probes === next.probes
+  && previous.selectedProbeId === next.selectedProbeId
+  && previous.draggingComponentId === next.draggingComponentId
+  && sameVisibleCurrents(previous, next)
+));

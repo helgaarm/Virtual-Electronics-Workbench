@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type { WorkbenchProject } from '../domain/project';
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import type {
@@ -85,7 +86,7 @@ export function OscilloscopePanel({ project, board, extraction, runtime, onEditP
     ? latestTimeSeconds
     : crossing + durationSeconds * 0.2;
   const startTimeSeconds = endTimeSeconds - durationSeconds;
-  const traces = {
+  const traces = useMemo(() => ({
     ch1: oscilloscopeTrace(
       scope.channels.ch1,
       extraction,
@@ -100,8 +101,8 @@ export function OscilloscopePanel({ project, board, extraction, runtime, onEditP
       endTimeSeconds,
       durationSeconds,
     ),
-  };
-  const measurementTraces = {
+  }), [durationSeconds, endTimeSeconds, extraction, runtime.samples, scope.channels.ch1, scope.channels.ch2]);
+  const measurementTraces = useMemo(() => ({
     ch1: oscilloscopeTrace(
       scope.channels.ch1,
       extraction,
@@ -116,11 +117,11 @@ export function OscilloscopePanel({ project, board, extraction, runtime, onEditP
       latestTimeSeconds,
       captureSpanSeconds,
     ),
-  };
-  const measurements = {
+  }), [captureSpanSeconds, extraction, latestTimeSeconds, runtime.samples, scope.channels.ch1, scope.channels.ch2]);
+  const measurements = useMemo(() => ({
     ch1: measureWaveform(measurementTraces.ch1.points),
     ch2: measureWaveform(measurementTraces.ch2.points),
-  };
+  }), [measurementTraces]);
   const activeChannel = scope.channels[scope.activeChannel];
   const activeHoleId = scope.activeTerminal === 'positive'
     ? activeChannel.positiveHoleId

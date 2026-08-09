@@ -204,7 +204,7 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
   const path = `components[${index}]`;
   const source = record(value, path);
   const kind = enumValue(source.kind, `${path}.kind`, [
-    'voltage-source', 'ground', 'resistor', 'led', 'capacitor', 'switch', 'jumper-wire', 'ne555',
+    'voltage-source', 'ground', 'resistor', 'led', 'capacitor', 'switch', 'jumper-wire', 'ne555', 'tmp36',
   ] as const);
   const base = {
     id: identifier(source.id, `${path}.id`),
@@ -296,6 +296,16 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
           `${path}.terminalHoleIds`,
           ['pin1', 'pin2', 'pin3', 'pin4', 'pin5', 'pin6', 'pin7', 'pin8'],
         ),
+      };
+    case 'tmp36':
+      return {
+        ...base,
+        kind,
+        deviceId: enumValue(source.deviceId, `${path}.deviceId`, ['tmp36'] as const),
+        packageId: enumValue(source.packageId, `${path}.packageId`, ['TO-92-inline'] as const),
+        simulationModel: enumValue(source.simulationModel, `${path}.simulationModel`, ['temperature-controlled-source'] as const),
+        temperatureC: finiteNumber(source.temperatureC, `${path}.temperatureC`, -40, 125),
+        terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['vs', 'vout', 'gnd']),
       };
   }
 }
