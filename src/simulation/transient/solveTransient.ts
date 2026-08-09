@@ -11,14 +11,16 @@ import {
   componentVoltage,
   directShortErrors,
   emptySimulationResult,
-  solveLinearCircuit,
   voltageAt,
   type CompanionBranch,
   type LinearSolution,
 } from '../mna';
+import { nonlinearTerminalCurrents, solveNonlinearCircuit } from '../nonlinear';
+import { flattenCircuit } from '../subcircuits';
 
 const MAX_LED_ITERATIONS = 12;
 const MAX_RUN_STEPS = 1_000_000;
+const MAX_NONLINEAR_STEP_RETRIES = 8;
 
 function capacitors(circuit: Circuit): ElectricalCapacitor[] {
   return circuit.components.filter(
@@ -30,14 +32,16 @@ export function createTransientState(
   circuit: Circuit,
   previous?: TransientState,
 ): TransientState {
+  const expandedCircuit = flattenCircuit(circuit);
   return {
     timeSeconds: previous?.timeSeconds ?? 0,
     capacitorVoltages: Object.fromEntries(
-      capacitors(circuit).map((capacitor) => [
+      capacitors(expandedCircuit).map((capacitor) => [
         capacitor.id,
         previous?.capacitorVoltages[capacitor.id] ?? 0,
       ]),
     ),
+    ...(previous?.nodeVoltages ? { nodeVoltages: { ...previous.nodeVoltages } } : {}),
   };
 }
 
@@ -62,17 +66,19 @@ function errorFrame(state: TransientState, result: SimulationResult): TransientF
   return { state, result };
 }
 
-export function stepTransient(
+function stepTransientAttempt(
   circuit: Circuit,
   state: TransientState,
   timeStepSeconds: number,
+  remainingRetries: number,
 ): TransientFrame {
   if (!Number.isFinite(timeStepSeconds) || timeStepSeconds <= 0) {
     return errorFrame(state, emptySimulationResult([
       { code: 'INVALID_TIME_STEP', message: 'Transient time step must be greater than zero.' },
     ]));
   }
-  const invalidCapacitor = capacitors(circuit).find(
+  const expandedCircuit = flattenCircuit(circuit);
+  const invalidCapacitor = capacitors(expandedCircuit).find(
     (capacitor) => !Number.isFinite(capacitor.capacitanceFarads) || capacitor.capacitanceFarads <= 0,
   );
   if (invalidCapacitor) {
@@ -82,26 +88,67 @@ export function stepTransient(
       componentId: invalidCapacitor.id,
     }]));
   }
-  const directShorts = directShortErrors(circuit);
+  const nextTimeSeconds = state.timeSeconds + timeStepSeconds;
+  const directShorts = directShortErrors(expandedCircuit, nextTimeSeconds);
   if (directShorts.length > 0) return errorFrame(state, emptySimulationResult(directShorts));
 
-  const leds = circuit.components.filter(
+  const leds = expandedCircuit.components.filter(
     (component): component is ElectricalLed => component.kind === 'led',
   );
   const ledStates = new Map(leds.map((led) => [led.id, false]));
-  const branches = companionBranches(circuit, state, timeStepSeconds);
+  const branches = companionBranches(expandedCircuit, state, timeStepSeconds);
   let solution: LinearSolution | undefined;
+  let diagnostics: SimulationResult['diagnostics'];
+  let initialNodeVoltages = state.nodeVoltages ?? {};
   let iterations: number;
   for (iterations = 1; iterations <= MAX_LED_ITERATIONS; iterations += 1) {
-    solution = solveLinearCircuit(circuit, ledStates, branches);
-    if (!solution) {
-      return errorFrame(state, emptySimulationResult([
-        { code: 'SINGULAR_CIRCUIT', message: 'The transient circuit matrix could not be solved.' },
-      ]));
+    const outcome = solveNonlinearCircuit(
+      expandedCircuit,
+      ledStates,
+      branches,
+      nextTimeSeconds,
+      initialNodeVoltages,
+    );
+    diagnostics = outcome.diagnostics;
+    if (outcome.status === 'error') {
+      if (remainingRetries > 0
+        && outcome.errors.some((error) => error.code === 'NONLINEAR_CONVERGENCE_FAILURE')) {
+        const halfStepSeconds = timeStepSeconds / 2;
+        const firstHalf = stepTransientAttempt(
+          circuit,
+          state,
+          halfStepSeconds,
+          remainingRetries - 1,
+        );
+        if (firstHalf.result.status === 'error') return firstHalf;
+        const secondHalf = stepTransientAttempt(
+          circuit,
+          firstHalf.state,
+          halfStepSeconds,
+          remainingRetries - 1,
+        );
+        return secondHalf.result.status === 'error'
+          ? errorFrame(state, secondHalf.result)
+          : secondHalf;
+      }
+      const errors = outcome.errors.map((error) => error.code === 'NONLINEAR_CONVERGENCE_FAILURE'
+        ? {
+          ...error,
+          message: `The nonlinear solver could not converge near ${nextTimeSeconds.toPrecision(6)} s. Try a smaller timestep or inspect the circuit wiring.`,
+        }
+        : error);
+      const result = emptySimulationResult(errors);
+      result.diagnostics = diagnostics;
+      return errorFrame(state, result);
     }
+    solution = outcome.solution;
+    initialNodeVoltages = Object.fromEntries(expandedCircuit.nodes.map((node) => [
+      node.id,
+      voltageAt(solution!, expandedCircuit.groundNodeId, node.id),
+    ]));
     let changed = false;
     for (const led of leds) {
-      const voltage = componentVoltage(solution, circuit.groundNodeId, led);
+      const voltage = componentVoltage(solution, expandedCircuit.groundNodeId, led);
       const shouldConduct = voltage >= led.forwardVoltageV - 1e-9;
       if (shouldConduct !== ledStates.get(led.id)) {
         ledStates.set(led.id, shouldConduct);
@@ -116,15 +163,15 @@ export function stepTransient(
     ]));
   }
 
-  const nodeVoltages: Record<string, number> = { [circuit.groundNodeId]: 0 };
-  for (const node of circuit.nodes) {
-    nodeVoltages[node.id] = voltageAt(solution, circuit.groundNodeId, node.id);
+  const nodeVoltages: Record<string, number> = { [expandedCircuit.groundNodeId]: 0 };
+  for (const node of expandedCircuit.nodes) {
+    nodeVoltages[node.id] = voltageAt(solution, expandedCircuit.groundNodeId, node.id);
   }
   const componentCurrents: Record<string, number> = {};
   const componentPowers: Record<string, number> = {};
   const nextCapacitorVoltages: Record<string, number> = {};
-  for (const component of circuit.components) {
-    const voltage = componentVoltage(solution, circuit.groundNodeId, component);
+  for (const component of expandedCircuit.components) {
+    const voltage = componentVoltage(solution, expandedCircuit.groundNodeId, component);
     let current: number;
     if (component.kind === 'resistor') current = voltage / component.resistanceOhms;
     else if (component.kind === 'led') {
@@ -135,9 +182,23 @@ export function stepTransient(
       current = component.capacitanceFarads / timeStepSeconds
         * (voltage - (state.capacitorVoltages[component.id] ?? 0));
       nextCapacitorVoltages[component.id] = voltage;
+    } else if (component.kind === 'diode' || component.kind === 'bjt' || component.kind === 'smooth-transconductance' || component.kind === 'smooth-switch') {
+      const currents = nonlinearTerminalCurrents(component, nodeVoltages);
+      current = currents[0];
+      if (component.kind === 'bjt') {
+        const terminalVoltages = [
+          nodeVoltages[component.collectorNodeId] ?? 0,
+          nodeVoltages[component.baseNodeId] ?? 0,
+          nodeVoltages[component.emitterNodeId] ?? 0,
+        ];
+        componentPowers[component.id] = currents.reduce(
+          (sum, terminalCurrent, index) => sum + terminalCurrent * terminalVoltages[index],
+          0,
+        );
+      }
     } else current = solution.values[solution.sourceIndex.get(component.id)!] ?? 0;
     componentCurrents[component.id] = current;
-    componentPowers[component.id] = voltage * current;
+    componentPowers[component.id] ??= voltage * current;
   }
   const warnings = leds.length
     ? [{ code: 'SIMPLIFIED_LED_MODEL', message: 'LEDs use a piecewise-linear educational model.' }]
@@ -150,14 +211,24 @@ export function stepTransient(
     warnings,
     errors: [],
     iterations,
+    diagnostics,
   };
   return {
     state: {
       timeSeconds: state.timeSeconds + timeStepSeconds,
       capacitorVoltages: nextCapacitorVoltages,
+      nodeVoltages,
     },
     result,
   };
+}
+
+export function stepTransient(
+  circuit: Circuit,
+  state: TransientState,
+  timeStepSeconds: number,
+): TransientFrame {
+  return stepTransientAttempt(circuit, state, timeStepSeconds, MAX_NONLINEAR_STEP_RETRIES);
 }
 
 export interface TransientRunOptions {

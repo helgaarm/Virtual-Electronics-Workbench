@@ -1,8 +1,19 @@
 import type { PlacedComponent } from './components/types';
+import {
+  createDefaultOscilloscopeSettings,
+  createDefaultSignalGeneratorSettings,
+  type AnalysisInstrumentId,
+  type OscilloscopeSettings,
+  type SignalGeneratorSettings,
+} from './instruments/types';
 import { railHoleId, terminalHoleId } from './physical/breadboard';
 
-export const PROJECT_SCHEMA_VERSION = 4 as const;
+export const PROJECT_SCHEMA_VERSION = 7 as const;
 export const MAX_PROJECT_PROBES = 16;
+export const SIMULATION_TIME_STEPS_SECONDS = [
+  0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05,
+] as const;
+export const SIMULATION_SPEEDS = [0.25, 0.5, 1, 2, 4] as const;
 
 export type ProbeTerminal = 'positive' | 'reference';
 
@@ -15,7 +26,7 @@ export interface MeasurementProbe {
 }
 
 export interface AnalysisSettings {
-  activeInstrument: 'multimeter';
+  activeInstrument: AnalysisInstrumentId;
   activeProbeTerminal: ProbeTerminal;
   selectedProbeId?: string;
 }
@@ -42,6 +53,8 @@ export interface WorkbenchProject {
   probes: MeasurementProbe[];
   analysis: AnalysisSettings;
   simulation: SimulationSettings;
+  oscilloscope: OscilloscopeSettings;
+  signalGenerator: SignalGeneratorSettings;
   view: {
     cameraPreset: '3d' | 'top';
     showConnections: boolean;
@@ -78,6 +91,8 @@ export function createEmptyProject(name = 'Untitled workbench'): WorkbenchProjec
       timeStepSeconds: 0.005,
       speed: 1,
     },
+    oscilloscope: createDefaultOscilloscopeSettings(),
+    signalGenerator: createDefaultSignalGeneratorSettings(),
     view: { cameraPreset: '3d', showConnections: false },
   };
 }

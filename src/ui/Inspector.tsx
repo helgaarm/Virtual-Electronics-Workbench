@@ -1,5 +1,12 @@
-import type { PlacedComponent } from '../domain/components/types';
-import { isComponentAnchored, terminalEntries } from '../domain/components/types';
+import type { LedColor, PlacedComponent } from '../domain/components/types';
+import {
+  isComponentAnchored,
+  LED_COLORS,
+  LED_TYPICAL_FORWARD_VOLTAGE_V,
+  NE555_PIN_NAMES,
+  terminalEntries,
+} from '../domain/components/types';
+import { recolorLed } from '../domain/components/led';
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import type { ComponentMeasurement, MeasurementValue } from '../measurement/dcMeasurements';
 import { breadboardHoleOptionGroups } from './breadboardHoleOptions';
@@ -12,13 +19,22 @@ interface Props {
   onUpdate: (component: PlacedComponent) => void;
   onRotate: () => void;
   onDelete: () => void;
+  onHardResetCapacitor: (componentId: string) => void;
 }
 
 function reading(value: MeasurementValue | undefined, formatter: (number: number) => string): string {
   return value?.status === 'valid' && value.value !== undefined ? formatter(value.value) : 'N/A';
 }
 
-export function Inspector({ component, board, measurement, onUpdate, onRotate, onDelete }: Props) {
+export function Inspector({
+  component,
+  board,
+  measurement,
+  onUpdate,
+  onRotate,
+  onDelete,
+  onHardResetCapacitor,
+}: Props) {
   if (!component) {
     return (
       <aside className="panel inspector empty-inspector" aria-label="Inspector">
@@ -88,6 +104,41 @@ export function Inspector({ component, board, measurement, onUpdate, onRotate, o
             <span>µF</span>
           </div>
           <small>{formatCapacitance(component.capacitanceFarads)} · polarized · {component.ratedVoltageV} V rated</small>
+          <button
+            className="capacitor-reset-button"
+            onClick={() => onHardResetCapacitor(component.id)}
+            title={`Force ${component.label} to 0 V without changing other capacitors`}
+          >
+            Hard reset charge to 0 V
+          </button>
+          <small>Pauses the transient simulation. Other capacitors keep their charge.</small>
+        </section>
+      )}
+
+      {component.kind === 'led' && (
+        <section className="inspector-section">
+          <label htmlFor="led-color">LED color</label>
+          <div className="led-color-control">
+            <span
+              className={`led-color-preview led-color-${component.color}`}
+              aria-hidden="true"
+            />
+            <select
+              id="led-color"
+              value={component.color}
+              onChange={(event) => onUpdate(recolorLed(component, event.target.value as LedColor))}
+            >
+              {LED_COLORS.map((color) => (
+                <option key={color} value={color}>
+                  {color[0].toUpperCase() + color.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <small>
+            {component.color[0].toUpperCase() + component.color.slice(1)} lens · typical forward voltage{' '}
+            {LED_TYPICAL_FORWARD_VOLTAGE_V[component.color].toFixed(1)} V
+          </small>
         </section>
       )}
 
@@ -97,6 +148,22 @@ export function Inspector({ component, board, measurement, onUpdate, onRotate, o
           <button className={component.closed ? 'state-button is-on' : 'state-button'} onClick={() => onUpdate({ ...component, closed: !component.closed })}>
             {component.closed ? 'Closed · conducting' : 'Open · no current'}
           </button>
+        </section>
+      )}
+
+      {component.kind === 'ne555' && (
+        <section className="inspector-section">
+          <div className="section-label">NE555N Timer · DIP-8</div>
+          <small>Hybrid analogue subcircuit · recommended supply 4.5–16 V</small>
+          <dl className="pinout-list">
+            {Object.entries(NE555_PIN_NAMES).map(([pinId, name], index) => (
+              <div key={pinId}>
+                <dt>{index + 1} · {name}</dt>
+                <dd>{component.terminalHoleIds[pinId as keyof typeof component.terminalHoleIds]}</dd>
+              </div>
+            ))}
+          </dl>
+          <small>Orientation {component.rotation}° · notch identifies the pin 1/8 end.</small>
         </section>
       )}
 
@@ -116,28 +183,30 @@ export function Inspector({ component, board, measurement, onUpdate, onRotate, o
         </small>
       </section>
 
-      <section className="inspector-section">
-        <div className="section-label">Breadboard connections</div>
-        <div className="terminal-list">
-          {terminalEntries(component).map(([terminal, holeId]) => (
-            <label key={terminal}>
-              <span>{terminal}</span>
-              <select disabled={anchored} value={holeId} onChange={(event) => updateTerminal(terminal, event.target.value)}>
-                {holeOptionGroups.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.holes.map((hole) => <option key={hole.id} value={hole.id}>{hole.label}</option>)}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-          ))}
-        </div>
-      </section>
+      {component.kind !== 'ne555' && (
+        <section className="inspector-section">
+          <div className="section-label">Breadboard connections</div>
+          <div className="terminal-list">
+            {terminalEntries(component).map(([terminal, holeId]) => (
+              <label key={terminal}>
+                <span>{terminal}</span>
+                <select disabled={anchored} value={holeId} onChange={(event) => updateTerminal(terminal, event.target.value)}>
+                  {holeOptionGroups.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.holes.map((hole) => <option key={hole.id} value={hole.id}>{hole.label}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="inspector-section measurements">
         <div className="section-label">Live simulation</div>
         <dl>
-          <div title={measurement?.voltage.reason}><dt>Voltage drop</dt><dd>{reading(measurement?.voltage, formatVoltage)}</dd></div>
+          <div title={measurement?.voltage.reason}><dt>{component.kind === 'ne555' ? 'Supply voltage' : 'Voltage drop'}</dt><dd>{reading(measurement?.voltage, formatVoltage)}</dd></div>
           <div title={measurement?.current.reason}><dt>Current</dt><dd>{reading(measurement?.current, formatCurrent)}</dd></div>
           <div title={measurement?.power.reason}><dt>Power</dt><dd>{reading(measurement?.power, (value) => `${Math.abs(value * 1_000).toFixed(2)} mW`)}</dd></div>
         </dl>
@@ -147,7 +216,7 @@ export function Inspector({ component, board, measurement, onUpdate, onRotate, o
       </section>
 
       <div className="inspector-actions">
-        <button disabled={anchored} onClick={onRotate} title={anchored ? 'Unanchor before rotating' : 'Rotate 90 degrees'}>↻ Rotate</button>
+        <button disabled={anchored} onClick={onRotate} title={anchored ? 'Unanchor before rotating' : `Rotate ${component.kind === 'ne555' ? 180 : 90} degrees`}>↻ Rotate</button>
         <button className="danger-quiet" onClick={onDelete}>Delete</button>
       </div>
     </aside>

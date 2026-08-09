@@ -1,6 +1,21 @@
 import type { PlacedComponent } from '../domain/components/types';
-import { terminalEntries } from '../domain/components/types';
-import { MAX_PROJECT_PROBES, PROJECT_SCHEMA_VERSION, type WorkbenchProject } from '../domain/project';
+import { LED_COLORS, terminalEntries } from '../domain/components/types';
+import {
+  createDefaultOscilloscopeSettings,
+  createDefaultSignalGeneratorSettings,
+  OSCILLOSCOPE_TIME_DIVISIONS_SECONDS,
+  OSCILLOSCOPE_VOLTS_PER_DIVISION,
+  SIGNAL_GENERATOR_COMPONENT_ID,
+  type OscilloscopeChannelId,
+  type OscilloscopeChannelSettings,
+} from '../domain/instruments/types';
+import {
+  MAX_PROJECT_PROBES,
+  PROJECT_SCHEMA_VERSION,
+  SIMULATION_SPEEDS,
+  SIMULATION_TIME_STEPS_SECONDS,
+  type WorkbenchProject,
+} from '../domain/project';
 import { createBreadboardDefinition } from '../domain/physical/breadboard';
 import { validateOccupancy } from '../domain/physical/occupancy';
 
@@ -92,8 +107,67 @@ function terminals<T extends string>(
   ) as Record<T, string>;
 }
 
+function numericEnumValue<T extends number>(value: unknown, path: string, values: readonly T[]): T {
+  if (typeof value !== 'number' || !values.includes(value as T)) {
+    throw new ProjectValidationError(path, `must be one of ${values.join(', ')}`);
+  }
+  return value as T;
+}
+
+function nearestNumericOption<T extends number>(
+  value: unknown,
+  path: string,
+  values: readonly T[],
+  minimum: number,
+  maximum: number,
+): T {
+  const numeric = finiteNumber(value, path, minimum, maximum);
+  return values.reduce((nearest, option) => (
+    Math.abs(option - numeric) < Math.abs(nearest - numeric) ? option : nearest
+  ));
+}
+
+function optionalString(value: unknown, path: string, maxLength = 200): string | undefined {
+  return value === undefined ? undefined : stringValue(value, path, maxLength);
+}
+
+function parseOscilloscopeChannel(
+  value: unknown,
+  path: string,
+  expectedId: OscilloscopeChannelId,
+  normalizeLegacyScale: boolean,
+): OscilloscopeChannelSettings {
+  const source = record(value, path);
+  const positiveHoleId = optionalString(source.positiveHoleId, `${path}.positiveHoleId`, 160);
+  const referenceHoleId = optionalString(source.referenceHoleId, `${path}.referenceHoleId`, 160);
+  return {
+    id: enumValue(source.id, `${path}.id`, [expectedId] as const),
+    label: enumValue(
+      source.label,
+      `${path}.label`,
+      [expectedId === 'ch1' ? 'CH1' : 'CH2'] as const,
+    ),
+    enabled: booleanValue(source.enabled, `${path}.enabled`),
+    voltsPerDivisionV: normalizeLegacyScale
+      ? nearestNumericOption(
+          source.voltsPerDivisionV,
+          `${path}.voltsPerDivisionV`,
+          OSCILLOSCOPE_VOLTS_PER_DIVISION,
+          0.001,
+          1_000,
+        )
+      : numericEnumValue(
+          source.voltsPerDivisionV,
+          `${path}.voltsPerDivisionV`,
+          OSCILLOSCOPE_VOLTS_PER_DIVISION,
+        ),
+    verticalOffsetV: finiteNumber(source.verticalOffsetV, `${path}.verticalOffsetV`, -1_000, 1_000),
+    ...(positiveHoleId ? { positiveHoleId } : {}),
+    ...(referenceHoleId ? { referenceHoleId } : {}),
+  };
+}
+
 const ROTATIONS = [0, 90, 180, 270] as const;
-const LED_COLORS = ['red', 'green', 'yellow', 'blue', 'white'] as const;
 const WIRE_COLORS = ['red', 'black', 'blue', 'green', 'yellow', 'orange'] as const;
 
 function rotationValue(value: unknown, path: string): (typeof ROTATIONS)[number] {
@@ -107,7 +181,7 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
   const path = `components[${index}]`;
   const source = record(value, path);
   const kind = enumValue(source.kind, `${path}.kind`, [
-    'voltage-source', 'ground', 'resistor', 'led', 'capacitor', 'switch', 'jumper-wire',
+    'voltage-source', 'ground', 'resistor', 'led', 'capacitor', 'switch', 'jumper-wire', 'ne555',
   ] as const);
   const base = {
     id: identifier(source.id, `${path}.id`),
@@ -117,6 +191,9 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
       ? {}
       : { anchored: booleanValue(source.anchored, `${path}.anchored`) }),
   };
+  if (base.id === SIGNAL_GENERATOR_COMPONENT_ID) {
+    throw new ProjectValidationError(`${path}.id`, 'is reserved for the signal generator instrument');
+  }
 
   switch (kind) {
     case 'voltage-source':
@@ -179,6 +256,23 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
         kind,
         color: enumValue(source.color, `${path}.color`, WIRE_COLORS),
         terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['a', 'b']),
+      };
+    case 'ne555':
+      return {
+        ...base,
+        kind,
+        deviceId: enumValue(source.deviceId, `${path}.deviceId`, ['ne555n'] as const),
+        packageId: enumValue(source.packageId, `${path}.packageId`, ['DIP-8'] as const),
+        simulationModel: enumValue(
+          source.simulationModel,
+          `${path}.simulationModel`,
+          ['hybrid-analogue-subcircuit'] as const,
+        ),
+        terminalHoleIds: terminals(
+          source.terminalHoleIds,
+          `${path}.terminalHoleIds`,
+          ['pin1', 'pin2', 'pin3', 'pin4', 'pin5', 'pin6', 'pin7', 'pin8'],
+        ),
       };
   }
 }
@@ -249,7 +343,9 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
           activeInstrument: enumValue(
             analysisSource.activeInstrument,
             'analysis.activeInstrument',
-            ['multimeter'] as const,
+            sourceVersion < 5
+              ? ['multimeter'] as const
+              : ['multimeter', 'oscilloscope', 'signal-generator'] as const,
           ),
           activeProbeTerminal: enumValue(
             analysisSource.activeProbeTerminal,
@@ -267,13 +363,125 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
     : (() => {
         const simulationSource = record(source.simulation, 'simulation');
         return {
-          timeStepSeconds: finiteNumber(
-            simulationSource.timeStepSeconds,
-            'simulation.timeStepSeconds',
-            1e-6,
-            1,
+          timeStepSeconds: sourceVersion < 6
+            ? nearestNumericOption(
+                simulationSource.timeStepSeconds,
+                'simulation.timeStepSeconds',
+                SIMULATION_TIME_STEPS_SECONDS,
+                1e-6,
+                1,
+              )
+            : numericEnumValue(
+                simulationSource.timeStepSeconds,
+                'simulation.timeStepSeconds',
+                SIMULATION_TIME_STEPS_SECONDS,
+              ),
+          speed: sourceVersion < 6
+            ? nearestNumericOption(
+                simulationSource.speed,
+                'simulation.speed',
+                SIMULATION_SPEEDS,
+                0.1,
+                10,
+              )
+            : numericEnumValue(simulationSource.speed, 'simulation.speed', SIMULATION_SPEEDS),
+        };
+      })();
+  const oscilloscope = sourceVersion < 5
+    ? createDefaultOscilloscopeSettings()
+    : (() => {
+        const oscilloscopeSource = record(source.oscilloscope, 'oscilloscope');
+        const channelsSource = record(oscilloscopeSource.channels, 'oscilloscope.channels');
+        return {
+          timePerDivisionSeconds: sourceVersion < 6
+            ? nearestNumericOption(
+                oscilloscopeSource.timePerDivisionSeconds,
+                'oscilloscope.timePerDivisionSeconds',
+                OSCILLOSCOPE_TIME_DIVISIONS_SECONDS,
+                1e-6,
+                100,
+              )
+            : numericEnumValue(
+                oscilloscopeSource.timePerDivisionSeconds,
+                'oscilloscope.timePerDivisionSeconds',
+                OSCILLOSCOPE_TIME_DIVISIONS_SECONDS,
+              ),
+          triggerSource: enumValue(
+            oscilloscopeSource.triggerSource,
+            'oscilloscope.triggerSource',
+            ['ch1', 'ch2'] as const,
           ),
-          speed: finiteNumber(simulationSource.speed, 'simulation.speed', 0.1, 10),
+          triggerEdge: sourceVersion < 6
+            ? 'rising' as const
+            : enumValue(
+                oscilloscopeSource.triggerEdge,
+                'oscilloscope.triggerEdge',
+                ['rising', 'falling'] as const,
+              ),
+          triggerLevelV: finiteNumber(
+            oscilloscopeSource.triggerLevelV,
+            'oscilloscope.triggerLevelV',
+            -1_000,
+            1_000,
+          ),
+          activeChannel: enumValue(
+            oscilloscopeSource.activeChannel,
+            'oscilloscope.activeChannel',
+            ['ch1', 'ch2'] as const,
+          ),
+          activeTerminal: enumValue(
+            oscilloscopeSource.activeTerminal,
+            'oscilloscope.activeTerminal',
+            ['positive', 'reference'] as const,
+          ),
+          channels: {
+            ch1: parseOscilloscopeChannel(
+              channelsSource.ch1,
+              'oscilloscope.channels.ch1',
+              'ch1',
+              sourceVersion < 6,
+            ),
+            ch2: parseOscilloscopeChannel(
+              channelsSource.ch2,
+              'oscilloscope.channels.ch2',
+              'ch2',
+              sourceVersion < 6,
+            ),
+          },
+        };
+      })();
+  if (simulation.timeStepSeconds <= 0.00005 && simulation.speed > 2) {
+    if (sourceVersion < 6) simulation.speed = 2;
+    else {
+      throw new ProjectValidationError(
+        'simulation.speed',
+        'must be at most 2 when the timestep is 0.00005 seconds',
+      );
+    }
+  }
+  const signalGenerator = sourceVersion < 5
+    ? createDefaultSignalGeneratorSettings()
+    : (() => {
+        const generatorSource = record(source.signalGenerator, 'signalGenerator');
+        const outputHoleId = optionalString(generatorSource.outputHoleId, 'signalGenerator.outputHoleId', 160);
+        const referenceHoleId = optionalString(
+          generatorSource.referenceHoleId,
+          'signalGenerator.referenceHoleId',
+          160,
+        );
+        return {
+          enabled: booleanValue(generatorSource.enabled, 'signalGenerator.enabled'),
+          waveform: enumValue(generatorSource.waveform, 'signalGenerator.waveform', ['square', 'sine'] as const),
+          frequencyHz: finiteNumber(generatorSource.frequencyHz, 'signalGenerator.frequencyHz', 0.01, 1_000),
+          amplitudeVpp: finiteNumber(generatorSource.amplitudeVpp, 'signalGenerator.amplitudeVpp', 0, 200),
+          offsetV: finiteNumber(generatorSource.offsetV, 'signalGenerator.offsetV', -100, 100),
+          activeTerminal: enumValue(
+            generatorSource.activeTerminal,
+            'signalGenerator.activeTerminal',
+            ['output', 'reference'] as const,
+          ),
+          ...(outputHoleId ? { outputHoleId } : {}),
+          ...(referenceHoleId ? { referenceHoleId } : {}),
         };
       })();
   const project: WorkbenchProject = {
@@ -290,6 +498,8 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
     probes,
     analysis,
     simulation,
+    oscilloscope,
+    signalGenerator,
     view: {
       cameraPreset: enumValue(viewSource.cameraPreset, 'view.cameraPreset', ['3d', 'top'] as const),
       showConnections: booleanValue(viewSource.showConnections, 'view.showConnections'),
@@ -314,6 +524,23 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
     ) {
       throw new ProjectValidationError(`probes.${probe.id}`, 'references an unknown hole');
     }
+  }
+  for (const channel of Object.values(oscilloscope.channels)) {
+    if (
+      (channel.positiveHoleId && !validHoleIds.has(channel.positiveHoleId))
+      || (channel.referenceHoleId && !validHoleIds.has(channel.referenceHoleId))
+    ) {
+      throw new ProjectValidationError(
+        `oscilloscope.channels.${channel.id}`,
+        'references an unknown hole',
+      );
+    }
+  }
+  if (
+    (signalGenerator.outputHoleId && !validHoleIds.has(signalGenerator.outputHoleId))
+    || (signalGenerator.referenceHoleId && !validHoleIds.has(signalGenerator.referenceHoleId))
+  ) {
+    throw new ProjectValidationError('signalGenerator', 'references an unknown hole');
   }
 
   return project;

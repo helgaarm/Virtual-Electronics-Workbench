@@ -1,6 +1,7 @@
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import { getHole } from '../domain/physical/breadboard';
 import { MAX_PROJECT_PROBES, type ProbeTerminal, type WorkbenchProject } from '../domain/project';
+import type { AnalysisInstrumentId } from '../domain/instruments/types';
 import { measureComponent, measureProbeVoltage, type MeasurementValue } from '../measurement/dcMeasurements';
 import type { ProjectSimulation } from '../simulation';
 import {
@@ -9,14 +10,22 @@ import {
   setProbeConnection,
   swapProbeConnections,
 } from '../state/probeActions';
+import {
+  activeInstrumentMarkerId,
+  instrumentProbeMarkers,
+} from '../state/instrumentSelectors';
+import type { TransientRuntimeController } from '../state/useTransientRuntime';
 import { WorkbenchCanvas } from '../workbench/scene/WorkbenchCanvas';
 import { breadboardHoleOptionGroups } from './breadboardHoleOptions';
 import { formatCurrent, formatPower, formatVoltage } from './format';
+import { OscilloscopePanel } from './OscilloscopePanel';
+import { SignalGeneratorPanel } from './SignalGeneratorPanel';
 
 interface Props {
   project: WorkbenchProject;
   board: BreadboardDefinition;
   simulation: ProjectSimulation;
+  transientRuntime: TransientRuntimeController;
   onEditProject: (updater: (current: WorkbenchProject) => WorkbenchProject) => void;
   onSwitchToBuild: () => void;
 }
@@ -37,6 +46,7 @@ export function AnalysisWorkspace({
   project,
   board,
   simulation,
+  transientRuntime,
   onEditProject,
   onSwitchToBuild,
 }: Props) {
@@ -44,23 +54,45 @@ export function AnalysisWorkspace({
     ?? project.probes[0];
   const selectedProbeId = selectedProbe?.id;
   const activeTerminal = project.analysis.activeProbeTerminal;
-  const activeHoleId = probeConnection(selectedProbe, activeTerminal);
+  const multimeterActiveHoleId = probeConnection(selectedProbe, activeTerminal);
   const probeVoltage = measureProbeVoltage(selectedProbe, simulation.extraction, simulation.result);
+  const activeScopeChannel = project.oscilloscope.channels[project.oscilloscope.activeChannel];
+  const activeHoleId = project.analysis.activeInstrument === 'multimeter'
+    ? multimeterActiveHoleId
+    : project.analysis.activeInstrument === 'oscilloscope'
+      ? project.oscilloscope.activeTerminal === 'positive'
+        ? activeScopeChannel.positiveHoleId
+        : activeScopeChannel.referenceHoleId
+      : project.signalGenerator.activeTerminal === 'output'
+        ? project.signalGenerator.outputHoleId
+        : project.signalGenerator.referenceHoleId;
   const selectedEndpoints = new Set(
-    selectedProbe
-      ? [selectedProbe.positiveHoleId, selectedProbe.referenceHoleId].filter((id): id is string => Boolean(id))
-      : [],
+    (project.analysis.activeInstrument === 'multimeter'
+      ? selectedProbe ? [selectedProbe.positiveHoleId, selectedProbe.referenceHoleId] : []
+      : project.analysis.activeInstrument === 'oscilloscope'
+        ? [activeScopeChannel.positiveHoleId, activeScopeChannel.referenceHoleId]
+        : [project.signalGenerator.outputHoleId, project.signalGenerator.referenceHoleId]
+    ).filter((id): id is string => Boolean(id)),
   );
   const occupiedHoleIds = new Set(
     project.components.flatMap((component) => Object.values(component.terminalHoleIds)),
   );
   const canAddProbe = project.probes.length < MAX_PROJECT_PROBES;
   const holeOptionGroups = breadboardHoleOptionGroups(board);
+  const probeMarkers = instrumentProbeMarkers(project);
+  const selectedMarkerId = activeInstrumentMarkerId(project);
+
+  const selectInstrument = (activeInstrument: AnalysisInstrumentId) => {
+    onEditProject((current) => ({
+      ...current,
+      analysis: { ...current.analysis, activeInstrument },
+    }));
+  };
 
   const selectProbe = (probeId: string) => {
     onEditProject((current) => ({
       ...current,
-      analysis: { ...current.analysis, selectedProbeId: probeId },
+      analysis: { ...current.analysis, activeInstrument: 'multimeter', selectedProbeId: probeId },
     }));
   };
 
@@ -73,6 +105,7 @@ export function AnalysisWorkspace({
         probes: [...current.probes, probe],
         analysis: {
           ...current.analysis,
+          activeInstrument: 'multimeter',
           selectedProbeId: probe.id,
           activeProbeTerminal: 'positive',
         },
@@ -99,6 +132,39 @@ export function AnalysisWorkspace({
     editSelectedProbe((probe) => setProbeConnection(probe, activeTerminal, holeId));
   };
 
+  const connectActiveInstrumentTerminal = (holeId: string | undefined) => {
+    if (project.analysis.activeInstrument === 'multimeter') {
+      connectActiveTerminal(holeId);
+      return;
+    }
+    if (project.analysis.activeInstrument === 'oscilloscope') {
+      onEditProject((current) => {
+        const channelId = current.oscilloscope.activeChannel;
+        const channel = { ...current.oscilloscope.channels[channelId] };
+        const key = current.oscilloscope.activeTerminal === 'positive'
+          ? 'positiveHoleId'
+          : 'referenceHoleId';
+        if (holeId) channel[key] = holeId;
+        else delete channel[key];
+        return {
+          ...current,
+          oscilloscope: {
+            ...current.oscilloscope,
+            channels: { ...current.oscilloscope.channels, [channelId]: channel },
+          },
+        };
+      });
+      return;
+    }
+    onEditProject((current) => {
+      const signalGenerator = { ...current.signalGenerator };
+      const key = signalGenerator.activeTerminal === 'output' ? 'outputHoleId' : 'referenceHoleId';
+      if (holeId) signalGenerator[key] = holeId;
+      else delete signalGenerator[key];
+      return { ...current, signalGenerator };
+    });
+  };
+
   const deleteSelectedProbe = () => {
     if (!selectedProbeId) return;
     onEditProject((current) => {
@@ -119,9 +185,9 @@ export function AnalysisWorkspace({
     <main className="analysis-layout">
       <aside className="panel instrument-rack">
         <div className="panel-heading"><span className="eyebrow">Instrument rack</span><h2>Test &amp; Analysis</h2></div>
-        <button className="instrument active" aria-pressed="true"><span>V</span><strong>Multimeter</strong><small>DC voltage</small></button>
-        <button className="instrument future" disabled><span>⌑</span><strong>Oscilloscope</strong><small>Phase E</small></button>
-        <button className="instrument future" disabled><span>∿</span><strong>Signal generator</strong><small>Phase E</small></button>
+        <button className={project.analysis.activeInstrument === 'multimeter' ? 'instrument active' : 'instrument'} aria-pressed={project.analysis.activeInstrument === 'multimeter'} onClick={() => selectInstrument('multimeter')}><span>V</span><strong>Multimeter</strong><small>DC voltage</small></button>
+        <button className={project.analysis.activeInstrument === 'oscilloscope' ? 'instrument active' : 'instrument'} aria-pressed={project.analysis.activeInstrument === 'oscilloscope'} onClick={() => selectInstrument('oscilloscope')}><span>⌁</span><strong>Oscilloscope</strong><small>CH1 + CH2</small></button>
+        <button className={project.analysis.activeInstrument === 'signal-generator' ? 'instrument active' : 'instrument'} aria-pressed={project.analysis.activeInstrument === 'signal-generator'} onClick={() => selectInstrument('signal-generator')}><span>∿</span><strong>Signal generator</strong><small>Square + sine</small></button>
         <div className="probe-rack">
           <div className="probe-rack-heading"><span>Saved readings</span><button onClick={addProbe} disabled={!canAddProbe}>+ Add</button></div>
           {project.probes.length === 0 && <p>No voltage probes yet.</p>}
@@ -143,7 +209,7 @@ export function AnalysisWorkspace({
       </aside>
 
       <section className="analysis-main">
-        <div className="meter-card" aria-live="polite">
+        {project.analysis.activeInstrument === 'multimeter' && <><div className="meter-card" aria-live="polite">
           <div className="meter-top">
             <span>DC VOLTAGE</span>
             <span className={`meter-status meter-${probeVoltage.status}`}>
@@ -217,7 +283,26 @@ export function AnalysisWorkspace({
               </div>
             </div>
           )}
-        </section>
+        </section></>}
+
+        {project.analysis.activeInstrument === 'oscilloscope' && (
+          <OscilloscopePanel
+            project={project}
+            board={board}
+            extraction={simulation.extraction}
+            runtime={transientRuntime}
+            onEditProject={onEditProject}
+          />
+        )}
+
+        {project.analysis.activeInstrument === 'signal-generator' && (
+          <SignalGeneratorPanel
+            project={project}
+            board={board}
+            runtime={transientRuntime}
+            onEditProject={onEditProject}
+          />
+        )}
 
         <div className="analysis-grid">
           <section className="analysis-table panel">
@@ -244,7 +329,11 @@ export function AnalysisWorkspace({
           </section>
           <section className="mini-board panel" aria-label="Live board view">
             <div className="mini-board-label">
-              <span>{selectedProbe ? `Attach ${activeTerminal === 'positive' ? '+' : 'COM'} lead` : 'Live board'}</span>
+              <span>{project.analysis.activeInstrument === 'multimeter'
+                ? selectedProbe ? `Attach ${activeTerminal === 'positive' ? '+' : 'COM'} lead` : 'Live board'
+                : project.analysis.activeInstrument === 'oscilloscope'
+                  ? `Attach ${activeScopeChannel.label} ${project.oscilloscope.activeTerminal === 'positive' ? 'probe' : 'ground'}`
+                  : `Attach generator ${project.signalGenerator.activeTerminal === 'output' ? 'output' : 'common'}`}</span>
               <button onClick={onSwitchToBuild}>Return to Build ↗</button>
             </div>
             <WorkbenchCanvas
@@ -255,10 +344,10 @@ export function AnalysisWorkspace({
               selectedHoleId={activeHoleId}
               highlightedHoleIds={selectedEndpoints}
               occupiedHoleIds={occupiedHoleIds}
-              probes={project.probes}
-              selectedProbeId={selectedProbeId}
+              probes={probeMarkers}
+              selectedProbeId={selectedMarkerId}
               onSelectComponent={() => undefined}
-              onSelectHole={connectActiveTerminal}
+              onSelectHole={connectActiveInstrumentTerminal}
               onClearSelection={() => undefined}
             />
           </section>

@@ -9,6 +9,9 @@ import { solveDC } from './dc/solveDC';
 import { createTransientState, stepTransient } from './transient/solveTransient';
 
 export { createTransientState, runTransient, stepTransient } from './transient/solveTransient';
+export { solveNonlinearCircuit } from './nonlinear';
+export { flattenCircuit, subcircuitScopedId } from './subcircuits';
+export { createNe555Subcircuit, NE555_HYBRID_SUBCIRCUIT } from './models/ne555';
 
 export interface ProjectSimulation {
   extraction: CircuitExtraction;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Circuit } from '../../src/domain/circuit/types';
+import { signalSourceVoltageAtTime, type Circuit } from '../../src/domain/circuit/types';
 import { createTransientState, runTransient, stepTransient } from '../../src/simulation';
 
 function chargingCircuit(): Circuit {
@@ -112,5 +112,37 @@ describe('backward-Euler transient solver', () => {
       .toBe('INVALID_CAPACITANCE');
     expect(() => runTransient(circuit, { durationSeconds: 0, timeStepSeconds: 0.001 }))
       .toThrow(/positive/);
+  });
+
+  it('evaluates square and sine signal sources from simulation time', () => {
+    const base = {
+      waveform: 'square' as const,
+      frequencyHz: 1,
+      amplitudeVpp: 4,
+      offsetV: 2,
+    };
+    expect(signalSourceVoltageAtTime(base, 0.25)).toBe(4);
+    expect(signalSourceVoltageAtTime(base, 0.75)).toBe(0);
+    expect(signalSourceVoltageAtTime({ ...base, waveform: 'sine' }, 0.25)).toBeCloseTo(4, 10);
+    expect(signalSourceVoltageAtTime({ ...base, waveform: 'sine' }, 0.75)).toBeCloseTo(0, 10);
+  });
+
+  it('samples a dynamic source even when the circuit has no capacitor', () => {
+    const circuit: Circuit = {
+      nodes: [{ id: 'gnd' }, { id: 'out' }],
+      groundNodeId: 'gnd',
+      components: [{
+        id: 'GEN',
+        kind: 'signal-source',
+        positiveNodeId: 'out',
+        negativeNodeId: 'gnd',
+        waveform: 'square',
+        frequencyHz: 1,
+        amplitudeVpp: 4,
+        offsetV: 2,
+      }],
+    };
+    const run = runTransient(circuit, { durationSeconds: 0.75, timeStepSeconds: 0.25 });
+    expect(run.samples.map((sample) => sample.nodeVoltages.out)).toEqual([4, 0, 0]);
   });
 });

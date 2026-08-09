@@ -1,5 +1,9 @@
 import type { ComponentKind, PlacedComponent } from '../domain/components/types';
-import { componentDisplayName, terminalEntries } from '../domain/components/types';
+import {
+  componentDisplayName,
+  LED_TYPICAL_FORWARD_VOLTAGE_V,
+  terminalEntries,
+} from '../domain/components/types';
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import { railHoleId, terminalHoleId } from '../domain/physical/breadboard';
 import { nextQuarterTurn, rotatePoint } from '../domain/physical/geometry';
@@ -29,6 +33,7 @@ function nextLabel(kind: ComponentKind, components: PlacedComponent[]): string {
     capacitor: 'C',
     switch: 'S',
     'jumper-wire': 'W',
+    ne555: 'U',
   };
   let index = 1;
   const labels = new Set(components.map((component) => component.label));
@@ -92,6 +97,35 @@ export function createPlacedComponent(
     return ground ? { ...base, kind, terminalHoleIds: { ground } } : undefined;
   }
 
+  if (kind === 'ne555') {
+    const occupied = buildOccupancy(components);
+    for (let column = 1; column <= board.columns - 3; column += 1) {
+      const required = [
+        ...Array.from({ length: 4 }, (_, index) => terminalHoleId(board.id, 'E', column + index)),
+        ...Array.from({ length: 4 }, (_, index) => terminalHoleId(board.id, 'F', column + index)),
+      ];
+      if (required.some((holeId) => occupied.has(holeId))) continue;
+      return {
+        ...base,
+        kind,
+        deviceId: 'ne555n',
+        packageId: 'DIP-8',
+        simulationModel: 'hybrid-analogue-subcircuit',
+        terminalHoleIds: {
+          pin1: terminalHoleId(board.id, 'E', column),
+          pin2: terminalHoleId(board.id, 'E', column + 1),
+          pin3: terminalHoleId(board.id, 'E', column + 2),
+          pin4: terminalHoleId(board.id, 'E', column + 3),
+          pin5: terminalHoleId(board.id, 'F', column + 3),
+          pin6: terminalHoleId(board.id, 'F', column + 2),
+          pin7: terminalHoleId(board.id, 'F', column + 1),
+          pin8: terminalHoleId(board.id, 'F', column),
+        },
+      };
+    }
+    return undefined;
+  }
+
   const first = vacantTerminal(board, components, 'E');
   if (!first) return undefined;
   const firstColumn = Number.parseInt(first.match(/(\d+)$/)?.[1] ?? '1', 10);
@@ -120,7 +154,7 @@ export function createPlacedComponent(
         ...base,
         kind,
         color: 'red',
-        forwardVoltageV: 1.9,
+        forwardVoltageV: LED_TYPICAL_FORWARD_VOLTAGE_V.red,
         onResistanceOhms: 12,
         terminalHoleIds: { anode: first, cathode: second },
       };
@@ -145,6 +179,43 @@ export function rotatePlacedComponent(
   allComponents: PlacedComponent[],
 ): PlacedComponent | undefined {
   const terminals = terminalEntries(component);
+  if (component.kind === 'ne555') {
+    const holes = terminals.map(([, holeId]) => board.holes.find((hole) => hole.id === holeId));
+    if (holes.some((hole) => !hole)) return undefined;
+    const positions = holes.map((hole) => hole!);
+    const center = positions.reduce(
+      (sum, hole) => ({ x: sum.x + hole.positionMm.x, z: sum.z + hole.positionMm.z }),
+      { x: 0, z: 0 },
+    );
+    center.x /= positions.length;
+    center.z /= positions.length;
+    const occupied = buildOccupancy(allComponents.filter((candidate) => candidate.id !== component.id));
+    const selected = new Set<string>();
+    const terminalHoleIds: Record<string, string> = {};
+    for (let index = 0; index < terminals.length; index += 1) {
+      const [terminalName] = terminals[index];
+      const original = positions[index];
+      const target = {
+        x: center.x * 2 - original.positionMm.x,
+        z: center.z * 2 - original.positionMm.z,
+      };
+      const candidate = board.holes
+        .filter((hole) => hole.kind === 'terminal' && !occupied.has(hole.id) && !selected.has(hole.id))
+        .map((hole) => ({
+          hole,
+          distance: Math.hypot(hole.positionMm.x - target.x, hole.positionMm.z - target.z),
+        }))
+        .sort((left, right) => left.distance - right.distance)[0];
+      if (!candidate || candidate.distance > board.pitchMm * 0.1) return undefined;
+      terminalHoleIds[terminalName] = candidate.hole.id;
+      selected.add(candidate.hole.id);
+    }
+    return {
+      ...component,
+      rotation: component.rotation === 0 ? 180 : 0,
+      terminalHoleIds,
+    } as PlacedComponent;
+  }
   const rotation = nextQuarterTurn(component.rotation);
   if (terminals.length < 2) return { ...component, rotation };
   const [firstName, firstHoleId] = terminals[0];
@@ -233,5 +304,6 @@ export function paletteDescription(kind: ComponentKind): string {
   if (kind === 'capacitor') return 'Radial · 100 µF · 16 V';
   if (kind === 'switch') return 'Tactile · SPST';
   if (kind === 'jumper-wire') return 'Flexible lead';
+  if (kind === 'ne555') return 'Integrated Circuits · Timers · DIP-8';
   return componentDisplayName(kind);
 }

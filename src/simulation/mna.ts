@@ -1,9 +1,11 @@
 import type {
   Circuit,
   ElectricalComponent,
+  ElectricalSignalSource,
   SimulationMessage,
   SimulationResult,
 } from '../domain/circuit/types';
+import { electricalComponentNodeIds, signalSourceVoltageAtTime } from '../domain/circuit/types';
 
 const GMIN_SIEMENS = 1e-12;
 const PIVOT_EPSILON = 1e-14;
@@ -19,6 +21,14 @@ export interface LinearSolution {
   values: number[];
   nodeIndex: Map<string, number>;
   sourceIndex: Map<string, number>;
+}
+
+export interface LinearizedDevice {
+  nodeIds: string[];
+  voltagesAtGuessV: number[];
+  currentsAtGuessA: number[];
+  /** Jacobian[row current terminal][column voltage terminal], in siemens. */
+  jacobianSiemens: number[][];
 }
 
 export function emptySimulationResult(
@@ -68,6 +78,31 @@ function stampCurrentSource(
   if (negative !== undefined) rhs[negative] += currentPositiveToNegative;
 }
 
+function stampLinearizedDevice(
+  matrix: number[][],
+  rhs: number[],
+  nodeIndex: Map<string, number>,
+  groundNodeId: string,
+  device: LinearizedDevice,
+): void {
+  for (let row = 0; row < device.nodeIds.length; row += 1) {
+    const rowIndex = device.nodeIds[row] === groundNodeId
+      ? undefined
+      : nodeIndex.get(device.nodeIds[row]);
+    if (rowIndex === undefined) continue;
+    let equivalentRhsA = -device.currentsAtGuessA[row];
+    for (let column = 0; column < device.nodeIds.length; column += 1) {
+      const conductance = device.jacobianSiemens[row][column];
+      equivalentRhsA += conductance * device.voltagesAtGuessV[column];
+      const columnIndex = device.nodeIds[column] === groundNodeId
+        ? undefined
+        : nodeIndex.get(device.nodeIds[column]);
+      if (columnIndex !== undefined) matrix[rowIndex][columnIndex] += conductance;
+    }
+    rhs[rowIndex] += equivalentRhsA;
+  }
+}
+
 function gaussianSolve(matrix: number[][], rhs: number[]): number[] | undefined {
   const size = rhs.length;
   const augmented = matrix.map((row, index) => [...row, rhs[index]]);
@@ -96,22 +131,29 @@ export function solveLinearCircuit(
   circuit: Circuit,
   ledStates: ReadonlyMap<string, boolean>,
   companionBranches: readonly CompanionBranch[] = [],
+  timeSeconds = 0,
+  linearizedDevices: readonly LinearizedDevice[] = [],
 ): LinearSolution | undefined {
   const activeNodeIds = new Set<string>([circuit.groundNodeId]);
   for (const component of circuit.components) {
-    activeNodeIds.add(component.positiveNodeId);
-    activeNodeIds.add(component.negativeNodeId);
+    for (const nodeId of electricalComponentNodeIds(component)) activeNodeIds.add(nodeId);
   }
   for (const branch of companionBranches) {
     activeNodeIds.add(branch.positiveNodeId);
     activeNodeIds.add(branch.negativeNodeId);
   }
+  for (const device of linearizedDevices) {
+    for (const nodeId of device.nodeIds) activeNodeIds.add(nodeId);
+  }
   const nonGroundNodes = circuit.nodes.filter(
     (node) => node.id !== circuit.groundNodeId && activeNodeIds.has(node.id),
   );
   const sources = circuit.components.filter(
-    (component) => component.kind === 'voltage-source'
-      && (component.positiveNodeId !== component.negativeNodeId || component.voltageV !== 0),
+    (component) => (component.kind === 'voltage-source' || component.kind === 'signal-source')
+      && (
+        component.positiveNodeId !== component.negativeNodeId
+        || sourceVoltageAtTime(component, timeSeconds) !== 0
+      ),
   );
   const nodeIndex = new Map(nonGroundNodes.map((node, index) => [node.id, index]));
   const sourceIndex = new Map(
@@ -155,7 +197,7 @@ export function solveLinearCircuit(
           -conductance * component.forwardVoltageV,
         );
       }
-    } else if (component.kind === 'voltage-source') {
+    } else if (component.kind === 'voltage-source' || component.kind === 'signal-source') {
       const sourceEquation = sourceIndex.get(component.id);
       if (sourceEquation === undefined) continue;
       const positive = component.positiveNodeId === circuit.groundNodeId
@@ -172,7 +214,7 @@ export function solveLinearCircuit(
         matrix[negative][sourceEquation] -= 1;
         matrix[sourceEquation][negative] -= 1;
       }
-      rhs[sourceEquation] = component.voltageV;
+      rhs[sourceEquation] = sourceVoltageAtTime(component, timeSeconds);
     }
   }
 
@@ -195,6 +237,10 @@ export function solveLinearCircuit(
     );
   }
 
+  for (const device of linearizedDevices) {
+    stampLinearizedDevice(matrix, rhs, nodeIndex, circuit.groundNodeId, device);
+  }
+
   if (size === 0) return { values: [], nodeIndex, sourceIndex };
   const values = gaussianSolve(matrix, rhs);
   return values ? { values, nodeIndex, sourceIndex } : undefined;
@@ -211,16 +257,34 @@ export function componentVoltage(
   groundNodeId: string,
   component: ElectricalComponent,
 ): number {
+  if (component.kind === 'bjt') {
+    return voltageAt(solution, groundNodeId, component.collectorNodeId)
+      - voltageAt(solution, groundNodeId, component.emitterNodeId);
+  }
+  if (component.kind === 'subcircuit') return 0;
+  if (component.kind === 'smooth-transconductance') {
+    return voltageAt(solution, groundNodeId, component.outputPositiveNodeId)
+      - voltageAt(solution, groundNodeId, component.outputNegativeNodeId);
+  }
   return voltageAt(solution, groundNodeId, component.positiveNodeId)
     - voltageAt(solution, groundNodeId, component.negativeNodeId);
 }
 
-export function directShortErrors(circuit: Circuit): SimulationMessage[] {
+function sourceVoltageAtTime(
+  source: Extract<ElectricalComponent, { kind: 'voltage-source' }> | ElectricalSignalSource,
+  timeSeconds: number,
+): number {
+  return source.kind === 'voltage-source'
+    ? source.voltageV
+    : signalSourceVoltageAtTime(source, timeSeconds);
+}
+
+export function directShortErrors(circuit: Circuit, timeSeconds = 0): SimulationMessage[] {
   return circuit.components
     .filter(
-      (component) => component.kind === 'voltage-source'
+      (component) => (component.kind === 'voltage-source' || component.kind === 'signal-source')
         && component.positiveNodeId === component.negativeNodeId
-        && component.voltageV !== 0,
+        && sourceVoltageAtTime(component, timeSeconds) !== 0,
     )
     .map((component) => ({
       code: 'DIRECT_SHORT',

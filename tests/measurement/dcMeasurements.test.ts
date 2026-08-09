@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createLedExampleProject } from '../../src/domain/project';
+import { createStarterProject } from '../../src/domain/starterProjects';
 import { measureComponent, measureProbeVoltage } from '../../src/measurement/dcMeasurements';
 import { simulateProject } from '../../src/simulation';
 
@@ -31,6 +32,27 @@ describe('DC measurement layer', () => {
       reason: expect.stringContaining('not calculated'),
     });
     expect(measurement.current.value).toBeUndefined();
+  });
+
+  it('reports an NE555 supply voltage from VCC to GND rather than arbitrary adjacent pins', () => {
+    const project = createStarterProject('ne555-astable');
+    const simulation = simulateProject(project);
+    const timer = project.components.find((component) => component.kind === 'ne555');
+    if (!timer) throw new Error('Starter timer is missing.');
+    const nodes = simulation.extraction.componentTerminalNodes[timer.id];
+    const result = {
+      ...simulation.result,
+      status: 'ok' as const,
+      errors: [],
+      nodeVoltages: {
+        [nodes.pin1]: 0,
+        [nodes.pin2]: 1.25,
+        [nodes.pin8]: 5,
+      },
+    };
+    const measurement = measureComponent(timer, simulation.extraction, result);
+    expect(measurement.voltage).toMatchObject({ status: 'valid', value: 5 });
+    expect(measurement.current.status).toBe('unavailable');
   });
 
   it('propagates simulation errors and disconnected probe state', () => {

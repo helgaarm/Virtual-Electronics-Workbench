@@ -45,10 +45,13 @@ export function measureComponent(
     return { voltage: reading, current: reading, power: reading };
   }
 
-  const voltage = terminals.length >= 2
+  const voltageTerminals = component.kind === 'ne555'
+    ? ['pin8', 'pin1']
+    : terminals.slice(0, 2).map(([name]) => name);
+  const voltage = voltageTerminals.length >= 2
     ? (() => {
-        const positive = result.nodeVoltages[terminalNodes[terminals[0][0]]];
-        const negative = result.nodeVoltages[terminalNodes[terminals[1][0]]];
+        const positive = result.nodeVoltages[terminalNodes[voltageTerminals[0]]];
+        const negative = result.nodeVoltages[terminalNodes[voltageTerminals[1]]];
         return positive === undefined || negative === undefined
           ? unavailable('disconnected', 'One or more terminal nodes are unavailable.')
           : valid(positive - negative);

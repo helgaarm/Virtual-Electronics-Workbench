@@ -1,10 +1,13 @@
 import type { Circuit, ElectricalComponent, SimulationMessage } from '../domain/circuit/types';
 import type { PlacedComponent } from '../domain/components/types';
 import { terminalEntries } from '../domain/components/types';
+import { SIGNAL_GENERATOR_COMPONENT_ID } from '../domain/instruments/types';
+export { SIGNAL_GENERATOR_COMPONENT_ID } from '../domain/instruments/types';
 import type { WorkbenchProject } from '../domain/project';
 import { createBreadboardDefinition } from '../domain/physical/breadboard';
 import { validateOccupancy } from '../domain/physical/occupancy';
 import { UnionFind } from './unionFind';
+import { createNe555Subcircuit } from './models/ne555';
 
 export interface CircuitExtraction {
   circuit: Circuit;
@@ -67,6 +70,8 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
     const source = project.components.find((component) => component.kind === 'voltage-source');
     groundNodeId = source
       ? holeToNodeId[source.terminalHoleIds.negative]
+      : project.signalGenerator.referenceHoleId
+        ? holeToNodeId[project.signalGenerator.referenceHoleId]
       : (holeToNodeId[board.holes[0].id] ?? 'node-ground');
     warnings.push({
       code: 'IMPLICIT_GROUND',
@@ -136,10 +141,51 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
           voltageV: project.powerOn ? component.voltageV : 0,
         });
         break;
+      case 'ne555':
+        electricalComponents.push(createNe555Subcircuit(component.id, {
+          gnd: holeToNodeId[component.terminalHoleIds.pin1],
+          trigger: holeToNodeId[component.terminalHoleIds.pin2],
+          output: holeToNodeId[component.terminalHoleIds.pin3],
+          reset: holeToNodeId[component.terminalHoleIds.pin4],
+          control: holeToNodeId[component.terminalHoleIds.pin5],
+          threshold: holeToNodeId[component.terminalHoleIds.pin6],
+          discharge: holeToNodeId[component.terminalHoleIds.pin7],
+          vcc: holeToNodeId[component.terminalHoleIds.pin8],
+        }));
+        break;
       case 'ground':
       case 'switch':
       case 'jumper-wire':
         break;
+    }
+  }
+
+
+  const generator = project.signalGenerator;
+  if (generator.enabled) {
+    if (generator.outputHoleId && generator.referenceHoleId) {
+      const positiveNodeId = holeToNodeId[generator.outputHoleId];
+      const negativeNodeId = holeToNodeId[generator.referenceHoleId];
+      componentTerminalNodes[SIGNAL_GENERATOR_COMPONENT_ID] = {
+        output: positiveNodeId,
+        reference: negativeNodeId,
+      };
+      electricalComponents.push({
+        id: SIGNAL_GENERATOR_COMPONENT_ID,
+        kind: 'signal-source',
+        positiveNodeId,
+        negativeNodeId,
+        waveform: generator.waveform,
+        frequencyHz: generator.frequencyHz,
+        amplitudeVpp: generator.amplitudeVpp,
+        offsetV: generator.offsetV,
+      });
+    } else {
+      warnings.push({
+        code: 'DISCONNECTED_SIGNAL_GENERATOR',
+        message: 'Connect both signal-generator leads before enabling its output.',
+        componentId: SIGNAL_GENERATOR_COMPONENT_ID,
+      });
     }
   }
 

@@ -153,4 +153,56 @@ describe('breadboard physical model', () => {
       project.components,
     )).toBeUndefined();
   });
+
+  it('places and rotates a reusable DIP-8 rigidly across the centre channel', () => {
+    const board = createBreadboardDefinition();
+    const timer = createPlacedComponent('ne555', board, []);
+    if (!timer || timer.kind !== 'ne555') throw new Error('NE555 was not placed.');
+    expect(PHYSICAL_PACKAGES.ne555).toMatchObject({
+      packageType: 'DIP-8',
+      dimensionsMm: { x: 9.81, y: 3.9, z: 6.35 },
+      allowedOrientations: [0, 180],
+    });
+    expect(timer.terminalHoleIds).toMatchObject({
+      pin1: terminalHoleId(board.id, 'E', 1),
+      pin4: terminalHoleId(board.id, 'E', 4),
+      pin5: terminalHoleId(board.id, 'F', 4),
+      pin8: terminalHoleId(board.id, 'F', 1),
+    });
+    expect(validateOccupancy(board, [timer])).toEqual([]);
+
+    const rotated = rotatePlacedComponent(board, { ...timer, anchored: false }, [timer]);
+    if (!rotated || rotated.kind !== 'ne555') throw new Error('NE555 did not rotate.');
+    expect(rotated.rotation).toBe(180);
+    expect(rotated.terminalHoleIds.pin1).toBe(timer.terminalHoleIds.pin5);
+    expect(rotated.terminalHoleIds.pin8).toBe(timer.terminalHoleIds.pin4);
+    expect(validateOccupancy(board, [rotated])).toEqual([]);
+  });
+
+  it('rejects a DIP-8 that does not straddle E/F over four consecutive columns', () => {
+    const board = createBreadboardDefinition();
+    const timer = createPlacedComponent('ne555', board, []);
+    if (!timer || timer.kind !== 'ne555') throw new Error('NE555 was not placed.');
+    const invalid = {
+      ...timer,
+      terminalHoleIds: { ...timer.terminalHoleIds, pin5: terminalHoleId(board.id, 'G', 4) },
+    };
+    expect(validateOccupancy(board, [invalid])).toContainEqual(expect.objectContaining({
+      code: 'INVALID_PACKAGE_PLACEMENT',
+      componentId: timer.id,
+    }));
+
+    const permutedPins = {
+      ...timer,
+      terminalHoleIds: {
+        ...timer.terminalHoleIds,
+        pin1: timer.terminalHoleIds.pin2,
+        pin2: timer.terminalHoleIds.pin1,
+      },
+    };
+    expect(validateOccupancy(board, [permutedPins])).toContainEqual(expect.objectContaining({
+      code: 'INVALID_PACKAGE_PLACEMENT',
+      componentId: timer.id,
+    }));
+  });
 });

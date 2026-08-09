@@ -30,7 +30,7 @@ describe('project document migrations', () => {
     delete legacy.simulation;
     for (const probe of legacy.probes as Array<Record<string, unknown>>) delete probe.instrumentId;
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(4);
+    expect(migrated.version).toBe(7);
     expect(migrated.revision).toBe(0);
     expect(migrated.probes[0].instrumentId).toBe('multimeter');
     expect(migrated.analysis).toMatchObject({
@@ -63,6 +63,43 @@ describe('project document migrations', () => {
     });
   });
 
+  it('migrates version 4 projects to default Phase E instruments', () => {
+    const legacy = projectRecord();
+    legacy.version = 4;
+    legacy.simulation = { timeStepSeconds: 0.001, speed: 2 };
+    delete legacy.oscilloscope;
+    delete legacy.signalGenerator;
+    const migrated = migrateProjectDocument(legacy);
+    expect(migrated.simulation).toEqual({ timeStepSeconds: 0.001, speed: 2 });
+    expect(migrated.oscilloscope.channels.ch1.label).toBe('CH1');
+    expect(migrated.oscilloscope.channels.ch2.label).toBe('CH2');
+    expect(migrated.signalGenerator).toMatchObject({
+      enabled: false,
+      waveform: 'square',
+      frequencyHz: 1,
+    });
+  });
+
+  it('migrates version 5 trigger defaults and normalizes legacy continuous scales', () => {
+    const legacy = projectRecord();
+    legacy.version = 5;
+    const simulation = legacy.simulation as Record<string, unknown>;
+    simulation.timeStepSeconds = 0.000001;
+    simulation.speed = 0.1;
+    const oscilloscope = legacy.oscilloscope as Record<string, unknown>;
+    delete oscilloscope.triggerEdge;
+    oscilloscope.timePerDivisionSeconds = 0.000001;
+    const channels = oscilloscope.channels as Record<string, Record<string, unknown>>;
+    channels.ch1.voltsPerDivisionV = 0.001;
+
+    const migrated = migrateProjectDocument(legacy);
+    expect(migrated.version).toBe(7);
+    expect(migrated.simulation).toEqual({ timeStepSeconds: 0.00005, speed: 0.25 });
+    expect(migrated.oscilloscope.timePerDivisionSeconds).toBe(0.00005);
+    expect(migrated.oscilloscope.channels.ch1.voltsPerDivisionV).toBe(0.01);
+    expect(migrated.oscilloscope.triggerEdge).toBe('rising');
+  });
+
   it('round-trips capacitor data and rejects invalid persisted capacitance', () => {
     const project = createStarterProject('rc-charge-discharge');
     expect(migrateProjectDocument(structuredClone(project))).toEqual(project);
@@ -75,13 +112,63 @@ describe('project document migrations', () => {
     expect(() => migrateProjectDocument(invalid)).toThrow(/capacitanceFarads/);
   });
 
+  it('round-trips NE555 identity, package, orientation, and all eight pins', () => {
+    const project = createStarterProject('ne555-astable');
+    const migrated = migrateProjectDocument(structuredClone(project));
+    const timer = migrated.components.find((component) => component.kind === 'ne555');
+    expect(migrated).toEqual(project);
+    expect(timer).toMatchObject({
+      kind: 'ne555',
+      deviceId: 'ne555n',
+      packageId: 'DIP-8',
+      simulationModel: 'hybrid-analogue-subcircuit',
+      rotation: 0,
+      terminalHoleIds: expect.objectContaining({ pin1: 'main:E10', pin8: 'main:F10' }),
+    });
+  });
+
   it.each([
     ['missing view', (value: Record<string, unknown>) => { delete value.view; }, /view/],
     ['missing analysis settings', (value: Record<string, unknown>) => { delete value.analysis; }, /analysis/],
     ['missing simulation settings', (value: Record<string, unknown>) => { delete value.simulation; }, /simulation/],
+    ['missing oscilloscope settings', (value: Record<string, unknown>) => { delete value.oscilloscope; }, /oscilloscope/],
+    ['missing signal generator settings', (value: Record<string, unknown>) => { delete value.signalGenerator; }, /signalGenerator/],
+    ['invalid active instrument', (value: Record<string, unknown>) => {
+      (value.analysis as Record<string, unknown>).activeInstrument = 'spectrum-analyzer';
+    }, /activeInstrument/],
+    ['invalid oscilloscope channel ID', (value: Record<string, unknown>) => {
+      const oscilloscope = value.oscilloscope as Record<string, unknown>;
+      const channels = oscilloscope.channels as Record<string, Record<string, unknown>>;
+      channels.ch1.id = 'ch2';
+    }, /oscilloscope.channels.ch1.id/],
+    ['invalid oscilloscope scale', (value: Record<string, unknown>) => {
+      (value.oscilloscope as Record<string, unknown>).timePerDivisionSeconds = 0;
+    }, /timePerDivisionSeconds/],
+    ['unsupported oscilloscope volts-per-division option', (value: Record<string, unknown>) => {
+      const oscilloscope = value.oscilloscope as Record<string, unknown>;
+      const channels = oscilloscope.channels as Record<string, Record<string, unknown>>;
+      channels.ch1.voltsPerDivisionV = 0.03;
+    }, /voltsPerDivisionV/],
+    ['invalid oscilloscope trigger edge', (value: Record<string, unknown>) => {
+      (value.oscilloscope as Record<string, unknown>).triggerEdge = 'both';
+    }, /triggerEdge/],
+    ['invalid signal-generator waveform', (value: Record<string, unknown>) => {
+      (value.signalGenerator as Record<string, unknown>).waveform = 'triangle';
+    }, /signalGenerator.waveform/],
+    ['signal-generator frequency above supported range', (value: Record<string, unknown>) => {
+      (value.signalGenerator as Record<string, unknown>).frequencyHz = 1_001;
+    }, /signalGenerator.frequencyHz/],
+    ['unknown signal-generator hole', (value: Record<string, unknown>) => {
+      (value.signalGenerator as Record<string, unknown>).outputHoleId = 'main:not-a-hole';
+    }, /signalGenerator/],
     ['invalid transient step', (value: Record<string, unknown>) => {
       (value.simulation as Record<string, unknown>).timeStepSeconds = 0;
     }, /timeStepSeconds/],
+    ['unsupported finest-step speed', (value: Record<string, unknown>) => {
+      const simulation = value.simulation as Record<string, unknown>;
+      simulation.timeStepSeconds = 0.00005;
+      simulation.speed = 4;
+    }, /simulation.speed/],
     ['unknown selected probe', (value: Record<string, unknown>) => {
       (value.analysis as Record<string, unknown>).selectedProbeId = 'probe-missing';
     }, /existing probe/],
@@ -109,6 +196,9 @@ describe('project document migrations', () => {
     ['unsafe component ID', (value: Record<string, unknown>) => {
       (value.components as Array<Record<string, unknown>>)[0].id = '__proto__';
     }, /safe identifier/],
+    ['reserved instrument component ID', (value: Record<string, unknown>) => {
+      (value.components as Array<Record<string, unknown>>)[0].id = 'signal-generator-output';
+    }, /reserved/],
   ])('rejects %s', (_name, mutate, expected) => {
     const value = projectRecord();
     mutate(value);

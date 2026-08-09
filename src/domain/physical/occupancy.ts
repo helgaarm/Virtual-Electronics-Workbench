@@ -4,7 +4,7 @@ import type { BreadboardDefinition } from './breadboard';
 import { leadSpanViolation, PHYSICAL_PACKAGES } from './packages';
 
 export interface OccupancyIssue {
-  code: 'UNKNOWN_HOLE' | 'HOLE_OCCUPIED' | 'DUPLICATE_TERMINAL' | 'LEAD_SPAN_OUT_OF_RANGE';
+  code: 'UNKNOWN_HOLE' | 'HOLE_OCCUPIED' | 'DUPLICATE_TERMINAL' | 'LEAD_SPAN_OUT_OF_RANGE' | 'INVALID_PACKAGE_PLACEMENT';
   message: string;
   componentId: string;
   holeId: string;
@@ -57,6 +57,51 @@ export function validateOccupancy(
       occupied.set(holeId, component.id);
     }
     const terminals = terminalEntries(component);
+    if (component.kind === 'ne555') {
+      const pinHoles = terminals
+        .map(([, holeId]) => board.holes.find((hole) => hole.id === holeId))
+        .filter((hole) => hole !== undefined);
+      const columns = [...new Set(pinHoles.map((hole) => hole.column))].sort((left, right) => left - right);
+      const validRows = pinHoles.filter((hole) => hole.row === 'E').length === 4
+        && pinHoles.filter((hole) => hole.row === 'F').length === 4;
+      const consecutiveColumns = columns.length === 4
+        && columns.every((column, index) => index === 0 || column === columns[index - 1] + 1);
+      const twoPinsPerColumn = columns.every(
+        (column) => pinHoles.filter((hole) => hole.column === column).length === 2,
+      );
+      const minimumColumn = columns[0];
+      const maximumColumn = columns[columns.length - 1];
+      const expectedPinPositions = component.rotation === 0
+        ? [
+          ['E', minimumColumn], ['E', minimumColumn + 1],
+          ['E', minimumColumn + 2], ['E', maximumColumn],
+          ['F', maximumColumn], ['F', minimumColumn + 2],
+          ['F', minimumColumn + 1], ['F', minimumColumn],
+        ] as const
+        : component.rotation === 180
+          ? [
+            ['F', maximumColumn], ['F', minimumColumn + 2],
+            ['F', minimumColumn + 1], ['F', minimumColumn],
+            ['E', minimumColumn], ['E', minimumColumn + 1],
+            ['E', minimumColumn + 2], ['E', maximumColumn],
+          ] as const
+          : [];
+      const correctPinOrder = expectedPinPositions.length === 8
+        && expectedPinPositions.every(([row, column], pinIndex) => {
+          const hole = board.holes.find(
+            (candidate) => candidate.id === component.terminalHoleIds[`pin${pinIndex + 1}` as keyof typeof component.terminalHoleIds],
+          );
+          return hole?.row === row && hole.column === column;
+        });
+      if (!validRows || !consecutiveColumns || !twoPinsPerColumn || !correctPinOrder) {
+        issues.push({
+          code: 'INVALID_PACKAGE_PLACEMENT',
+          message: `${component.label} must straddle the centre channel with rigid DIP-8 pin order.`,
+          componentId: component.id,
+          holeId: terminals[0]?.[1] ?? '',
+        });
+      }
+    }
     const limits = PHYSICAL_PACKAGES[component.kind].leadSpanMm;
     if (limits && terminals.length >= 2) {
       const first = board.holes.find((hole) => hole.id === terminals[0][1]);

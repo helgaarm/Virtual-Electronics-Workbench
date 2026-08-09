@@ -10,6 +10,7 @@ const KINDS: Array<{ kind: ComponentKind; icon: string }> = [
   { kind: 'capacitor', icon: 'C' },
   { kind: 'switch', icon: 'SW' },
   { kind: 'jumper-wire', icon: 'WIRE' },
+  { kind: 'ne555', icon: '555' },
 ];
 
 export function Palette({ onAdd }: { onAdd: (kind: ComponentKind) => void }) {

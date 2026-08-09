@@ -1,5 +1,6 @@
 import type { ComponentKind } from '../components/types';
 import type { QuarterTurn } from './geometry';
+import { DIP_8_PACKAGE } from './dipPackages';
 
 export interface PhysicalPackageDefinition {
   packageType: string;
@@ -66,6 +67,13 @@ export const PHYSICAL_PACKAGES: Record<ComponentKind, PhysicalPackageDefinition>
     leadDiameterMm: 0.5,
     mountingHeightMm: 5,
     allowedOrientations: QUARTER_TURNS,
+  },
+  ne555: {
+    packageType: DIP_8_PACKAGE.id,
+    dimensionsMm: DIP_8_PACKAGE.bodyDimensionsMm,
+    leadDiameterMm: DIP_8_PACKAGE.leadWidthMm,
+    mountingHeightMm: 5.2,
+    allowedOrientations: [0, 180],
   },
 };
 

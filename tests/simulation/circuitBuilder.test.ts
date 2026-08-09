@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLedExampleProject } from '../../src/domain/project';
 import { createStarterProject } from '../../src/domain/starterProjects';
-import { extractCircuit } from '../../src/simulation/circuitBuilder';
+import {
+  extractCircuit,
+  SIGNAL_GENERATOR_COMPONENT_ID,
+} from '../../src/simulation/circuitBuilder';
 import { simulateProject } from '../../src/simulation';
 
 describe('physical circuit extraction', () => {
@@ -76,5 +79,40 @@ describe('physical circuit extraction', () => {
       code: 'INVALID_CAPACITANCE',
       componentId: 'C1',
     }));
+  });
+
+  it('extracts the connected signal generator as a real time-dependent source', () => {
+    const project = createStarterProject('rc-charge-discharge');
+    const extraction = extractCircuit(project);
+    expect(extraction.circuit.components).toContainEqual({
+      id: SIGNAL_GENERATOR_COMPONENT_ID,
+      kind: 'signal-source',
+      positiveNodeId: extraction.holeToNodeId[project.signalGenerator.outputHoleId!],
+      negativeNodeId: extraction.holeToNodeId[project.signalGenerator.referenceHoleId!],
+      waveform: 'square',
+      frequencyHz: 0.25,
+      amplitudeVpp: 5,
+      offsetV: 2.5,
+    });
+  });
+
+  it('maps every physical NE555 pin into a reusable internal subcircuit', () => {
+    const project = createStarterProject('ne555-astable');
+    const extraction = extractCircuit(project);
+    const timer = extraction.circuit.components.find((component) => component.id === 'U1');
+    expect(timer).toMatchObject({
+      id: 'U1',
+      kind: 'subcircuit',
+      externalNodes: {
+        gnd: extraction.componentTerminalNodes.U1.pin1,
+        trigger: extraction.componentTerminalNodes.U1.pin2,
+        output: extraction.componentTerminalNodes.U1.pin3,
+        reset: extraction.componentTerminalNodes.U1.pin4,
+        control: extraction.componentTerminalNodes.U1.pin5,
+        threshold: extraction.componentTerminalNodes.U1.pin6,
+        discharge: extraction.componentTerminalNodes.U1.pin7,
+        vcc: extraction.componentTerminalNodes.U1.pin8,
+      },
+    });
   });
 });

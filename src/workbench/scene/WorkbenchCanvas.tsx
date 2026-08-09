@@ -6,7 +6,7 @@ import type { BreadboardDefinition } from '../../domain/physical/breadboard';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { PlacedComponent } from '../../domain/components/types';
 import type { SimulationResult } from '../../domain/circuit/types';
-import type { MeasurementProbe } from '../../domain/project';
+import type { InstrumentProbeMarker } from '../../state/instrumentSelectors';
 import { ComponentMeshes } from '../components/ComponentMeshes';
 import { ProbeMeshes } from '../components/ProbeMeshes';
 import { BreadboardMesh } from './BreadboardMesh';
@@ -22,7 +22,7 @@ interface Props {
   highlightedHoleIds: Set<string>;
   connectionGuideHoleIds?: Set<string>;
   occupiedHoleIds: Set<string>;
-  probes?: readonly MeasurementProbe[];
+  probes?: readonly InstrumentProbeMarker[];
   selectedProbeId?: string;
   onSelectComponent: (id: string) => void;
   onSelectHole: (id: string) => void;

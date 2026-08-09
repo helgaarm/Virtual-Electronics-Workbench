@@ -1,22 +1,22 @@
 import { Html } from '@react-three/drei';
 import type { BreadboardDefinition } from '../../domain/physical/breadboard';
 import { getHole } from '../../domain/physical/breadboard';
-import type { MeasurementProbe, ProbeTerminal } from '../../domain/project';
+import type { InstrumentProbeMarker } from '../../state/instrumentSelectors';
 
 interface Props {
   board: BreadboardDefinition;
-  probes: readonly MeasurementProbe[];
+  probes: readonly InstrumentProbeMarker[];
   selectedProbeId?: string;
 }
 
 interface ProbeEnd {
   key: string;
-  probe: MeasurementProbe;
-  terminal: ProbeTerminal;
+  probe: InstrumentProbeMarker;
+  terminal: 'positive' | 'reference';
   holeId: string;
 }
 
-function probeEnds(probes: readonly MeasurementProbe[]): ProbeEnd[] {
+function probeEnds(probes: readonly InstrumentProbeMarker[]): ProbeEnd[] {
   return probes.flatMap((probe) => [
     ...(probe.positiveHoleId
       ? [{ key: `${probe.id}:positive`, probe, terminal: 'positive' as const, holeId: probe.positiveHoleId }]
@@ -32,7 +32,7 @@ export function ProbeMeshes({ board, probes, selectedProbeId }: Props) {
     const hole = getHole(board, holeId);
     if (!hole) return null;
     const positive = terminal === 'positive';
-    const color = positive ? '#2f82c4' : '#252b2b';
+    const color = positive ? probe.positiveColor : probe.referenceColor;
     const selected = probe.id === selectedProbeId;
     return (
       <group key={key} position={[hole.positionMm.x, hole.positionMm.y + 0.18, hole.positionMm.z]}>
@@ -58,7 +58,8 @@ export function ProbeMeshes({ board, probes, selectedProbeId }: Props) {
             aria-hidden="true"
             className={`probe-marker-label probe-marker-${terminal}${selected ? ' is-selected' : ''}`}
           >
-            <strong>{probe.label}</strong><span>{positive ? '+' : 'COM'} {hole.label}</span>
+            <strong>{probe.label}</strong>
+            <span>{positive ? probe.positiveLabel : probe.referenceLabel} {hole.label}</span>
           </span>
         </Html>
       </group>

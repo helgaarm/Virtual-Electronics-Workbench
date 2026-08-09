@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createLedExampleProject } from '../../src/domain/project';
+import { createStarterProject } from '../../src/domain/starterProjects';
 import { createApp } from '../../server/app';
 import { ProjectConflictError, SqliteProjectRepository } from '../../server/sqliteProjectRepository';
 
@@ -59,6 +60,21 @@ describe('SQLite project persistence', () => {
       reader?.close();
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it('round-trips configured Phase E instruments through SQLite and HTTP', async () => {
+    const repo = repository();
+    const app = createApp(repo);
+    const project = createStarterProject('rc-charge-discharge');
+    const saved = await request(app)
+      .put(`/api/projects/${project.id}`)
+      .send(project)
+      .expect(200);
+    const reopened = await request(app).get(`/api/projects/${project.id}`).expect(200);
+    expect(reopened.body.oscilloscope).toEqual(project.oscilloscope);
+    expect(reopened.body.signalGenerator).toEqual(project.signalGenerator);
+    expect(reopened.body.simulation).toEqual(project.simulation);
+    expect(reopened.body.revision).toBe(saved.body.revision);
   });
 
   it('exposes health and project CRUD over HTTP', async () => {

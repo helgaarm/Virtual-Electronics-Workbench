@@ -31,6 +31,8 @@ The authoritative flow is:
 
 ## Adding a component
 
+Follow the complete research, package/device/model, licensing, persistence, and validation workflow in [docs/component-authoring.md](docs/component-authoring.md). The short code map below is only a repository orientation aid.
+
 1. Define its electrical terminals/properties in `src/domain/circuit`.
 2. Define its package dimensions, lead diameter, mounting height, and allowed orientations in `src/domain/physical`; derive renderer-only lead anchors from those values when needed.
 3. Add circuit-extraction stamps in `src/simulation/circuitBuilder.ts`.

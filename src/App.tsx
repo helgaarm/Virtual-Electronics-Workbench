@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ComponentKind, PlacedComponent } from './domain/components/types';
 import { isComponentAnchored, terminalEntries } from './domain/components/types';
+import { signalSourceVoltageAtTime } from './domain/circuit/types';
 import { connectedHoleIds, createBreadboardDefinition } from './domain/physical/breadboard';
 import { buildOccupancy, validateOccupancy } from './domain/physical/occupancy';
-import { createEmptyProject, type WorkbenchProject } from './domain/project';
+import {
+  createEmptyProject,
+  SIMULATION_SPEEDS,
+  SIMULATION_TIME_STEPS_SECONDS,
+  type WorkbenchProject,
+} from './domain/project';
 import {
   createStarterProject,
   STARTER_PROJECTS,
@@ -14,6 +20,11 @@ import { ApiProjectRepository } from './persistence/apiProjectRepository';
 import type { ProjectSummary } from './persistence/projectRepository';
 import { simulateProject } from './simulation';
 import { connectionLearningTarget } from './state/connectionLearning';
+import {
+  activeInstrumentMarkerId,
+  instrumentProbeMarkers,
+  oscilloscopeSampleNodeIds,
+} from './state/instrumentSelectors';
 import { useTransientRuntime } from './state/useTransientRuntime';
 import { createPlacedComponent, movePlacedComponent, rotatePlacedComponent } from './state/workbenchActions';
 import {
@@ -51,6 +62,8 @@ export default function App() {
   const [transientResetKey, setTransientResetKey] = useState(0);
   const past = useRef<WorkbenchProject[]>([]);
   const future = useRef<WorkbenchProject[]>([]);
+  const projectNameInputRef = useRef<HTMLInputElement>(null);
+  const projectNameAtFocusRef = useRef(project.name);
 
   const board = useMemo(
     () => createBreadboardDefinition(project.board.id, project.board.columns),
@@ -58,18 +71,33 @@ export default function App() {
   );
   const dcSimulation = useMemo(() => simulateProject(project), [project]);
   const circuitKey = useMemo(
-    () => JSON.stringify({ board: project.board, powerOn: project.powerOn, components: project.components }),
-    [project.board, project.components, project.powerOn],
+    () => JSON.stringify({
+      board: project.board,
+      powerOn: project.powerOn,
+      components: project.components,
+      signalGenerator: project.signalGenerator,
+    }),
+    [project.board, project.components, project.powerOn, project.signalGenerator],
+  );
+  const sampleNodeIds = useMemo(
+    () => oscilloscopeSampleNodeIds(project, dcSimulation.extraction.holeToNodeId),
+    [dcSimulation.extraction.holeToNodeId, project],
+  );
+  const circuitTopologyKey = useMemo(
+    () => JSON.stringify(dcSimulation.extraction.holeToNodeId),
+    [dcSimulation.extraction.holeToNodeId],
   );
   const transientRuntime = useTransientRuntime(
     dcSimulation.extraction.circuit,
     circuitKey,
     project.simulation,
     transientResetKey,
+    sampleNodeIds,
+    circuitTopologyKey,
   );
   const simulation = useMemo(() => {
     if (
-      !transientRuntime.hasCapacitors
+      !transientRuntime.hasTransientDevices
       || !transientRuntime.frame
       || dcSimulation.extraction.errors.length > 0
     ) return dcSimulation;
@@ -89,8 +117,9 @@ export default function App() {
             : 'ok' as const,
       },
     };
-  }, [dcSimulation, transientRuntime.frame, transientRuntime.hasCapacitors]);
-  const selectedProbeId = project.analysis.selectedProbeId ?? project.probes[0]?.id;
+  }, [dcSimulation, transientRuntime.frame, transientRuntime.hasTransientDevices]);
+  const probeMarkers = useMemo(() => instrumentProbeMarkers(project), [project]);
+  const selectedMarkerId = activeInstrumentMarkerId(project);
   const selectedComponent = project.components.find((component) => component.id === selectedComponentId);
   const selectedMeasurement = useMemo(
     () => selectedComponent
@@ -163,6 +192,15 @@ export default function App() {
       return next;
     });
   }, []);
+
+  const commitProjectName = useCallback((rawName: string) => {
+    const name = rawName.trim() || 'Untitled workbench';
+    if (name !== project.name) applyProject((current) => ({ ...current, name }));
+    if (name !== projectNameAtFocusRef.current) {
+      setNotice(`Project renamed to “${name}”. Select Save to store the new name in SQLite.`);
+    }
+    projectNameAtFocusRef.current = name;
+  }, [applyProject, project.name]);
 
   const undo = useCallback(() => {
     const previous = past.current.at(-1);
@@ -269,7 +307,8 @@ export default function App() {
       return;
     }
     updateComponent(rotated);
-    setNotice(`${selectedComponent.label} rotated 90° and re-snapped.`);
+    const rotationStep = selectedComponent.kind === 'ne555' ? 180 : 90;
+    setNotice(`${selectedComponent.label} rotated ${rotationStep}° and re-snapped.`);
   };
 
   const toggleConnectionLearning = (enabled: boolean) => {
@@ -403,6 +442,11 @@ export default function App() {
 
   const statusText = simulation.result.errors[0]?.message ?? notice;
   const activeVoltageSource = project.components.find((component) => component.kind === 'voltage-source');
+  const sourceStatusText = project.signalGenerator.enabled
+    ? `${project.signalGenerator.frequencyHz.toLocaleString()} Hz ${project.signalGenerator.waveform} · ${signalSourceVoltageAtTime(project.signalGenerator, transientRuntime.clock.timeSeconds).toFixed(2)} V now`
+    : project.powerOn && activeVoltageSource
+      ? `${activeVoltageSource.voltageV.toFixed(2)} V DC`
+      : '0 V';
 
   return (
     <div className="app-shell">
@@ -425,7 +469,37 @@ export default function App() {
       </header>
 
       <div className="project-bar">
-        <label className="project-name"><span>Project</span><input value={project.name} onChange={(event) => applyProject((current) => ({ ...current, name: event.target.value }))} /></label>
+        <div className="project-name">
+          <label htmlFor="project-name-input">Project name</label>
+          <span className="project-name-control">
+            <input
+              ref={projectNameInputRef}
+              id="project-name-input"
+              value={project.name}
+              maxLength={200}
+              autoComplete="off"
+              aria-invalid={!project.name.trim()}
+              title="Enter a project name, then select Save to persist it in SQLite."
+              onFocus={() => { projectNameAtFocusRef.current = project.name; }}
+              onChange={(event) => applyProject((current) => ({
+                ...current,
+                name: event.target.value,
+              }))}
+              onBlur={(event) => commitProjectName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                projectNameInputRef.current?.focus();
+                projectNameInputRef.current?.select();
+              }}
+              title="Rename this project"
+            >Rename</button>
+          </span>
+        </div>
         <div className="project-loaders">
           <div className="starter-project">
             <label htmlFor="starter-projects">Start projects</label>
@@ -463,8 +537,8 @@ export default function App() {
                 highlightedHoleIds={highlightedHoleIds}
                 connectionGuideHoleIds={connectionGuideHoleIds}
                 occupiedHoleIds={occupiedHoleIds}
-                probes={project.probes}
-                selectedProbeId={selectedProbeId}
+                probes={probeMarkers}
+                selectedProbeId={selectedMarkerId}
                 onSelectComponent={selectComponent}
                 onSelectHole={(id) => { setSelectedHoleId(id); setSelectedComponentId(''); setNotice(`${id.split(':').at(-1)} selected.`); }}
                 onClearSelection={() => { setSelectedComponentId(''); setSelectedHoleId(undefined); }}
@@ -485,6 +559,11 @@ export default function App() {
             onUpdate={updateComponent}
             onRotate={rotateSelected}
             onDelete={removeSelected}
+            onHardResetCapacitor={(componentId) => {
+              transientRuntime.hardResetCapacitor(componentId);
+              const capacitor = project.components.find((component) => component.id === componentId);
+              setNotice(`${capacitor?.label ?? 'Capacitor'} charge hard-reset to 0 V. Simulation paused.`);
+            }}
           />
         </main>
       ) : (
@@ -492,6 +571,7 @@ export default function App() {
           project={project}
           board={board}
           simulation={simulation}
+          transientRuntime={transientRuntime}
           onEditProject={applyProject}
           onSwitchToBuild={() => applyProject((current) => ({ ...current, workspace: 'build' }))}
         />
@@ -499,31 +579,44 @@ export default function App() {
 
       <footer className={`status-bar status-${simulation.result.status}`}>
         <span className="status-dot" />
-        <strong>{transientRuntime.hasCapacitors
+        <strong>{transientRuntime.hasTransientDevices
           ? `Transient ${transientRuntime.clock.status}`
           : project.powerOn ? 'Simulation active' : 'Output off'}</strong>
         <span className="status-separator" />
-        <span>{project.powerOn && activeVoltageSource ? `${activeVoltageSource.voltageV.toFixed(2)} V DC` : '0 V'}</span>
-        {transientRuntime.hasCapacitors && (
+        <span>{sourceStatusText}</span>
+        {transientRuntime.hasTransientDevices && (
           <div className="transient-controls" role="group" aria-label="Transient simulation clock">
             <button onClick={transientRuntime.toggleRunning}>
               {transientRuntime.clock.status === 'running' ? 'Pause' : 'Run'}
             </button>
             <button onClick={transientRuntime.stepOnce} disabled={transientRuntime.clock.status === 'running'}>Step</button>
-            <button onClick={transientRuntime.reset}>Reset</button>
+            <button
+              onClick={transientRuntime.reset}
+              title="Clear every capacitor charge and return transient time to 0 seconds"
+            >Reset all</button>
             <output>{transientRuntime.clock.timeSeconds.toFixed(3)} s</output>
             <label>Step
               <select
                 value={project.simulation.timeStepSeconds}
-                onChange={(event) => applyProject((current) => ({
-                  ...current,
-                  simulation: { ...current.simulation, timeStepSeconds: Number(event.target.value) },
-                }))}
+                onChange={(event) => {
+                  const timeStepSeconds = Number(event.target.value);
+                  applyProject((current) => ({
+                    ...current,
+                    simulation: {
+                      ...current.simulation,
+                      timeStepSeconds,
+                      speed: timeStepSeconds <= 0.00005
+                        ? Math.min(current.simulation.speed, 2)
+                        : current.simulation.speed,
+                    },
+                  }));
+                }}
               >
-                <option value={0.001}>1 ms</option>
-                <option value={0.005}>5 ms</option>
-                <option value={0.01}>10 ms</option>
-                <option value={0.05}>50 ms</option>
+                {SIMULATION_TIME_STEPS_SECONDS.map((value) => (
+                  <option key={value} value={value}>
+                    {value < 0.001 ? `${value * 1e6} µs` : `${value * 1e3} ms`}
+                  </option>
+                ))}
               </select>
             </label>
             <label>Speed
@@ -534,11 +627,13 @@ export default function App() {
                   simulation: { ...current.simulation, speed: Number(event.target.value) },
                 }))}
               >
-                <option value={0.25}>0.25×</option>
-                <option value={0.5}>0.5×</option>
-                <option value={1}>1×</option>
-                <option value={2}>2×</option>
-                <option value={4}>4×</option>
+                {SIMULATION_SPEEDS.map((value) => (
+                  <option
+                    key={value}
+                    value={value}
+                    disabled={value === 4 && project.simulation.timeStepSeconds <= 0.00005}
+                  >{value}×</option>
+                ))}
               </select>
             </label>
           </div>

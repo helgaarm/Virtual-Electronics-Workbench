@@ -1,5 +1,15 @@
 import type { QuarterTurn } from '../physical/geometry';
 
+export const LED_COLORS = ['red', 'green', 'yellow', 'blue', 'white'] as const;
+export type LedColor = (typeof LED_COLORS)[number];
+export const LED_TYPICAL_FORWARD_VOLTAGE_V: Record<LedColor, number> = {
+  red: 1.9,
+  green: 2.1,
+  yellow: 2,
+  blue: 3,
+  white: 3,
+};
+
 interface ComponentBase {
   id: string;
   label: string;
@@ -27,7 +37,7 @@ export interface ResistorComponent extends ComponentBase {
 
 export interface LedComponent extends ComponentBase {
   kind: 'led';
-  color: 'red' | 'green' | 'yellow' | 'blue' | 'white';
+  color: LedColor;
   forwardVoltageV: number;
   onResistanceOhms: number;
   terminalHoleIds: { anode: string; cathode: string };
@@ -52,6 +62,27 @@ export interface JumperWireComponent extends ComponentBase {
   terminalHoleIds: { a: string; b: string };
 }
 
+export const NE555_PIN_NAMES = {
+  pin1: 'GND',
+  pin2: 'TRIGGER',
+  pin3: 'OUTPUT',
+  pin4: 'RESET',
+  pin5: 'CONTROL VOLTAGE',
+  pin6: 'THRESHOLD',
+  pin7: 'DISCHARGE',
+  pin8: 'VCC',
+} as const;
+
+export type Ne555PinId = keyof typeof NE555_PIN_NAMES;
+
+export interface Ne555Component extends ComponentBase {
+  kind: 'ne555';
+  deviceId: 'ne555n';
+  packageId: 'DIP-8';
+  simulationModel: 'hybrid-analogue-subcircuit';
+  terminalHoleIds: Record<Ne555PinId, string>;
+}
+
 export type PlacedComponent =
   | VoltageSourceComponent
   | GroundComponent
@@ -59,7 +90,8 @@ export type PlacedComponent =
   | LedComponent
   | CapacitorComponent
   | SwitchComponent
-  | JumperWireComponent;
+  | JumperWireComponent
+  | Ne555Component;
 
 export type ComponentKind = PlacedComponent['kind'];
 
@@ -87,5 +119,7 @@ export function componentDisplayName(kind: ComponentKind): string {
       return 'Switch';
     case 'jumper-wire':
       return 'Jumper wire';
+    case 'ne555':
+      return 'NE555N timer';
   }
 }

@@ -9,6 +9,7 @@ import type { SimulationResult } from '../../domain/circuit/types';
 import { routeJumperWire } from '../../domain/physical/wireRouting';
 import { CylinderBetween, SmoothTube } from '../scene/geometry';
 import { createJumperCurve } from '../scene/wireGeometry';
+import { DIP_8_PACKAGE } from '../../domain/physical/dipPackages';
 
 interface Props {
   board: BreadboardDefinition;
@@ -441,8 +442,112 @@ function TactileSwitchMesh({ component, board, selected, onSelect, onBeginDrag }
   );
 }
 
+function useDipMarkingTexture(): THREE.CanvasTexture | undefined {
+  const texture = useMemo(() => {
+    if (typeof document === 'undefined') return undefined;
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 160;
+    const context = canvas.getContext('2d');
+    if (!context) return undefined;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#c8cbca';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.font = '700 66px ui-monospace, monospace';
+    context.fillText('NE555N', canvas.width / 2, 62);
+    context.fillStyle = '#8c9291';
+    context.font = '500 31px ui-monospace, monospace';
+    context.fillText('TIMER', canvas.width / 2, 125);
+    const created = new THREE.CanvasTexture(canvas);
+    created.colorSpace = THREE.SRGBColorSpace;
+    created.needsUpdate = true;
+    return created;
+  }, []);
+  useEffect(() => () => texture?.dispose(), [texture]);
+  return texture;
+}
+
+/** Reusable procedural DIP package. Pin locations come entirely from the placed component. */
+function Dip8Mesh({ component, board, selected, onSelect, onBeginDrag }: {
+  component: Extract<PlacedComponent, { kind: 'ne555' }>;
+  board: BreadboardDefinition;
+  selected: boolean;
+  onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
+}) {
+  const physicalPackage = PHYSICAL_PACKAGES.ne555;
+  const pinPoints = Object.values(component.terminalHoleIds).map((holeId) => point(board, holeId, 0.25));
+  const center = pinPoints.reduce((sum, pin) => sum.add(pin), new THREE.Vector3())
+    .multiplyScalar(1 / pinPoints.length);
+  const pin1 = point(board, component.terminalHoleIds.pin1);
+  const pin4 = point(board, component.terminalHoleIds.pin4);
+  const packageAxis = pin4.clone().sub(pin1);
+  const rotationY = -Math.atan2(packageAxis.z, packageAxis.x);
+  const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const bodyBottomY = bodyCenter.y - DIP_8_PACKAGE.bodyDimensionsMm.y / 2;
+  const texture = useDipMarkingTexture();
+
+  return (
+    <group
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+    >
+      {pinPoints.map((pin, index) => {
+        const inward = center.clone().sub(pin).setY(0).normalize();
+        const shoulder = pin.clone().setY(bodyBottomY - 0.25);
+        const contact = shoulder.clone().addScaledVector(inward, 0.72).setY(bodyBottomY + 0.12);
+        return (
+          <SmoothTube
+            key={index}
+            points={[pin, shoulder, contact]}
+            radius={DIP_8_PACKAGE.leadWidthMm / 2}
+            color="#b9bec0"
+            metalness={0.9}
+          />
+        );
+      })}
+      <group position={bodyCenter} rotation={[0, rotationY, 0]}>
+        <RoundedBox
+          args={[
+            DIP_8_PACKAGE.bodyDimensionsMm.x,
+            DIP_8_PACKAGE.bodyDimensionsMm.y,
+            DIP_8_PACKAGE.bodyDimensionsMm.z,
+          ]}
+          radius={0.42}
+          smoothness={7}
+          bevelSegments={5}
+          castShadow
+        >
+          <meshStandardMaterial
+            color={selected ? '#263643' : '#15191b'}
+            roughness={0.58}
+            metalness={0.04}
+            emissive={selected ? '#3478c7' : '#000000'}
+            emissiveIntensity={selected ? 0.15 : 0}
+          />
+        </RoundedBox>
+        <mesh position={[-DIP_8_PACKAGE.bodyDimensionsMm.x / 2 + 0.28, DIP_8_PACKAGE.bodyDimensionsMm.y / 2 + 0.015, 0]}>
+          <cylinderGeometry args={[0.82, 0.82, 0.08, 32, 1, false, 0, Math.PI]} />
+          <meshStandardMaterial color="#090b0c" roughness={0.74} />
+        </mesh>
+        <mesh position={[-3.05, DIP_8_PACKAGE.bodyDimensionsMm.y / 2 + 0.06, -2.05]}>
+          <cylinderGeometry args={[0.3, 0.3, 0.11, 24]} />
+          <meshStandardMaterial color="#737978" roughness={0.58} />
+        </mesh>
+        {texture && (
+          <mesh position={[0.55, DIP_8_PACKAGE.bodyDimensionsMm.y / 2 + 0.065, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[6.8, 2.15]} />
+            <meshBasicMaterial map={texture} transparent depthWrite={false} />
+          </mesh>
+        )}
+      </group>
+    </group>
+  );
+}
+
 function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: {
-  component: Exclude<PlacedComponent, { kind: 'resistor' | 'led' | 'capacitor' | 'jumper-wire' | 'switch' }>;
+  component: Exclude<PlacedComponent, { kind: 'resistor' | 'led' | 'capacitor' | 'jumper-wire' | 'switch' | 'ne555' }>;
   board: BreadboardDefinition;
   selected: boolean;
   onSelect: () => void;
@@ -508,6 +613,7 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         if (component.kind === 'capacitor') return <RadialCapacitorMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'jumper-wire') return <WireMesh key={component.id} component={component} components={components} {...common} />;
         if (component.kind === 'switch') return <TactileSwitchMesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'ne555') return <Dip8Mesh key={component.id} component={component} {...common} />;
         return <SimpleComponent key={component.id} component={component} {...common} />;
       })}
     </>
