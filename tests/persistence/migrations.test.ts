@@ -21,17 +21,41 @@ describe('project document migrations', () => {
     expect(() => migrateProjectDocument(project)).toThrow(UnsupportedProjectVersionError);
   });
 
-  it('migrates version 1 documents to revision-aware version 2', () => {
+  it('migrates version 1 documents to the Phase C instrument schema', () => {
     const legacy = projectRecord();
     legacy.version = 1;
     delete legacy.revision;
+    delete legacy.analysis;
+    for (const probe of legacy.probes as Array<Record<string, unknown>>) delete probe.instrumentId;
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(2);
+    expect(migrated.version).toBe(3);
     expect(migrated.revision).toBe(0);
+    expect(migrated.probes[0].instrumentId).toBe('multimeter');
+    expect(migrated.analysis).toMatchObject({
+      activeInstrument: 'multimeter',
+      activeProbeTerminal: 'positive',
+      selectedProbeId: migrated.probes[0].id,
+    });
+  });
+
+  it('migrates version 2 probes and allows intentionally disconnected leads', () => {
+    const legacy = projectRecord();
+    legacy.version = 2;
+    delete legacy.analysis;
+    const probe = (legacy.probes as Array<Record<string, unknown>>)[0];
+    delete probe.instrumentId;
+    delete probe.referenceHoleId;
+    const migrated = migrateProjectDocument(legacy);
+    expect(migrated.probes[0]).not.toHaveProperty('referenceHoleId');
+    expect(migrated.analysis.selectedProbeId).toBe(migrated.probes[0].id);
   });
 
   it.each([
     ['missing view', (value: Record<string, unknown>) => { delete value.view; }, /view/],
+    ['missing analysis settings', (value: Record<string, unknown>) => { delete value.analysis; }, /analysis/],
+    ['unknown selected probe', (value: Record<string, unknown>) => {
+      (value.analysis as Record<string, unknown>).selectedProbeId = 'probe-missing';
+    }, /existing probe/],
     ['invalid rotation', (value: Record<string, unknown>) => {
       (value.components as Array<Record<string, unknown>>)[0].rotation = 45;
     }, /rotation/],

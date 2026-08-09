@@ -48,4 +48,20 @@ describe('DC measurement layer', () => {
     expect(measureProbeVoltage(undefined, simulation.extraction, simulation.result))
       .toMatchObject({ status: 'disconnected' });
   });
+
+  it('explains which lead is missing from a partially connected probe', () => {
+    const project = createLedExampleProject();
+    const simulation = simulateProject(project);
+    const probe = project.probes[0];
+    expect(measureProbeVoltage(
+      { ...probe, referenceHoleId: undefined },
+      simulation.extraction,
+      simulation.result,
+    )).toMatchObject({ status: 'disconnected', reason: expect.stringContaining('COM') });
+    expect(measureProbeVoltage(
+      { ...probe, positiveHoleId: undefined },
+      simulation.extraction,
+      simulation.result,
+    )).toMatchObject({ status: 'disconnected', reason: expect.stringContaining('positive') });
+  });
 });

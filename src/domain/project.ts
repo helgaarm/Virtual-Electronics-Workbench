@@ -1,7 +1,24 @@
 import type { PlacedComponent } from './components/types';
 import { railHoleId, terminalHoleId } from './physical/breadboard';
 
-export const PROJECT_SCHEMA_VERSION = 2 as const;
+export const PROJECT_SCHEMA_VERSION = 3 as const;
+export const MAX_PROJECT_PROBES = 16;
+
+export type ProbeTerminal = 'positive' | 'reference';
+
+export interface MeasurementProbe {
+  id: string;
+  label: string;
+  instrumentId: 'multimeter';
+  positiveHoleId?: string;
+  referenceHoleId?: string;
+}
+
+export interface AnalysisSettings {
+  activeInstrument: 'multimeter';
+  activeProbeTerminal: ProbeTerminal;
+  selectedProbeId?: string;
+}
 
 export interface WorkbenchProject {
   version: typeof PROJECT_SCHEMA_VERSION;
@@ -17,12 +34,8 @@ export interface WorkbenchProject {
   powerOn: boolean;
   workspace: 'build' | 'analysis';
   components: PlacedComponent[];
-  probes: Array<{
-    id: string;
-    label: string;
-    positiveHoleId: string;
-    referenceHoleId: string;
-  }>;
+  probes: MeasurementProbe[];
+  analysis: AnalysisSettings;
   view: {
     cameraPreset: '3d' | 'top';
     showConnections: boolean;
@@ -51,6 +64,10 @@ export function createEmptyProject(name = 'Untitled workbench'): WorkbenchProjec
     workspace: 'build',
     components: [],
     probes: [],
+    analysis: {
+      activeInstrument: 'multimeter',
+      activeProbeTerminal: 'positive',
+    },
     view: { cameraPreset: '3d', showConnections: false },
   };
 }
@@ -136,9 +153,14 @@ export function createLedExampleProject(): WorkbenchProject {
       {
         id: 'probe-dc-1',
         label: 'DC probe',
+        instrumentId: 'multimeter',
         positiveHoleId: terminalHoleId(boardId, 'A', 10),
         referenceHoleId: railHoleId(boardId, 'top', 'negative', 3),
       },
     ],
+    analysis: {
+      ...project.analysis,
+      selectedProbeId: 'probe-dc-1',
+    },
   };
 }

@@ -2,7 +2,7 @@
 
 ## Current scope
 
-Phase A provides the true-3D, millimetre-based breadboard and physical editing foundation. Phase B connects that physical state to a deterministic DC circuit and persists projects in SQLite.
+Phase A provides the true-3D, millimetre-based breadboard and physical editing foundation. Phase B connects that physical state to a deterministic DC circuit and persists projects in SQLite. Phase C adds persistent multimeter state and an attachable probe workflow over the same measurement boundary.
 
 ## Boundaries
 
@@ -27,7 +27,7 @@ The project JSON is a stable but untrusted boundary. The client validates API re
 - `PUT /api/projects/:id` requires matching URL/body IDs and the current revision. It returns the saved document with the next revision, 400 for invalid input, or 409 for a stale/future version.
 - `DELETE /api/projects/:id` removes one project or returns 404.
 
-JSON bodies are limited to 2 MB. Schema version 1 documents migrate to version 2 with revision zero; unsupported future schemas are rejected explicitly.
+JSON bodies are limited to 2 MB. Schema version 1 and 2 documents migrate to version 3; legacy probes are assigned to the multimeter, Phase C instrument settings are initialized, and version 1 revisions start at zero. Unsupported future schemas are rejected explicitly.
 
 ## Chosen libraries
 
@@ -53,3 +53,4 @@ JSON bodies are limited to 2 MB. Schema version 1 documents migrate to version 2
 4. Circuit extraction and DC MNA solver.
 5. SQLite repository and project lifecycle UI.
 6. Integrated verification and accessibility/browser smoke testing.
+7. Persistent multimeter readings, probe attachment, 3D markers, and Test & Analysis telemetry.

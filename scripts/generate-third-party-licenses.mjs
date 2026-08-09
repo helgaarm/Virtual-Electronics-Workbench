@@ -119,7 +119,7 @@ const output = [
 
 const outputPath = join(root, 'THIRD_PARTY_LICENSES.md');
 if (process.argv.includes('--check')) {
-  if (!existsSync(outputPath) || readFileSync(outputPath, 'utf8') !== output) {
+  if (!existsSync(outputPath) || normalize(readFileSync(outputPath, 'utf8')) !== normalize(output)) {
     throw new Error('THIRD_PARTY_LICENSES.md is stale. Run npm run licenses:generate.');
   }
   process.stdout.write(`Verified THIRD_PARTY_LICENSES.md for ${packages.length} installed production packages.\n`);

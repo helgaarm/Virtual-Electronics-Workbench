@@ -6,7 +6,9 @@ import type { BreadboardDefinition } from '../../domain/physical/breadboard';
 import type { ThreeEvent } from '@react-three/fiber';
 import type { PlacedComponent } from '../../domain/components/types';
 import type { SimulationResult } from '../../domain/circuit/types';
+import type { MeasurementProbe } from '../../domain/project';
 import { ComponentMeshes } from '../components/ComponentMeshes';
+import { ProbeMeshes } from '../components/ProbeMeshes';
 import { BreadboardMesh } from './BreadboardMesh';
 import { dragCandidateHoleId } from './dragPlacement';
 
@@ -18,7 +20,10 @@ interface Props {
   selectedComponentId?: string;
   selectedHoleId?: string;
   highlightedHoleIds: Set<string>;
+  connectionGuideHoleIds?: Set<string>;
   occupiedHoleIds: Set<string>;
+  probes?: readonly MeasurementProbe[];
+  selectedProbeId?: string;
   onSelectComponent: (id: string) => void;
   onSelectHole: (id: string) => void;
   onClearSelection: () => void;
@@ -127,6 +132,7 @@ export function WorkbenchCanvas(props: Props) {
           board={props.board}
           selectedHoleId={props.selectedHoleId}
           highlightedHoleIds={props.highlightedHoleIds}
+          connectionGuideHoleIds={props.connectionGuideHoleIds ?? new Set()}
           occupiedHoleIds={props.occupiedHoleIds}
           onHoleClick={props.onSelectHole}
         />
@@ -147,6 +153,11 @@ export function WorkbenchCanvas(props: Props) {
             setActivePointerId(pointerId);
             props.onBeginDrag?.(id);
           } : undefined}
+        />
+        <ProbeMeshes
+          board={props.board}
+          probes={props.probes ?? []}
+          selectedProbeId={props.selectedProbeId}
         />
         {props.draggingComponentId && props.onDragCandidate && props.onDropComponent && (
           <PlacementPlane

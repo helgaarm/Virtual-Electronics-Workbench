@@ -1,6 +1,6 @@
 import type { PlacedComponent } from '../domain/components/types';
 import { terminalEntries } from '../domain/components/types';
-import { PROJECT_SCHEMA_VERSION, type WorkbenchProject } from '../domain/project';
+import { MAX_PROJECT_PROBES, PROJECT_SCHEMA_VERSION, type WorkbenchProject } from '../domain/project';
 import { createBreadboardDefinition } from '../domain/physical/breadboard';
 import { validateOccupancy } from '../domain/physical/occupancy';
 
@@ -175,7 +175,7 @@ function unique(values: string[], path: string): void {
 export function migrateProjectDocument(value: unknown): WorkbenchProject {
   const source = record(value, 'project');
   const sourceVersion = integer(source.version, 'version', 1, Number.MAX_SAFE_INTEGER);
-  if (sourceVersion !== 1 && sourceVersion !== PROJECT_SCHEMA_VERSION) {
+  if (sourceVersion < 1 || sourceVersion > PROJECT_SCHEMA_VERSION) {
     throw new UnsupportedProjectVersionError(
       `Project version ${sourceVersion} is not supported by version ${PROJECT_SCHEMA_VERSION}.`,
     );
@@ -189,8 +189,8 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
   if (!Array.isArray(source.components) || source.components.length > 100) {
     throw new ProjectValidationError('components', 'must be an array with at most 100 entries');
   }
-  if (!Array.isArray(source.probes) || source.probes.length > 16) {
-    throw new ProjectValidationError('probes', 'must be an array with at most 16 entries');
+  if (!Array.isArray(source.probes) || source.probes.length > MAX_PROJECT_PROBES) {
+    throw new ProjectValidationError('probes', `must be an array with at most ${MAX_PROJECT_PROBES} entries`);
   }
   const components = source.components.map(parseComponent);
   unique(components.map((component) => component.id), 'components');
@@ -198,16 +198,53 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
   const probes = source.probes.map((value, index) => {
     const path = `probes[${index}]`;
     const probe = record(value, path);
+    const positiveHoleId = probe.positiveHoleId === undefined
+      ? undefined
+      : stringValue(probe.positiveHoleId, `${path}.positiveHoleId`, 160);
+    const referenceHoleId = probe.referenceHoleId === undefined
+      ? undefined
+      : stringValue(probe.referenceHoleId, `${path}.referenceHoleId`, 160);
     return {
       id: identifier(probe.id, `${path}.id`),
       label: stringValue(probe.label, `${path}.label`, 80),
-      positiveHoleId: stringValue(probe.positiveHoleId, `${path}.positiveHoleId`, 160),
-      referenceHoleId: stringValue(probe.referenceHoleId, `${path}.referenceHoleId`, 160),
+      instrumentId: sourceVersion < 3
+        ? 'multimeter' as const
+        : enumValue(probe.instrumentId, `${path}.instrumentId`, ['multimeter'] as const),
+      ...(positiveHoleId ? { positiveHoleId } : {}),
+      ...(referenceHoleId ? { referenceHoleId } : {}),
     };
   });
   unique(probes.map((probe) => probe.id), 'probes');
 
   const viewSource = record(source.view, 'view');
+  const analysis = sourceVersion < 3
+    ? {
+        activeInstrument: 'multimeter' as const,
+        activeProbeTerminal: 'positive' as const,
+        ...(probes[0] ? { selectedProbeId: probes[0].id } : {}),
+      }
+    : (() => {
+        const analysisSource = record(source.analysis, 'analysis');
+        const selectedProbeId = analysisSource.selectedProbeId === undefined
+          ? undefined
+          : identifier(analysisSource.selectedProbeId, 'analysis.selectedProbeId');
+        return {
+          activeInstrument: enumValue(
+            analysisSource.activeInstrument,
+            'analysis.activeInstrument',
+            ['multimeter'] as const,
+          ),
+          activeProbeTerminal: enumValue(
+            analysisSource.activeProbeTerminal,
+            'analysis.activeProbeTerminal',
+            ['positive', 'reference'] as const,
+          ),
+          ...(selectedProbeId ? { selectedProbeId } : {}),
+        };
+      })();
+  if (analysis.selectedProbeId && !probes.some((probe) => probe.id === analysis.selectedProbeId)) {
+    throw new ProjectValidationError('analysis.selectedProbeId', 'must reference an existing probe');
+  }
   const project: WorkbenchProject = {
     version: PROJECT_SCHEMA_VERSION,
     revision: sourceVersion === 1 ? 0 : integer(source.revision, 'revision', 0, Number.MAX_SAFE_INTEGER),
@@ -220,6 +257,7 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
     workspace: enumValue(source.workspace, 'workspace', ['build', 'analysis'] as const),
     components,
     probes,
+    analysis,
     view: {
       cameraPreset: enumValue(viewSource.cameraPreset, 'view.cameraPreset', ['3d', 'top'] as const),
       showConnections: booleanValue(viewSource.showConnections, 'view.showConnections'),
@@ -238,7 +276,10 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
   const occupancyIssue = validateOccupancy(definition, components)[0];
   if (occupancyIssue) throw new ProjectValidationError('components', occupancyIssue.message);
   for (const probe of probes) {
-    if (!validHoleIds.has(probe.positiveHoleId) || !validHoleIds.has(probe.referenceHoleId)) {
+    if (
+      (probe.positiveHoleId && !validHoleIds.has(probe.positiveHoleId))
+      || (probe.referenceHoleId && !validHoleIds.has(probe.referenceHoleId))
+    ) {
       throw new ProjectValidationError(`probes.${probe.id}`, 'references an unknown hole');
     }
   }

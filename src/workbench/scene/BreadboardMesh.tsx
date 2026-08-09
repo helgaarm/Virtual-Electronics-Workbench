@@ -3,11 +3,13 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
 import * as THREE from 'three';
 import type { BreadboardDefinition } from '../../domain/physical/breadboard';
+import { connectionGuideSegment } from './connectionGuide';
 
 interface BreadboardMeshProps {
   board: BreadboardDefinition;
   selectedHoleId?: string;
   highlightedHoleIds: Set<string>;
+  connectionGuideHoleIds: Set<string>;
   occupiedHoleIds: Set<string>;
   onHoleClick: (holeId: string) => void;
 }
@@ -85,11 +87,16 @@ export function BreadboardMesh({
   board,
   selectedHoleId,
   highlightedHoleIds,
+  connectionGuideHoleIds,
   occupiedHoleIds,
   onHoleClick,
 }: BreadboardMeshProps) {
   const instanceRef = useRef<THREE.InstancedMesh>(null);
   const color = useMemo(() => new THREE.Color(), []);
+  const guide = useMemo(
+    () => connectionGuideSegment(board, connectionGuideHoleIds),
+    [board, connectionGuideHoleIds],
+  );
 
   useEffect(() => {
     const mesh = instanceRef.current;
@@ -188,6 +195,23 @@ export function BreadboardMesh({
           </group>
         );
       })}
+      {guide && (
+        <mesh
+          position={[guide.centerX, 3.34, guide.centerZ]}
+          rotation={[0, guide.rotationY, 0]}
+          raycast={() => null}
+          renderOrder={2}
+        >
+          <boxGeometry args={[guide.length, 0.035, 0.22]} />
+          <meshBasicMaterial
+            color="#267bc0"
+            transparent
+            opacity={0.3}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+      )}
       <BoardMarkings board={board} />
     </group>
   );

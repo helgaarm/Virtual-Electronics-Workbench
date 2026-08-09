@@ -80,9 +80,11 @@ function voltageDividerProject(): WorkbenchProject {
     probes: [{
       id: 'probe-divider',
       label: 'Divider midpoint',
+      instrumentId: 'multimeter',
       positiveHoleId: terminalHoleId(boardId, 'C', 10),
       referenceHoleId: railHoleId(boardId, 'top', 'negative', 3),
     }],
+    analysis: { ...project.analysis, selectedProbeId: 'probe-divider' },
   };
 }
 
@@ -147,9 +149,11 @@ function seriesLedsProject(): WorkbenchProject {
     probes: [{
       id: 'probe-series',
       label: 'Series string input',
+      instrumentId: 'multimeter',
       positiveHoleId: terminalHoleId(boardId, 'C', 10),
       referenceHoleId: railHoleId(boardId, 'top', 'negative', 3),
     }],
+    analysis: { ...project.analysis, selectedProbeId: 'probe-series' },
   };
 }
 
@@ -236,9 +240,11 @@ function parallelIndicatorsProject(): WorkbenchProject {
     probes: [{
       id: 'probe-parallel',
       label: 'Red branch input',
+      instrumentId: 'multimeter',
       positiveHoleId: terminalHoleId(boardId, 'C', 9),
       referenceHoleId: railHoleId(boardId, 'top', 'negative', 3),
     }],
+    analysis: { ...project.analysis, selectedProbeId: 'probe-parallel' },
   };
 }
 

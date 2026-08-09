@@ -13,6 +13,7 @@ import { measureComponent } from './measurement/dcMeasurements';
 import { ApiProjectRepository } from './persistence/apiProjectRepository';
 import type { ProjectSummary } from './persistence/projectRepository';
 import { simulateProject } from './simulation';
+import { connectionLearningTarget } from './state/connectionLearning';
 import { createPlacedComponent, movePlacedComponent, rotatePlacedComponent } from './state/workbenchActions';
 import {
   isProjectDirty,
@@ -54,6 +55,7 @@ export default function App() {
     [project.board.columns, project.board.id],
   );
   const simulation = useMemo(() => simulateProject(project), [project]);
+  const selectedProbeId = project.analysis.selectedProbeId ?? project.probes[0]?.id;
   const selectedComponent = project.components.find((component) => component.id === selectedComponentId);
   const selectedMeasurement = useMemo(
     () => selectedComponent
@@ -85,6 +87,14 @@ export default function App() {
       ...(dragPreview ? terminalEntries(dragPreview).map(([, holeId]) => holeId) : []),
     ]),
     [board, dragPreview, project.view.showConnections, selectedHoleId],
+  );
+  const connectionGuideHoleIds = useMemo(
+    () => new Set(
+      project.view.showConnections && selectedHoleId
+        ? connectedHoleIds(board, selectedHoleId)
+        : [],
+    ),
+    [board, project.view.showConnections, selectedHoleId],
   );
 
   const refreshProjects = useCallback(async () => {
@@ -169,9 +179,25 @@ export default function App() {
       setNotice('No compatible free holes were found for that part.');
       return;
     }
-    applyProject((current) => ({ ...current, components: [...current.components, component] }));
+    applyProject((current) => ({
+      ...current,
+      components: [...current.components, component],
+      view: { ...current.view, showConnections: false },
+    }));
     setSelectedComponentId(component.id);
+    setSelectedHoleId(undefined);
     setNotice(`${component.label} snapped into available breadboard holes.`);
+  };
+
+  const selectComponent = (componentId: string) => {
+    setSelectedComponentId(componentId);
+    setSelectedHoleId(undefined);
+    if (project.view.showConnections) {
+      applyProject((current) => ({
+        ...current,
+        view: { ...current.view, showConnections: false },
+      }));
+    }
   };
 
   const updateComponent = (updated: PlacedComponent) => {
@@ -209,6 +235,24 @@ export default function App() {
     }
     updateComponent(rotated);
     setNotice(`${selectedComponent.label} rotated 90° and re-snapped.`);
+  };
+
+  const toggleConnectionLearning = (enabled: boolean) => {
+    applyProject((current) => ({
+      ...current,
+      view: { ...current.view, showConnections: enabled },
+    }));
+    if (!enabled) {
+      setNotice('Internal connection highlighting turned off.');
+      return;
+    }
+    const targetHoleId = connectionLearningTarget(board, selectedHoleId, selectedComponent);
+    if (targetHoleId) {
+      setSelectedHoleId(targetHoleId);
+      setSelectedComponentId('');
+      const label = board.holes.find((hole) => hole.id === targetHoleId)?.label ?? targetHoleId;
+      setNotice(`${label} selected — its internally connected holes are highlighted.`);
+    }
   };
 
   const cancelDrag = useCallback(() => {
@@ -367,7 +411,7 @@ export default function App() {
           <section className="workbench-stage" aria-label="3D breadboard workbench">
             <div className="stage-toolbar">
               <div className="view-buttons"><button className={project.view.cameraPreset === 'top' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: 'top' } }))}>Top</button><button className={project.view.cameraPreset === '3d' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: '3d' } }))}>3D</button><button onClick={() => { applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: '3d' } })); setCameraResetKey((key) => key + 1); }}>Fit</button><button onClick={() => setCameraResetKey((key) => key + 1)}>Reset view</button></div>
-              <label className="learning-toggle"><input type="checkbox" checked={project.view.showConnections} onChange={(event) => applyProject((current) => ({ ...current, view: { ...current.view, showConnections: event.target.checked } }))} /> Show breadboard connections</label>
+              <label className="learning-toggle" title="Highlights every hole joined by the breadboard's internal metal strip."><input type="checkbox" checked={project.view.showConnections} onChange={(event) => toggleConnectionLearning(event.target.checked)} /> Highlight connected holes</label>
             </div>
             <div className="canvas-wrap" data-reset-key={cameraResetKey}>
               <WorkbenchCanvas
@@ -379,8 +423,11 @@ export default function App() {
                 selectedComponentId={selectedComponentId}
                 selectedHoleId={selectedHoleId}
                 highlightedHoleIds={highlightedHoleIds}
+                connectionGuideHoleIds={connectionGuideHoleIds}
                 occupiedHoleIds={occupiedHoleIds}
-                onSelectComponent={(id) => { setSelectedComponentId(id); setSelectedHoleId(undefined); }}
+                probes={project.probes}
+                selectedProbeId={selectedProbeId}
+                onSelectComponent={selectComponent}
                 onSelectHole={(id) => { setSelectedHoleId(id); setSelectedComponentId(''); setNotice(`${id.split(':').at(-1)} selected.`); }}
                 onClearSelection={() => { setSelectedComponentId(''); setSelectedHoleId(undefined); }}
                 draggingComponentId={draggingComponentId}
@@ -403,7 +450,13 @@ export default function App() {
           />
         </main>
       ) : (
-        <AnalysisWorkspace project={project} board={board} simulation={simulation} onSwitchToBuild={() => applyProject((current) => ({ ...current, workspace: 'build' }))} />
+        <AnalysisWorkspace
+          project={project}
+          board={board}
+          simulation={simulation}
+          onEditProject={applyProject}
+          onSwitchToBuild={() => applyProject((current) => ({ ...current, workspace: 'build' }))}
+        />
       )}
 
       <footer className={`status-bar status-${simulation.result.status}`}>

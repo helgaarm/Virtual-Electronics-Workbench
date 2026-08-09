@@ -1,8 +1,8 @@
 # Virtual Electronics Workbench
 
-A runnable Phase A/B foundation for physically building and simulating breadboard circuits in the browser.
+A runnable Phase A–C foundation for physically building, simulating, and measuring breadboard circuits in the browser.
 
-The application opens with a working **Light an LED** example: a 5 V source, closed switch, 220 Ω axial resistor, red LED, ground reference, and curved return jumper. Turn output off, operate the switch, change resistance, rotate or re-snap parts, inspect live current/voltage, switch to DC analysis, and save/reopen the complete project from SQLite.
+The application opens with a working **Light an LED** example: a 5 V source, closed switch, 220 Ω axial resistor, red LED, ground reference, and curved return jumper. Turn output off, operate the switch, change resistance, rotate or re-snap parts, attach multimeter probes, inspect live readings, and save/reopen the complete project from SQLite.
 
 ## Included in this milestone
 
@@ -26,6 +26,15 @@ The application opens with a working **Light an LED** example: a 5 V source, clo
 - Exhaustively validated, versioned project documents stored in a real SQLite database through a small local API.
 - Optimistic revisions that reject stale-tab writes instead of silently replacing newer work.
 - New, Save, Save As, list, and Open flows.
+
+### Phase C — Test & Analysis
+
+- Multiple named DC voltage readings with independently persisted probe connections.
+- Explicit positive and COM lead workflow: select a lead, then click a real breadboard hole or use the accessible printed-hole selector.
+- Non-occupying 3D probe markers and consistent `+`/`COM` hole labels in Build and Test views.
+- Live disconnected/error guidance and a saved-reading rack for quickly comparing nodes.
+- Component telemetry showing available voltage, current, and power without fabricating unsupported ideal-connector currents.
+- Schema version 3 with automatic migration of Phase A/B version 1 and 2 projects.
 
 Oscilloscope, signal generation, capacitors, and transient waveforms intentionally remain later phases. No waveform is fabricated.
 
@@ -76,6 +85,7 @@ This runs strict linting, the unit/integration test suite, TypeScript project ch
 - Select a part in 3D, then change values or exact terminal holes in the inspector.
 - **Rotate** moves the second lead to a physically compatible hole at the same spacing; it refuses an impossible or occupied target.
 - Select a hole with **Show breadboard connections** enabled to highlight its internal metal strip.
+- In **Test & Analysis**, add or choose a saved reading, choose `Positive (+)` or `Common (COM)`, then click a hole in the live board. The hole selectors provide an equivalent keyboard-accessible workflow.
 - `Ctrl/Cmd+Z`, `Ctrl/Cmd+Shift+Z`, and `Delete/Backspace` provide history and deletion.
 
 ## Persistence and sleep
@@ -86,7 +96,7 @@ SQLite data is durable on disk once Save is used. A normal computer sleep state 
 
 Start with [docs/architecture.md](docs/architecture.md) and [AGENTS.md](AGENTS.md). Solver assumptions are in [docs/simulation.md](docs/simulation.md); physical scale/topology is in [docs/physical-model.md](docs/physical-model.md).
 
-This is an educational simulator foundation, not SPICE and not a safety tool. The LED is simplified, disconnected nodes use a tiny numerical conductance, mechanical collision is discrete, and reactive/transient behavior is not part of Phase B. Jumper routing provides visual clearance around component packages; it is not a general collision solver and does not route around other jumper wires.
+This is an educational simulator foundation, not SPICE and not a safety tool. The LED is simplified, disconnected nodes use a tiny numerical conductance, mechanical collision is discrete, and reactive/transient behavior is not part of Phase C. Jumper routing provides visual clearance around component packages; it is not a general collision solver and does not route around other jumper wires.
 
 ## License and dependencies
 

@@ -78,6 +78,15 @@ export function measureProbeVoltage(
   result: SimulationResult,
 ): MeasurementValue {
   if (!probe) return unavailable('disconnected', 'No probe is connected.');
+  if (!probe.positiveHoleId && !probe.referenceHoleId) {
+    return unavailable('disconnected', 'Attach the positive and COM leads to breadboard holes.');
+  }
+  if (!probe.positiveHoleId) {
+    return unavailable('disconnected', 'Attach the positive lead to a breadboard hole.');
+  }
+  if (!probe.referenceHoleId) {
+    return unavailable('disconnected', 'Attach the COM lead to a breadboard hole.');
+  }
   if (result.status === 'error') {
     return unavailable('simulation-error', result.errors[0]?.message ?? 'Simulation failed.');
   }
