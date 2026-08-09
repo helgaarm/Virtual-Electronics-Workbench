@@ -13,6 +13,7 @@ function valueOf(component: PlacedComponent): string {
     case 'resistor': return `${component.resistanceOhms} Ω`;
     case 'capacitor': return `${component.capacitanceFarads} F`;
     case 'led': return `${component.color} LED`;
+    case 'switch': return component.closed ? 'Normally open switch (closed)' : 'Normally open switch';
     case 'ne555': return 'NE555N';
     case 'voltage-source': return `${component.voltageV} V input`;
     default: return component.label;
