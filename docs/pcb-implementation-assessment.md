@@ -1,24 +1,24 @@
 # PCB implementation assessment
 
-The breadboard definition groups holes by conductive `stripId`; circuit extraction joins those
-strips, closed switches, jumper wires, and explicit grounds with union-find. The resulting
-`componentTerminalNodes` map is therefore the authoritative PCB conversion input, rather than
-screen position. Component terminal keys live on the discriminated component types and device pin
-names/numbers live in the component catalog. Physical packages already use millimetres and 2.54 mm
-pitch in `src/domain/physical`.
+The original PCB converter reused simulation extraction. That extractor unions breadboard strips,
+permanent jumper wires, explicit grounds, and a switch's terminals whenever the switch is closed.
+Consequently, changing runtime switch state could collapse two physical switch pads into one PCB
+net. The old converter also silently omitted unresolved terminals and discarded one-pad nets.
 
-Projects are schema-versioned JSON documents, validated on load, and stored through a repository
-boundary backed by SQLite. PCB state should consequently be an optional versioned child of the
-project, with domain geometry independent of React and Three.js. The initial converter can support
-the reliable THT packages already represented: axial resistors, 5 mm LEDs, radial capacitors and
-DIP-8 NE555. Breadboard power/ground symbols and loose jumper wires are connectivity aids rather
-than board components; switches need a specifically identified package before conversion. Other
-catalog devices need component placement support before they can be converted despite having
-datasheet-backed package metadata.
+Placement used fixed 14 mm coordinates in four columns without consulting package dimensions or
+courtyards. Routing connected adjacent pad-array entries with a direct L-shaped polyline and did not
+inspect edges, pads, component placement, prior copper, width, or clearance. Its connectivity check
+only recognized trace endpoints exactly coincident with two pads. DRC counted those declared
+endpoint pairs and checked basic width, layer, drill and point-edge rules; it did not test cross-net
+copper geometry. Thus crossing or overlapping different-net traces could be reported ready.
 
-The implementation stages are: domain/footprint library, authoritative net conversion, placement,
-single-layer routing and DRC, editor, persistence, then KiCad/BOM output. KiCad's documented
-S-expression board format is suitable for direct deterministic interchange. Fabrication plotting
-should remain behind an adapter to KiCad CLI rather than emitting unvalidated pseudo-Gerbers; the
-UI must report manufacturing ZIP as unavailable when that optional tool is absent.
+PCB conversion now performs its own static union of breadboard strips, permanent jumper wires, and
+explicit grounds. Device conductive state is never an input. Stable net IDs derive from the
+lexically first physical hole in each connected group rather than traversal-dependent simulation
+node numbering. All supported terminals must map explicitly to footprint pads and nets.
 
+The domain pipeline is static physical net conversion, courtyard-aware placement, single-layer
+obstacle-aware routing, copper-geometry connectivity and DRC, then rendering/export. Shared geometry
+functions define segment intersection, point/segment and segment/segment distance, polylines and
+courtyard overlap, so routing and validation use the same physical interpretation. KiCad export
+serializes the validated stored geometry rather than reconstructing a different route.
