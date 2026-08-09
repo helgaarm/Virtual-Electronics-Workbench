@@ -610,9 +610,13 @@ function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: 
 }) {
   const physicalPackage = PHYSICAL_PACKAGES[component.kind];
   const entries = Object.values(component.terminalHoleIds);
-  const start = point(board, entries[0], 0.3);
-  const end = point(board, entries[1] ?? entries[0], 0.3);
-  const midpoint = start.clone().add(end).multiplyScalar(0.5);
+  const terminalPoints = entries.map((holeId) => point(board, holeId, 0.3));
+  const start = terminalPoints[0];
+  const end = terminalPoints[1] ?? start;
+  const midpoint = terminalPoints.reduce(
+    (sum, terminalPoint) => sum.add(terminalPoint),
+    new THREE.Vector3(),
+  ).multiplyScalar(1 / terminalPoints.length);
   if (component.kind === 'ground') {
     return (
       <group
@@ -629,13 +633,23 @@ function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: 
   const height = physicalPackage.mountingHeightMm;
   const direction = end.clone().sub(start);
   const rotationY = -Math.atan2(direction.z, direction.x);
+  const bodyBottomY = midpoint.y + height - physicalPackage.dimensionsMm.y / 2;
   return (
     <group
       onClick={(event) => { event.stopPropagation(); onSelect(); }}
       onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
     >
-      <CylinderBetween start={start} end={start.clone().add(new THREE.Vector3(0, height, 0))} radius={physicalPackage.leadDiameterMm / 2} color="#afb5b7" metalness={0.7} />
-      <CylinderBetween start={end} end={end.clone().add(new THREE.Vector3(0, height, 0))} radius={physicalPackage.leadDiameterMm / 2} color="#afb5b7" metalness={0.7} />
+      {terminalPoints.map((terminalPoint, index) => (
+        <CylinderBetween
+          key={`${entries[index]}-${index}`}
+          start={terminalPoint}
+          end={terminalPoint.clone().setY(bodyBottomY + 0.35)}
+          radius={physicalPackage.leadDiameterMm / 2}
+          color="#afb5b7"
+          roughness={0.3}
+          metalness={0.86}
+        />
+      ))}
       <RoundedBox
         args={[physicalPackage.dimensionsMm.x, physicalPackage.dimensionsMm.y, physicalPackage.dimensionsMm.z]}
         radius={isPower ? 0.85 : 0.5}
