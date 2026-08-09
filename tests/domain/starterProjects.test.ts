@@ -67,6 +67,17 @@ describe('classic starter projects', () => {
     expect(second.revision).toBe(0);
   });
 
+  it('includes the complete thermometer component inventory and TMP36 probe', () => {
+    const project = createStarterProject('digital-thermometer');
+    const kinds = project.components.map((component) => component.kind);
+    expect(kinds).toContain('tmp36');
+    expect(kinds).toContain('attiny85');
+    expect(kinds.filter((kind) => kind === '74hc595')).toHaveLength(2);
+    expect(kinds).toContain('four-digit-seven-segment');
+    expect(kinds.filter((kind) => kind === 'bc547' || kind === '2n3904')).toHaveLength(4);
+    expect(project.probes[0].label).toBe('TMP36 output');
+  });
+
   it('produces the expected 2.5 V divider midpoint', () => {
     const project = createStarterProject('voltage-divider');
     const simulation = simulateProject(project);

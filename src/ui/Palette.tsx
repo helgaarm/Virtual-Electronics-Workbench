@@ -12,6 +12,16 @@ const KINDS: Array<{ kind: ComponentKind; icon: string }> = [
   { kind: 'jumper-wire', icon: 'WIRE' },
   { kind: 'ne555', icon: '555' },
   { kind: 'tmp36', icon: '°C' },
+  { kind: 'diode-1n4148', icon: '▷|' },
+  { kind: 'bc547', icon: 'Q' },
+  { kind: 'bc557', icon: 'Q' },
+  { kind: '2n3904', icon: 'Q' },
+  { kind: '2n3906', icon: 'Q' },
+  { kind: 'potentiometer', icon: 'RV' },
+  { kind: 'seven-segment', icon: '8.' },
+  { kind: 'four-digit-seven-segment', icon: '88.8' },
+  { kind: '74hc595', icon: '595' },
+  { kind: 'attiny85', icon: 'AVR' },
 ];
 
 export function Palette({ onAdd }: { onAdd: (kind: ComponentKind) => void }) {

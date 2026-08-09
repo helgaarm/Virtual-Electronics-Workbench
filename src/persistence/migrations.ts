@@ -213,6 +213,8 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
   const source = record(value, path);
   const kind = enumValue(source.kind, `${path}.kind`, [
     'voltage-source', 'ground', 'resistor', 'led', 'capacitor', 'switch', 'jumper-wire', 'ne555', 'tmp36',
+    'diode-1n4148', 'bc547', 'bc557', '2n3904', '2n3906', 'potentiometer',
+    'seven-segment', 'four-digit-seven-segment', '74hc595', 'attiny85',
   ] as const);
   const base = {
     id: identifier(source.id, `${path}.id`),
@@ -315,6 +317,20 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
         temperatureC: finiteNumber(source.temperatureC, `${path}.temperatureC`, -40, 125),
         terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['vs', 'vout', 'gnd']),
       };
+    case 'diode-1n4148':
+      return { ...base, kind, deviceId: '1n4148', packageId: 'DO-35', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['anode', 'cathode']) };
+    case 'bc547': case 'bc557': case '2n3904': case '2n3906':
+      return { ...base, kind, deviceId: kind, packageId: 'TO-92-inline', polarity: enumValue(source.polarity, `${path}.polarity`, ['npn', 'pnp'] as const), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['collector', 'base', 'emitter']) };
+    case 'potentiometer':
+      return { ...base, kind, totalResistanceOhms: finiteNumber(source.totalResistanceOhms, `${path}.totalResistanceOhms`, 1, 99e6), wiperPosition: finiteNumber(source.wiperPosition, `${path}.wiperPosition`, 0, 1), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['a', 'wiper', 'b']) };
+    case 'seven-segment':
+      return { ...base, kind, packageId: 'DIP-10', commonType: 'common-cathode', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['a','b','c','d','e','f','g','dp','common1','common2']) };
+    case 'four-digit-seven-segment':
+      return { ...base, kind, packageId: '12-pin-multiplexed', commonType: 'common-cathode', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['a','b','c','d','e','f','g','dp','digit1','digit2','digit3','digit4']) };
+    case '74hc595':
+      return { ...base, kind, deviceId: '74hc595', packageId: 'DIP-16', firmwareState: 'electrical-pins', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 16 }, (_, i) => `pin${i + 1}`)) };
+    case 'attiny85':
+      return { ...base, kind, deviceId: 'attiny85', packageId: 'DIP-8', firmwareId: stringValue(source.firmwareId, `${path}.firmwareId`, 80), clockHz: finiteNumber(source.clockHz, `${path}.clockHz`, 1, 20_000_000), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 8 }, (_, i) => `pin${i + 1}`)) };
   }
 }
 

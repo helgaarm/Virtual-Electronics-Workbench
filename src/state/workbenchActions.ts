@@ -35,6 +35,9 @@ function nextLabel(kind: ComponentKind, components: PlacedComponent[]): string {
     'jumper-wire': 'W',
     ne555: 'U',
     tmp36: 'T',
+    'diode-1n4148': 'D', bc547: 'Q', bc557: 'Q', '2n3904': 'Q', '2n3906': 'Q',
+    potentiometer: 'RV', 'seven-segment': 'DS', 'four-digit-seven-segment': 'DS',
+    '74hc595': 'U', attiny85: 'U',
   };
   let index = 1;
   const labels = new Set(components.map((component) => component.label));
@@ -145,6 +148,38 @@ export function createPlacedComponent(
     return undefined;
   }
 
+  const dipPins = kind === '74hc595' ? 16 : kind === 'attiny85' ? 8
+    : kind === 'seven-segment' ? 10 : kind === 'four-digit-seven-segment' ? 12 : 0;
+  if (dipPins) {
+    const occupied = buildOccupancy(components);
+    const perRow = dipPins / 2;
+    for (let column = 1; column <= board.columns - perRow + 1; column += 1) {
+      const near = Array.from({ length: perRow }, (_, i) => terminalHoleId(board.id, 'E', column + i));
+      const far = Array.from({ length: perRow }, (_, i) => terminalHoleId(board.id, 'F', column + i));
+      if ([...near, ...far].some((id) => occupied.has(id))) continue;
+      const clockwise = [...near, ...far.slice().reverse()];
+      if (kind === '74hc595') return { ...base, kind, deviceId: '74hc595', packageId: 'DIP-16', firmwareState: 'electrical-pins', terminalHoleIds: Object.fromEntries(clockwise.map((id, i) => [`pin${i + 1}`, id])) };
+      if (kind === 'attiny85') return { ...base, kind, deviceId: 'attiny85', packageId: 'DIP-8', firmwareId: 'thermometer-v1', clockHz: 1_000_000, terminalHoleIds: Object.fromEntries(clockwise.map((id, i) => [`pin${i + 1}`, id])) };
+      const names = kind === 'seven-segment'
+        ? ['e', 'd', 'common1', 'c', 'dp', 'b', 'a', 'common2', 'f', 'g']
+        : ['digit1', 'a', 'f', 'digit2', 'digit3', 'b', 'digit4', 'g', 'c', 'dp', 'd', 'e'];
+      return { ...base, kind, packageId: kind === 'seven-segment' ? 'DIP-10' : '12-pin-multiplexed', commonType: 'common-cathode', terminalHoleIds: Object.fromEntries(names.map((name, i) => [name, clockwise[i]])) } as PlacedComponent;
+    }
+    return undefined;
+  }
+
+  if (kind === 'bc547' || kind === 'bc557' || kind === '2n3904' || kind === '2n3906' || kind === 'potentiometer') {
+    const occupied = buildOccupancy(components);
+    for (let column = 1; column <= board.columns - 2; column += 1) {
+      const holes = Array.from({ length: 3 }, (_, i) => terminalHoleId(board.id, 'E', column + i));
+      if (holes.some((id) => occupied.has(id))) continue;
+      if (kind === 'potentiometer') return { ...base, kind, totalResistanceOhms: 10_000, wiperPosition: 0.5, terminalHoleIds: { a: holes[0], wiper: holes[1], b: holes[2] } };
+      const european = kind === 'bc547' || kind === 'bc557';
+      return { ...base, kind, deviceId: kind, packageId: 'TO-92-inline', polarity: kind === 'bc547' || kind === '2n3904' ? 'npn' : 'pnp', terminalHoleIds: european ? { collector: holes[0], base: holes[1], emitter: holes[2] } : { emitter: holes[0], base: holes[1], collector: holes[2] } };
+    }
+    return undefined;
+  }
+
   const first = vacantTerminal(board, components, 'E');
   if (!first) return undefined;
   const firstColumn = Number.parseInt(first.match(/(\d+)$/)?.[1] ?? '1', 10);
@@ -189,6 +224,8 @@ export function createPlacedComponent(
       return { ...base, kind, closed: false, terminalHoleIds: { a: first, b: second } };
     case 'jumper-wire':
       return { ...base, kind, color: 'blue', terminalHoleIds: { a: first, b: second } };
+    case 'diode-1n4148':
+      return { ...base, kind, deviceId: '1n4148', packageId: 'DO-35', terminalHoleIds: { anode: first, cathode: second } };
   }
 }
 
@@ -325,5 +362,13 @@ export function paletteDescription(kind: ComponentKind): string {
   if (kind === 'jumper-wire') return 'Flexible lead';
   if (kind === 'ne555') return 'Integrated Circuits · Timers · DIP-8';
   if (kind === 'tmp36') return 'Temperature sensor · TO-92 · 25 °C';
+  if (kind === 'diode-1n4148') return 'Small-signal diode · DO-35 glass';
+  if (kind === 'bc547' || kind === '2n3904') return 'NPN transistor · TO-92';
+  if (kind === 'bc557' || kind === '2n3906') return 'PNP transistor · TO-92';
+  if (kind === 'potentiometer') return 'Input · trimmer · 10 kΩ';
+  if (kind === 'seven-segment') return 'Display · common cathode · 1 digit';
+  if (kind === 'four-digit-seven-segment') return 'Display · multiplexed · 4 digits';
+  if (kind === '74hc595') return 'Logic · serial-in / parallel-out · DIP-16';
+  if (kind === 'attiny85') return 'Microcontroller · AVR · DIP-8';
   return componentDisplayName(kind);
 }
