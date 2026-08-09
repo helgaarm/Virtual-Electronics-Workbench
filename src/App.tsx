@@ -36,6 +36,8 @@ import {
 import { AnalysisWorkspace } from './ui/AnalysisWorkspace';
 import { Inspector } from './ui/Inspector';
 import { Palette } from './ui/Palette';
+import { PcbDesigner } from './ui/PcbDesigner';
+import { convertBreadboardToPcb, circuitFingerprint } from './domain/pcb/converter';
 import { WorkbenchCanvas } from './workbench/scene/WorkbenchCanvas';
 import './styles.css';
 
@@ -262,6 +264,18 @@ export default function App() {
     setNotice(`${component.label} snapped into available breadboard holes.`);
   };
 
+  const createOrOpenPcb = () => {
+    if (project.pcb) {
+      applyProject((current) => ({ ...current, workspace: 'pcb' }));
+      if (project.pcb.sourceCircuitFingerprint !== circuitFingerprint(project)) setNotice('Breadboard circuit has changed. Existing PCB work is preserved; update it deliberately.');
+      return;
+    }
+    const converted = convertBreadboardToPcb(project);
+    if (!converted.pcb) { setNotice(`PCB footprint required: ${converted.missing.map((item) => item.componentId).join(', ')}.`); return; }
+    applyProject((current) => ({ ...current, pcb: converted.pcb, workspace: 'pcb' }));
+    setNotice('Initial PCB placement created from the simulator net model.');
+  };
+
   const selectComponent = (componentId: string) => {
     setSelectedComponentId(componentId);
     setSelectedHoleId(undefined);
@@ -455,6 +469,7 @@ export default function App() {
         <nav className="workspace-switcher" aria-label="Workspace">
           <button className={project.workspace === 'build' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, workspace: 'build' }))}>Build</button>
           <button className={project.workspace === 'analysis' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, workspace: 'analysis' }))}>Test &amp; Analysis</button>
+          <button className={project.workspace === 'pcb' ? 'active' : ''} onClick={createOrOpenPcb}>Design PCB</button>
         </nav>
         <div className="header-actions">
           <button className="icon-button" onClick={undo} title="Undo (Ctrl+Z)">↶</button>
@@ -566,7 +581,7 @@ export default function App() {
             }}
           />
         </main>
-      ) : (
+      ) : project.workspace === 'analysis' ? (
         <AnalysisWorkspace
           project={project}
           board={board}
@@ -575,7 +590,7 @@ export default function App() {
           onEditProject={applyProject}
           onSwitchToBuild={() => applyProject((current) => ({ ...current, workspace: 'build' }))}
         />
-      )}
+      ) : project.pcb ? <PcbDesigner pcb={project.pcb} onChange={(pcb) => applyProject((current) => ({ ...current, pcb }))} onBack={() => applyProject((current) => ({ ...current, workspace: 'build' }))} /> : null}
 
       <footer className={`status-bar status-${simulation.result.status}`}>
         <span className="status-dot" />

@@ -1,5 +1,15 @@
 # Virtual Electronics Workbench
 
+## From Breadboard to Real PCB
+
+Build and test a circuit, then open **Design PCB** to convert its simulator-backed electrical nets
+into an approachable single-sided through-hole board. The current milestone provides realistic
+millimetre footprints, initial placement, a ratsnest, deterministic bottom-copper routing, board
+flipping, DRC, stable project persistence, KiCad PCB export, a CSV BOM and a manufacturing summary.
+It deliberately reports missing footprints and keeps manufacturing ZIP unavailable rather than
+creating unvalidated fabrication data. See [the PCB designer documentation](docs/pcb-designer.md)
+for supported packages and current limitations.
+
 A runnable Phase A–F foundation, completed through the original instrument phases 14–15, for physically building, simulating, generating, and measuring breadboard circuits in the browser.
 
 The application opens with a working **Light an LED** example: a 5 V source, closed switch, 220 Ω axial resistor, red LED, ground reference, and curved return jumper. Turn output off, operate the switch, change resistance, rotate or re-snap parts, attach multimeter probes, inspect live readings, and save/reopen the complete project from SQLite.

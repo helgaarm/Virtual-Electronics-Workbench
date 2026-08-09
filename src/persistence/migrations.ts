@@ -24,6 +24,7 @@ import {
 } from '../domain/project';
 import { createBreadboardDefinition } from '../domain/physical/breadboard';
 import { validateOccupancy } from '../domain/physical/occupancy';
+import type { PcbProject } from '../domain/pcb/types';
 
 export class UnsupportedProjectVersionError extends Error {}
 
@@ -34,6 +35,13 @@ export class ProjectValidationError extends Error {
   ) {
     super(`${path}: ${message}`);
   }
+}
+
+function parsePcb(value: unknown): PcbProject {
+  const source = record(value, 'pcb');
+  if (source.version !== 1) throw new ProjectValidationError('pcb.version', 'must be 1');
+  const cloned = structuredClone(source);
+  return cloned as unknown as PcbProject;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -635,7 +643,8 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
     updatedAt: isoDate(source.updatedAt, 'updatedAt'),
     board,
     powerOn: booleanValue(source.powerOn, 'powerOn'),
-    workspace: enumValue(source.workspace, 'workspace', ['build', 'analysis'] as const),
+    workspace: enumValue(source.workspace, 'workspace', sourceVersion < 9 ? ['build', 'analysis'] as const : ['build', 'analysis', 'pcb'] as const),
+    ...(sourceVersion >= 9 && source.pcb !== undefined ? { pcb: parsePcb(source.pcb) } : {}),
     components,
     probes,
     analysis,
