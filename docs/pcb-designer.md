@@ -9,11 +9,15 @@ is not yet identified.
 Boards use millimetres, a top-left origin, clockwise quarter-turn placement, top-side component
 coordinates and bottom copper (`B.Cu`) only. Flipping the preview mirrors X as a physical board flip;
 it does not alter manufacturing coordinates. The deterministic first router connects remaining
-nets with orthogonal tracks. It never creates a top layer or hidden vias. Complex collision-aware
+nets with orthogonal tracks. New PCB conversions are routed automatically. For an existing design,
+the `UNROUTED_CONNECTIONS` result includes a **Fix automatically** action; it can be run repeatedly
+without duplicating valid tracks and replaces stale automatic tracks after a footprint is rotated.
+It never creates a top layer or hidden vias. Complex collision-aware
 rip-up, manual trace drawing, jumper proposal, mounting-hole editing, Gerber/Excellon plotting and
 the thermometer starter are known follow-up limitations.
 
-DRC blocks readiness for unresolved connections, invalid boards, missing/unverified footprints,
+DRC counts electrical connectivity independently for each net and blocks readiness for unresolved
+connections, invalid boards, missing/unverified footprints,
 small drills, narrow tracks, edge violations or a non-bottom trace. Passing these checks describes
 manufacturing geometry only, not electrical safety or functional certification.
 

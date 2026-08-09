@@ -1,5 +1,6 @@
 import { PCB_FOOTPRINTS } from './footprints';
 import { padPosition } from './geometry';
+import { routedConnectionsForNet } from './router';
 import type { PcbPointMm, PcbProject } from './types';
 
 export type PcbDrcSeverity = 'error' | 'warning' | 'information';
@@ -25,7 +26,10 @@ export function runPcbDrc(pcb: PcbProject): PcbDrcResult {
     if (trace.pointsMm.some((point) => point.xMm < pcb.rules.copperToEdgeMm || point.yMm < pcb.rules.copperToEdgeMm || point.xMm > pcb.board.widthMm - pcb.rules.copperToEdgeMm || point.yMm > pcb.board.heightMm - pcb.rules.copperToEdgeMm)) issues.push({ id: `trace-edge-${trace.id}`, severity: 'error', code: 'TRACE_EDGE_CLEARANCE', message: `${trace.id} is too close to the board edge.` });
   }
   const totalConnections = pcb.nets.reduce((sum, net) => sum + Math.max(0, net.pads.length - 1), 0);
-  const routedConnections = Math.min(totalConnections, pcb.traces.length + pcb.jumpers.length);
+  const routedConnections = pcb.nets.reduce(
+    (sum, net) => sum + routedConnectionsForNet(pcb, net),
+    0,
+  );
   if (routedConnections < totalConnections) issues.push({ id: 'unrouted', severity: 'error', code: 'UNROUTED_CONNECTIONS', message: `${totalConnections - routedConnections} required connection(s) remain unrouted.` });
   const blocking = issues.some((issue) => issue.severity === 'error');
   return { issues, routedConnections, totalConnections, status: blocking ? 'not-ready' : routedConnections === totalConnections ? 'manufacturing-checks-passed' : 'electrically-complete' };

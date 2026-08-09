@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { PCB_FOOTPRINTS } from '../domain/pcb/footprints';
 import { padPosition, pointForViewedSide } from '../domain/pcb/geometry';
 import { runPcbDrc } from '../domain/pcb/drc';
-import { clearAutoRoutes, routeRemainingConnections } from '../domain/pcb/router';
+import { clearAutoRoutes, isNetFullyRouted, routeRemainingConnections } from '../domain/pcb/router';
 import { downloadTextFile, exportBomCsv, exportKicadPcb, manufacturingSummary } from '../domain/pcb/exporters';
 import type { PcbProject } from '../domain/pcb/types';
 
@@ -16,12 +16,16 @@ export function PcbDesigner({ pcb, onChange, onBack }: Props) {
   const scale = 10;
   const flip = (point: { xMm: number; yMm: number }) => pointForViewedSide(point, pcb.board.widthMm, side);
   const selected = pcb.components.find((component) => component.id === selectedId);
-  const routedNetIds = new Set(pcb.traces.map((trace) => trace.netId));
+  const routedNetIds = new Set(
+    pcb.nets.filter((net) => isNetFullyRouted(pcb, net)).map((net) => net.id),
+  );
+  const hasUnroutedConnections = drc.issues.some((issue) => issue.code === 'UNROUTED_CONNECTIONS');
+  const fixUnroutedConnections = () => onChange(routeRemainingConnections(pcb).pcb);
   const rotate = () => selected && onChange({ ...pcb, components: pcb.components.map((component) => component.id === selected.id ? { ...component, rotationDegrees: ((component.rotationDegrees + 90) % 360) as 0 | 90 | 180 | 270 } : component) });
   return <main className="pcb-layout">
     <aside className="pcb-tools panel">
       <div className="panel-heading"><span className="eyebrow">Single-sided THT</span><h2>PCB Designer</h2></div>
-      <button onClick={onBack}>← Breadboard</button><button className="primary" onClick={() => onChange(routeRemainingConnections(pcb).pcb)}>Auto Route Remaining</button><button onClick={() => onChange(clearAutoRoutes(pcb))}>Clear auto-routes</button>
+      <button onClick={onBack}>← Breadboard</button><button className="primary" onClick={fixUnroutedConnections}>Fix unrouted connections</button><button onClick={() => onChange(clearAutoRoutes(pcb))}>Clear auto-routes</button>
       <label>Board width (mm)<input type="number" min="20" max="300" value={pcb.board.widthMm} onChange={(event) => onChange({ ...pcb, board: { ...pcb.board, widthMm: Number(event.target.value) } })} /></label>
       <label>Board height (mm)<input type="number" min="20" max="300" value={pcb.board.heightMm} onChange={(event) => onChange({ ...pcb, board: { ...pcb.board, heightMm: Number(event.target.value) } })} /></label>
       <label><input type="checkbox" checked={showRatsnest} onChange={(event) => setShowRatsnest(event.target.checked)} /> Ratsnest</label>
@@ -46,6 +50,7 @@ export function PcbDesigner({ pcb, onChange, onBack }: Props) {
       <div className="panel-heading"><span className="eyebrow">Manufacturing</span><h2>{drc.status === 'manufacturing-checks-passed' ? 'Checks Passed' : 'Not Ready'}</h2></div>
       {selected && <section><strong>{selected.reference}</strong><small>{PCB_FOOTPRINTS[selected.footprintId]?.name}</small><button onClick={rotate}>Rotate 90°</button></section>}
       <h3>Design rule check</h3><ul className="drc-list">{drc.issues.length ? drc.issues.map((issue) => <li key={issue.id} className={issue.severity}><strong>{issue.code}</strong>{issue.message}</li>) : <li className="pass">No blocking geometry or routing errors.</li>}</ul>
+      {hasUnroutedConnections && <button className="primary pcb-fix-button" onClick={fixUnroutedConnections}>Fix automatically</button>}
       <div className="export-actions"><button onClick={() => downloadTextFile(exportKicadPcb(pcb), `${pcb.board.title}.kicad_pcb`, 'application/x-kicad-pcb')}>Export KiCad PCB</button><button onClick={() => downloadTextFile(exportBomCsv(pcb), `${pcb.board.title}-bom.csv`, 'text/csv')}>Export BOM</button><button onClick={() => downloadTextFile(manufacturingSummary(pcb), 'manufacturing-summary.txt')}>Summary</button><button disabled title="Requires a validated KiCad CLI fabrication adapter.">Manufacturing ZIP unavailable</button></div>
       <p className="pcb-safety">DRC checks board geometry and routing—not circuit safety, compliance, or function.</p>
     </aside>

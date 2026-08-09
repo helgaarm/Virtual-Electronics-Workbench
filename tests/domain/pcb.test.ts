@@ -21,6 +21,41 @@ describe('single-sided PCB workflow', () => {
     expect(runPcbDrc(pcb).routedConnections).toBe(runPcbDrc(pcb).totalConnections);
   });
 
+  it('repairs only genuinely disconnected nets and remains idempotent', () => {
+    const initial = convertBreadboardToPcb(createStarterProject('voltage-divider')).pcb!;
+    const routed = routeRemainingConnections(initial).pcb;
+    const missingNetId = routed.traces[0].netId;
+    const retainedTrace = routed.traces.find((trace) => trace.netId !== missingNetId)!;
+    const partiallyRouted = {
+      ...routed,
+      traces: [
+        ...routed.traces.filter((trace) => trace.netId !== missingNetId),
+        { ...retainedTrace, id: `${retainedTrace.id}-duplicate` },
+      ],
+    };
+
+    expect(runPcbDrc(partiallyRouted).issues.map((issue) => issue.code)).toContain('UNROUTED_CONNECTIONS');
+
+    const repaired = routeRemainingConnections(partiallyRouted).pcb;
+    expect(runPcbDrc(repaired).status).toBe('manufacturing-checks-passed');
+    expect(routeRemainingConnections(repaired).pcb.traces).toEqual(repaired.traces);
+  });
+
+  it('replaces stale automatic tracks after a footprint is rotated', () => {
+    const routed = routeRemainingConnections(
+      convertBreadboardToPcb(createStarterProject('voltage-divider')).pcb!,
+    ).pcb;
+    const rotated = {
+      ...routed,
+      components: routed.components.map((component, index) => index === 0
+        ? { ...component, rotationDegrees: 90 as const }
+        : component),
+    };
+
+    expect(runPcbDrc(rotated).issues.map((issue) => issue.code)).toContain('UNROUTED_CONNECTIONS');
+    expect(runPcbDrc(routeRemainingConnections(rotated).pcb).status).toBe('manufacturing-checks-passed');
+  });
+
   it('exports deterministic KiCad geometry, nets, bottom copper and BOM', () => {
     const pcb = routeRemainingConnections(convertBreadboardToPcb(createStarterProject('voltage-divider')).pcb!).pcb;
     const output = exportKicadPcb(pcb);

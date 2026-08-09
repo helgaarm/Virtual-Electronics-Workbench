@@ -38,6 +38,7 @@ import { Inspector } from './ui/Inspector';
 import { Palette } from './ui/Palette';
 import { PcbDesigner } from './ui/PcbDesigner';
 import { convertBreadboardToPcb, circuitFingerprint } from './domain/pcb/converter';
+import { routeRemainingConnections } from './domain/pcb/router';
 import { WorkbenchCanvas } from './workbench/scene/WorkbenchCanvas';
 import './styles.css';
 
@@ -272,8 +273,11 @@ export default function App() {
     }
     const converted = convertBreadboardToPcb(project);
     if (!converted.pcb) { setNotice(`PCB footprint required: ${converted.missing.map((item) => item.componentId).join(', ')}.`); return; }
-    applyProject((current) => ({ ...current, pcb: converted.pcb, workspace: 'pcb' }));
-    setNotice('Initial PCB placement created from the simulator net model.');
+    const routed = routeRemainingConnections(converted.pcb);
+    applyProject((current) => ({ ...current, pcb: routed.pcb, workspace: 'pcb' }));
+    setNotice(routed.diagnostics.length > 0
+      ? `PCB created with ${routed.diagnostics.length} routing diagnostic(s).`
+      : 'PCB created and required connections routed automatically.');
   };
 
   const selectComponent = (componentId: string) => {
