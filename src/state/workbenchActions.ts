@@ -26,6 +26,7 @@ function nextLabel(kind: ComponentKind, components: PlacedComponent[]): string {
     ground: 'GND',
     resistor: 'R',
     led: 'D',
+    capacitor: 'C',
     switch: 'S',
     'jumper-wire': 'W',
   };
@@ -122,6 +123,14 @@ export function createPlacedComponent(
         forwardVoltageV: 1.9,
         onResistanceOhms: 12,
         terminalHoleIds: { anode: first, cathode: second },
+      };
+    case 'capacitor':
+      return {
+        ...base,
+        kind,
+        capacitanceFarads: 100e-6,
+        ratedVoltageV: 16,
+        terminalHoleIds: { positive: first, negative: second },
       };
     case 'switch':
       return { ...base, kind, closed: false, terminalHoleIds: { a: first, b: second } };
@@ -221,6 +230,7 @@ export function paletteDescription(kind: ComponentKind): string {
   if (kind === 'voltage-source') return '5.00 V DC source';
   if (kind === 'resistor') return 'Axial · 220 Ω';
   if (kind === 'led') return '5 mm · red';
+  if (kind === 'capacitor') return 'Radial · 100 µF · 16 V';
   if (kind === 'switch') return 'Tactile · SPST';
   if (kind === 'jumper-wire') return 'Flexible lead';
   return componentDisplayName(kind);

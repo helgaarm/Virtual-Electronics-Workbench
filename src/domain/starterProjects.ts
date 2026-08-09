@@ -23,6 +23,11 @@ export const STARTER_PROJECTS = [
     name: 'Parallel indicators',
     description: 'Independent red and green LED branches demonstrate a parallel circuit.',
   },
+  {
+    id: 'rc-charge-discharge',
+    name: 'RC charge and discharge',
+    description: 'A 10 kΩ resistor charges a 100 µF capacitor from 5 V; turn output off to discharge it.',
+  },
 ] as const;
 
 export type StarterProjectId = (typeof STARTER_PROJECTS)[number]['id'];
@@ -85,6 +90,67 @@ function voltageDividerProject(): WorkbenchProject {
       referenceHoleId: railHoleId(boardId, 'top', 'negative', 3),
     }],
     analysis: { ...project.analysis, selectedProbeId: 'probe-divider' },
+  };
+}
+
+function rcChargeDischargeProject(): WorkbenchProject {
+  const project = createEmptyProject('RC charge and discharge');
+  const boardId = project.board.id;
+  const components: PlacedComponent[] = [
+    {
+      id: 'V1', kind: 'voltage-source', label: 'V1', rotation: 0, voltageV: 5,
+      terminalHoleIds: {
+        positive: railHoleId(boardId, 'top', 'positive', 1),
+        negative: railHoleId(boardId, 'top', 'negative', 1),
+      },
+    },
+    {
+      id: 'GND1', kind: 'ground', label: 'GND', rotation: 0,
+      terminalHoleIds: { ground: railHoleId(boardId, 'top', 'negative', 2) },
+    },
+    {
+      id: 'W1', kind: 'jumper-wire', label: 'W1', rotation: 0, color: 'red',
+      terminalHoleIds: {
+        a: railHoleId(boardId, 'top', 'positive', 5),
+        b: terminalHoleId(boardId, 'A', 5),
+      },
+    },
+    {
+      id: 'R1', kind: 'resistor', label: 'R1', rotation: 0,
+      resistanceOhms: 10_000, tolerancePercent: 5,
+      terminalHoleIds: {
+        a: terminalHoleId(boardId, 'E', 5),
+        b: terminalHoleId(boardId, 'E', 10),
+      },
+    },
+    {
+      id: 'C1', kind: 'capacitor', label: 'C1', rotation: 0,
+      capacitanceFarads: 100e-6, ratedVoltageV: 16,
+      terminalHoleIds: {
+        positive: terminalHoleId(boardId, 'A', 10),
+        negative: terminalHoleId(boardId, 'A', 11),
+      },
+    },
+    {
+      id: 'W2', kind: 'jumper-wire', label: 'W2', rotation: 0, color: 'black',
+      terminalHoleIds: {
+        a: terminalHoleId(boardId, 'E', 11),
+        b: railHoleId(boardId, 'top', 'negative', 10),
+      },
+    },
+  ];
+  return {
+    ...project,
+    powerOn: true,
+    components,
+    probes: [{
+      id: 'probe-capacitor',
+      label: 'Capacitor voltage',
+      instrumentId: 'multimeter',
+      positiveHoleId: terminalHoleId(boardId, 'C', 10),
+      referenceHoleId: railHoleId(boardId, 'top', 'negative', 3),
+    }],
+    analysis: { ...project.analysis, selectedProbeId: 'probe-capacitor' },
   };
 }
 
@@ -253,6 +319,7 @@ const STARTER_FACTORIES: Record<StarterProjectId, () => WorkbenchProject> = {
   'voltage-divider': voltageDividerProject,
   'series-leds': seriesLedsProject,
   'parallel-indicators': parallelIndicatorsProject,
+  'rc-charge-discharge': rcChargeDischargeProject,
 };
 
 export function createStarterProject(id: StarterProjectId): WorkbenchProject {

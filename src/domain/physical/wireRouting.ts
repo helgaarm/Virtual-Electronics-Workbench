@@ -5,6 +5,7 @@ import { PHYSICAL_PACKAGES } from './packages';
 
 interface Obstacle {
   center: Point3Mm;
+  bodyRadiusMm: number;
   radiusMm: number;
   bottomY: number;
   topY: number;
@@ -66,7 +67,7 @@ function componentObstacle(
   };
 
   return distance2d(center, closest) < radiusMm
-    ? { center, radiusMm, bottomY, topY, projection }
+    ? { center, bodyRadiusMm, radiusMm, bottomY, topY, projection }
     : undefined;
 }
 
@@ -121,33 +122,40 @@ export function routeJumperWire(
 
   const sideScore = (side: -1 | 1) => obstacles.reduce((score, obstacle) => {
     const candidate = {
-      x: obstacle.center.x + perpendicular.x * obstacle.radiusMm * side,
+      x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
       y: peakY,
-      z: obstacle.center.z + perpendicular.z * obstacle.radiusMm * side,
+      z: obstacle.center.z + perpendicular.z * obstacle.bodyRadiusMm * side,
     };
     const boundaryPenalty = isInsideBoard(board, candidate) ? 0 : 10_000;
     const crowdingPenalty = obstacles.reduce((penalty, other) => {
       if (other === obstacle) return penalty;
-      const overlap = other.radiusMm - distance2d(candidate, other.center);
+      const overlap = other.bodyRadiusMm - distance2d(candidate, other.center);
       return penalty + Math.max(0, overlap) * 100;
     }, 0);
     return score + boundaryPenalty + crowdingPenalty
       + distance2d(start, candidate) + distance2d(candidate, end);
   }, 0);
   const side: -1 | 1 = sideScore(-1) <= sideScore(1) ? -1 : 1;
-  const detours = obstacles.map((obstacle) => ({
-    x: obstacle.center.x + perpendicular.x * obstacle.radiusMm * side,
-    y: peakY,
-    z: obstacle.center.z + perpendicular.z * obstacle.radiusMm * side,
-  }));
-  const startObstacles = obstacles.filter((obstacle) => distance2d(start, obstacle.center) < obstacle.radiusMm);
-  const endObstacles = obstacles.filter((obstacle) => distance2d(end, obstacle.center) < obstacle.radiusMm);
+  const startObstacles = obstacles.filter(
+    (obstacle) => distance2d(start, obstacle.center) < obstacle.bodyRadiusMm,
+  );
+  const endObstacles = obstacles.filter(
+    (obstacle) => distance2d(end, obstacle.center) < obstacle.bodyRadiusMm,
+  );
+  const endpointObstacles = new Set([...startObstacles, ...endObstacles]);
+  const detours = obstacles
+    .filter((obstacle) => !endpointObstacles.has(obstacle))
+    .map((obstacle) => ({
+      x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
+      y: peakY,
+      z: obstacle.center.z + perpendicular.z * obstacle.bodyRadiusMm * side,
+    }));
   const escapePoint = (obstacle: Obstacle, endpoint: Point3Mm) => ({
-    x: obstacle.center.x + perpendicular.x * obstacle.radiusMm * side,
+    x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
     y: obstacle.bottomY - MAX_WIRE_RADIUS_MM - 0.2 > endpoint.y
       ? Math.min(endpoint.y + 0.25, obstacle.bottomY - MAX_WIRE_RADIUS_MM - 0.2)
       : obstacle.topY + 1.2,
-    z: obstacle.center.z + perpendicular.z * obstacle.radiusMm * side,
+    z: obstacle.center.z + perpendicular.z * obstacle.bodyRadiusMm * side,
   });
   const startEscapes = startObstacles.map((obstacle) => escapePoint(obstacle, start));
   const endEscapes = endObstacles.map((obstacle) => escapePoint(obstacle, end));

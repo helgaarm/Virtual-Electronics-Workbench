@@ -229,6 +229,79 @@ function LedMesh({
   );
 }
 
+function RadialCapacitorMesh({ component, board, selected, onSelect, onBeginDrag }: {
+  component: Extract<PlacedComponent, { kind: 'capacitor' }>;
+  board: BreadboardDefinition;
+  selected: boolean;
+  onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
+}) {
+  const physicalPackage = PHYSICAL_PACKAGES.capacitor;
+  const positive = point(board, component.terminalHoleIds.positive, 0.25);
+  const negative = point(board, component.terminalHoleIds.negative, 0.25);
+  const midpoint = positive.clone().add(negative).multiplyScalar(0.5);
+  const direction = negative.clone().sub(positive);
+  const horizontal = new THREE.Vector3(direction.x, 0, direction.z).normalize();
+  const bodyCenter = midpoint.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const bodyBottomY = bodyCenter.y - physicalPackage.dimensionsMm.y / 2;
+  const positiveContact = midpoint.clone().addScaledVector(horizontal, -0.62);
+  const negativeContact = midpoint.clone().addScaledVector(horizontal, 0.62);
+  positiveContact.y = bodyBottomY;
+  negativeContact.y = bodyBottomY;
+  const positiveShoulder = positive.clone().add(new THREE.Vector3(0, 1.45, 0));
+  const negativeShoulder = negative.clone().add(new THREE.Vector3(0, 1.15, 0));
+  const rotationY = -Math.atan2(direction.z, direction.x);
+  const radius = physicalPackage.dimensionsMm.x / 2;
+
+  return (
+    <group
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+    >
+      <SmoothTube points={[positive, positiveShoulder, positiveContact]} radius={physicalPackage.leadDiameterMm / 2} color="#b8bec0" metalness={0.82} />
+      <SmoothTube points={[negative, negativeShoulder, negativeContact]} radius={physicalPackage.leadDiameterMm / 2} color="#aeb4b6" metalness={0.82} />
+      <group position={bodyCenter} rotation={[0, rotationY, 0]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[radius, radius, physicalPackage.dimensionsMm.y, 40]} />
+          <meshStandardMaterial
+            color={selected ? '#315f87' : '#243e59'}
+            roughness={0.56}
+            metalness={0.08}
+            emissive={selected ? '#3478c7' : '#000000'}
+            emissiveIntensity={selected ? 0.2 : 0}
+          />
+        </mesh>
+        <mesh position={[0, physicalPackage.dimensionsMm.y / 2 + 0.04, 0]}>
+          <cylinderGeometry args={[radius * 0.94, radius, 0.22, 40]} />
+          <meshStandardMaterial color="#1c2e40" roughness={0.42} metalness={0.18} />
+        </mesh>
+        <mesh position={[0, -physicalPackage.dimensionsMm.y / 2 - 0.04, 0]}>
+          <cylinderGeometry args={[radius * 0.9, radius * 0.94, 0.2, 40]} />
+          <meshStandardMaterial color="#2b3031" roughness={0.72} />
+        </mesh>
+        <RoundedBox
+          args={[0.52, physicalPackage.dimensionsMm.y - 1.4, 2.75]}
+          radius={0.12}
+          smoothness={4}
+          position={[radius - 0.09, 0, 0]}
+        >
+          <meshStandardMaterial color="#d8dcda" roughness={0.62} />
+        </RoundedBox>
+        {[-3, 0, 3].map((y) => (
+          <mesh key={y} position={[radius + 0.2, y, 0]}>
+            <boxGeometry args={[0.09, 0.2, 1.2]} />
+            <meshBasicMaterial color="#4c5758" />
+          </mesh>
+        ))}
+        <mesh position={[-1.1, physicalPackage.dimensionsMm.y / 2 + 0.18, 0]}>
+          <torusGeometry args={[0.46, 0.1, 10, 28]} />
+          <meshStandardMaterial color="#aeb9ba" roughness={0.35} metalness={0.55} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
 function WireMesh({ component, board, components, selected, onSelect, onBeginDrag }: {
   component: Extract<PlacedComponent, { kind: 'jumper-wire' }>;
   board: BreadboardDefinition;
@@ -369,7 +442,7 @@ function TactileSwitchMesh({ component, board, selected, onSelect, onBeginDrag }
 }
 
 function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: {
-  component: Exclude<PlacedComponent, { kind: 'resistor' | 'led' | 'jumper-wire' | 'switch' }>;
+  component: Exclude<PlacedComponent, { kind: 'resistor' | 'led' | 'capacitor' | 'jumper-wire' | 'switch' }>;
   board: BreadboardDefinition;
   selected: boolean;
   onSelect: () => void;
@@ -432,6 +505,7 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         };
         if (component.kind === 'resistor') return <AxialResistor key={component.id} component={component} {...common} />;
         if (component.kind === 'led') return <LedMesh key={component.id} component={component} current={result.componentCurrents[component.id] ?? 0} {...common} />;
+        if (component.kind === 'capacitor') return <RadialCapacitorMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'jumper-wire') return <WireMesh key={component.id} component={component} components={components} {...common} />;
         if (component.kind === 'switch') return <TactileSwitchMesh key={component.id} component={component} {...common} />;
         return <SimpleComponent key={component.id} component={component} {...common} />;

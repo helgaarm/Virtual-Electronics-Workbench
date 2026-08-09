@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createLedExampleProject } from '../../src/domain/project';
+import { createStarterProject } from '../../src/domain/starterProjects';
 import {
   migrateProjectDocument,
   ProjectValidationError,
@@ -26,9 +27,10 @@ describe('project document migrations', () => {
     legacy.version = 1;
     delete legacy.revision;
     delete legacy.analysis;
+    delete legacy.simulation;
     for (const probe of legacy.probes as Array<Record<string, unknown>>) delete probe.instrumentId;
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(4);
     expect(migrated.revision).toBe(0);
     expect(migrated.probes[0].instrumentId).toBe('multimeter');
     expect(migrated.analysis).toMatchObject({
@@ -42,6 +44,7 @@ describe('project document migrations', () => {
     const legacy = projectRecord();
     legacy.version = 2;
     delete legacy.analysis;
+    delete legacy.simulation;
     const probe = (legacy.probes as Array<Record<string, unknown>>)[0];
     delete probe.instrumentId;
     delete probe.referenceHoleId;
@@ -50,9 +53,35 @@ describe('project document migrations', () => {
     expect(migrated.analysis.selectedProbeId).toBe(migrated.probes[0].id);
   });
 
+  it('migrates version 3 projects to default transient settings', () => {
+    const legacy = projectRecord();
+    legacy.version = 3;
+    delete legacy.simulation;
+    expect(migrateProjectDocument(legacy).simulation).toEqual({
+      timeStepSeconds: 0.005,
+      speed: 1,
+    });
+  });
+
+  it('round-trips capacitor data and rejects invalid persisted capacitance', () => {
+    const project = createStarterProject('rc-charge-discharge');
+    expect(migrateProjectDocument(structuredClone(project))).toEqual(project);
+
+    const invalid = structuredClone(project) as unknown as Record<string, unknown>;
+    const capacitor = (invalid.components as Array<Record<string, unknown>>)
+      .find((component) => component.kind === 'capacitor');
+    if (!capacitor) throw new Error('RC starter capacitor is missing.');
+    capacitor.capacitanceFarads = 0;
+    expect(() => migrateProjectDocument(invalid)).toThrow(/capacitanceFarads/);
+  });
+
   it.each([
     ['missing view', (value: Record<string, unknown>) => { delete value.view; }, /view/],
     ['missing analysis settings', (value: Record<string, unknown>) => { delete value.analysis; }, /analysis/],
+    ['missing simulation settings', (value: Record<string, unknown>) => { delete value.simulation; }, /simulation/],
+    ['invalid transient step', (value: Record<string, unknown>) => {
+      (value.simulation as Record<string, unknown>).timeStepSeconds = 0;
+    }, /timeStepSeconds/],
     ['unknown selected probe', (value: Record<string, unknown>) => {
       (value.analysis as Record<string, unknown>).selectedProbeId = 'probe-missing';
     }, /existing probe/],

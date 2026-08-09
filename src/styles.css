@@ -22,7 +22,7 @@ button { color: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid rgba(46, 118, 208, 0.32); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: 0.45; }
 
-.app-shell { height: 100vh; min-height: 620px; display: grid; grid-template-rows: 72px 58px minmax(0, 1fr) 34px; background: #eeece6; }
+.app-shell { height: 100vh; min-height: 620px; display: grid; grid-template-rows: 72px 58px minmax(0, 1fr) 40px; background: #eeece6; }
 .app-header { z-index: 5; display: grid; grid-template-columns: minmax(210px, 1fr) auto minmax(340px, 1fr) auto; align-items: center; gap: 24px; padding: 0 22px; background: rgba(250, 249, 246, 0.96); border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 12px; }
 .brand > div { display: flex; flex-direction: column; line-height: 1.05; }
@@ -156,7 +156,7 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 .probe-actions button { height: 30px; padding: 0 9px; border: 1px solid #d5d3cc; border-radius: 6px; background: #f6f5f1; color: #5e6663; font-size: 9px; font-weight: 700; cursor: pointer; }.probe-actions .danger-quiet { margin-left: auto; color: #a3423d; }
 .analysis-grid { min-height: 300px; display: grid; grid-template-columns: minmax(300px, .8fr) minmax(380px, 1.2fr); gap: 15px; }
 .analysis-table, .mini-board { overflow: hidden; border: 1px solid #d9d7d0; border-radius: 13px; box-shadow: 0 5px 16px rgba(50,49,44,.045); }
-.component-table-wrap { overflow: auto; padding: 0 18px 18px; }.component-table { width: 100%; border-collapse: collapse; font-size: 9px; text-align: left; }.component-table th, .component-table td { padding: 9px 7px; border-top: 1px solid #e7e5df; white-space: nowrap; }.component-table thead th { color: #858a87; font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }.component-table tbody th { color: #343c39; }.component-table td { color: #676f6c; }.component-table td:nth-child(n+3) { font-family: "DM Mono", monospace; text-align: right; }
+.component-table-wrap { overflow: auto; padding: 0 18px 18px; }.component-table { width: 100%; border-collapse: collapse; font-size: 9px; text-align: left; }.component-table th, .component-table td { padding: 9px 7px; border-top: 1px solid #e7e5df; white-space: nowrap; }.component-table thead th { color: #858a87; font-size: 8px; text-transform: uppercase; letter-spacing: .06em; }.component-table thead th:nth-child(n+3), .component-table td:nth-child(n+3) { text-align: right; }.component-table tbody th { color: #343c39; }.component-table td { color: #676f6c; }.component-table td:nth-child(n+3) { font-family: "DM Mono", monospace; font-variant-numeric: tabular-nums; }
 .mini-board { position: relative; min-height: 330px; }.mini-board-label { position: absolute; z-index: 2; top: 10px; left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: center; pointer-events: none; }.mini-board-label span { padding: 5px 7px; border-radius: 5px; background: rgba(255,255,255,.8); color: #707673; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }.mini-board-label button { pointer-events: auto; padding: 6px 8px; border: 1px solid #d3d2cb; border-radius: 6px; background: rgba(255,255,255,.86); color: #525a57; font-size: 9px; font-weight: 650; cursor: pointer; }
 .probe-marker-label { display: flex; min-width: max-content; overflow: hidden; border: 1px solid rgba(255,255,255,.72); border-radius: 5px; background: rgba(34,40,39,.78); color: #fff; font: 700 8px "DM Mono", monospace; box-shadow: 0 3px 9px rgba(20,24,23,.16); opacity: .82; }
 .probe-marker-label strong, .probe-marker-label span { display: block; padding: 4px 5px; }.probe-marker-label strong { max-width: 88px; overflow: hidden; border-right: 1px solid rgba(255,255,255,.22); text-overflow: ellipsis; }.probe-marker-label span { letter-spacing: .02em; }
@@ -164,9 +164,13 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 
 .status-bar { display: flex; align-items: center; gap: 8px; padding: 0 17px; border-top: 1px solid #d6d4cd; background: #faf9f6; color: #707673; font-size: 9px; }
 .status-bar strong { color: #444c49; font-size: 9px; }.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #a8adaa; }.status-warning .status-dot { background: #4ca06a; box-shadow: 0 0 0 3px #dceee2; }.status-error .status-dot { background: var(--red); box-shadow: 0 0 0 3px #f2deda; }.status-separator { height: 13px; width: 1px; background: #d5d3cd; }.status-message { min-width: 0; overflow: hidden; color: #858a87; text-overflow: ellipsis; white-space: nowrap; }.sqlite-status { margin-left: auto; color: #7a817e; font-family: "DM Mono", monospace; }
+.transient-controls { display: flex; align-items: center; gap: 4px; padding-left: 7px; border-left: 1px solid #ddd9d1; }
+.transient-controls button { height: 25px; padding: 0 7px; border: 1px solid #d2d0c8; border-radius: 6px; background: #f3f2ed; color: #505855; font-size: 8px; font-weight: 750; cursor: pointer; }.transient-controls button:first-child { min-width: 42px; border-color: #aebfca; background: #edf4f8; color: #286895; }
+.transient-controls output { min-width: 58px; color: #315f7e; font: 600 9px "DM Mono", monospace; text-align: center; }
+.transient-controls label { display: flex; align-items: center; gap: 3px; color: #7b817e; font-size: 8px; font-weight: 700; }.transient-controls select { height: 25px; border: 1px solid #d2d0c8; border-radius: 6px; background: #fff; padding: 0 4px; color: #4b5350; font: 8px "DM Mono", monospace; }
 
 @media (max-width: 1050px) {
-  .app-header { grid-template-columns: auto auto 1fr auto; gap: 10px; }.brand > div { display: none; }.header-actions .quiet-button { display: none; }.project-name input { width: 180px; }.project-loaders { gap: 10px; }.project-loaders label { display: none; }
+  .app-header { grid-template-columns: auto auto 1fr auto; gap: 10px; }.brand > div { display: none; }.header-actions .quiet-button { display: none; }.project-name input { width: 180px; }.project-loaders { gap: 10px; }.project-loaders label { display: none; }.transient-controls label { display: none; }
   .build-layout { grid-template-columns: 190px minmax(360px, 1fr) 230px; }.probe-controls { grid-template-columns: 1fr 1fr; }.probe-hole-select { grid-column: 1 / -1; }.analysis-grid { grid-template-columns: 1fr; }.mini-board { min-height: 300px; }
 }
 

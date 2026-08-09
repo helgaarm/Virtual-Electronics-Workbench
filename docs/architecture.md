@@ -2,7 +2,7 @@
 
 ## Current scope
 
-Phase A provides the true-3D, millimetre-based breadboard and physical editing foundation. Phase B connects that physical state to a deterministic DC circuit and persists projects in SQLite. Phase C adds persistent multimeter state and an attachable probe workflow over the same measurement boundary.
+Phase A provides the true-3D, millimetre-based breadboard and physical editing foundation. Phase B connects that physical state to a deterministic DC circuit and persists projects in SQLite. Phase C adds persistent multimeter state and an attachable probe workflow over the same measurement boundary. Phase D adds polarized capacitors, transient MNA state, and a shared deterministic simulation clock without coupling solver time to rendering frames.
 
 ## Boundaries
 
@@ -11,7 +11,7 @@ Phase A provides the true-3D, millimetre-based breadboard and physical editing f
 | Physical domain | holes, strips, occupancy, package dimensions and lead metadata, rotations | electrical solving, meshes |
 | Electrical domain | nodes, terminals, idealized components | hole coordinates, React state |
 | Circuit extraction | map strips, wires, switches and leads into electrical nodes | rendering |
-| Simulation | MNA matrix/stamps and structured results | project/UI state |
+| Simulation | shared MNA matrix/stamps, DC and transient engines, fixed-step clock, structured results | project/UI state, animation-frame timing |
 | Measurement | derived V/I/P values | solver mutation |
 | Rendering | meshes, materials, camera, picking | authoritative connectivity |
 | State/UI | commands and orchestration | solver algorithms |
@@ -27,7 +27,7 @@ The project JSON is a stable but untrusted boundary. The client validates API re
 - `PUT /api/projects/:id` requires matching URL/body IDs and the current revision. It returns the saved document with the next revision, 400 for invalid input, or 409 for a stale/future version.
 - `DELETE /api/projects/:id` removes one project or returns 404.
 
-JSON bodies are limited to 2 MB. Schema version 1 and 2 documents migrate to version 3; legacy probes are assigned to the multimeter, Phase C instrument settings are initialized, and version 1 revisions start at zero. Unsupported future schemas are rejected explicitly.
+JSON bodies are limited to 2 MB. Schema versions 1 through 3 migrate to version 4; legacy probes are assigned to the multimeter, missing instrument and transient settings are initialized, and version 1 revisions start at zero. Unsupported future schemas are rejected explicitly.
 
 ## Chosen libraries
 
@@ -41,6 +41,7 @@ JSON bodies are limited to 2 MB. Schema version 1 and 2 documents migrate to ver
 
 - Browser picking across many holes: holes are instanced, but larger or multiple boards will still need profiling and spatial indexing.
 - MNA non-linearity: the Phase B LED uses a documented piecewise-linear iteration, not a semiconductor-accurate SPICE model.
+- Transient fidelity: the Phase D capacitor is ideal and uses a fixed-step backward-Euler model. Other reactive components and variable-step error control remain future work.
 - Mechanical interaction: snapping/occupancy is discrete. It prevents contradictory terminal occupancy but is not a rigid-body engine.
 - SQLite concurrency: `BEGIN IMMEDIATE` plus optimistic document revisions protects the local multi-tab workflow. A collaborative service will still need a transactional async design and user-facing merge semantics.
 - Project evolution: migrations are mandatory whenever persisted shapes change.
@@ -54,3 +55,4 @@ JSON bodies are limited to 2 MB. Schema version 1 and 2 documents migrate to ver
 5. SQLite repository and project lifecycle UI.
 6. Integrated verification and accessibility/browser smoke testing.
 7. Persistent multimeter readings, probe attachment, 3D markers, and Test & Analysis telemetry.
+8. Polarized capacitor, reusable MNA primitives, fixed-step transient clock, and verified RC charge/discharge response.

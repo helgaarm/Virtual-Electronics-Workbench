@@ -7,6 +7,7 @@ describe('physical package lead spans', () => {
     'voltage-source',
     'resistor',
     'led',
+    'capacitor',
     'switch',
   ] as ComponentKind[])('enforces realistic minimum and maximum spans for %s', (kind) => {
     const limits = PHYSICAL_PACKAGES[kind].leadSpanMm!;

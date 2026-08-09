@@ -44,6 +44,14 @@ export const PHYSICAL_PACKAGES: Record<ComponentKind, PhysicalPackageDefinition>
     mountingHeightMm: 5.7,
     allowedOrientations: QUARTER_TURNS,
   },
+  capacitor: {
+    packageType: 'RADIAL_ELECTROLYTIC_6_3MM',
+    dimensionsMm: { x: 6.3, y: 11, z: 6.3 },
+    leadDiameterMm: 0.5,
+    leadSpanMm: { minimum: 2, maximum: 5.08 },
+    mountingHeightMm: 6.25,
+    allowedOrientations: QUARTER_TURNS,
+  },
   switch: {
     packageType: 'TACTILE_SWITCH_6MM',
     dimensionsMm: { x: 6.2, y: 3.4, z: 6.2 },

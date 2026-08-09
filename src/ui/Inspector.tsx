@@ -2,7 +2,8 @@ import type { PlacedComponent } from '../domain/components/types';
 import { isComponentAnchored, terminalEntries } from '../domain/components/types';
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import type { ComponentMeasurement, MeasurementValue } from '../measurement/dcMeasurements';
-import { formatCurrent, formatResistance, formatVoltage } from './format';
+import { breadboardHoleOptionGroups } from './breadboardHoleOptions';
+import { formatCapacitance, formatCurrent, formatResistance, formatVoltage } from './format';
 
 interface Props {
   component?: PlacedComponent;
@@ -28,7 +29,7 @@ export function Inspector({ component, board, measurement, onUpdate, onRotate, o
     );
   }
 
-  const allHoles = [...board.holes].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  const holeOptionGroups = breadboardHoleOptionGroups(board);
   const anchored = isComponentAnchored(component);
 
   const updateTerminal = (terminal: string, holeId: string) => {
@@ -68,6 +69,28 @@ export function Inspector({ component, board, measurement, onUpdate, onRotate, o
         </section>
       )}
 
+      {component.kind === 'capacitor' && (
+        <section className="inspector-section">
+          <label htmlFor="capacitance">Capacitance</label>
+          <div className="input-with-unit">
+            <input
+              id="capacitance"
+              type="number"
+              min="0.001"
+              max="100000"
+              step="1"
+              value={component.capacitanceFarads * 1e6}
+              onChange={(event) => onUpdate({
+                ...component,
+                capacitanceFarads: Math.max(1e-9, Number(event.target.value) * 1e-6),
+              })}
+            />
+            <span>µF</span>
+          </div>
+          <small>{formatCapacitance(component.capacitanceFarads)} · polarized · {component.ratedVoltageV} V rated</small>
+        </section>
+      )}
+
       {component.kind === 'switch' && (
         <section className="inspector-section switch-control">
           <span>Contact</span>
@@ -100,7 +123,11 @@ export function Inspector({ component, board, measurement, onUpdate, onRotate, o
             <label key={terminal}>
               <span>{terminal}</span>
               <select disabled={anchored} value={holeId} onChange={(event) => updateTerminal(terminal, event.target.value)}>
-                {allHoles.map((hole) => <option key={hole.id} value={hole.id}>{hole.label}</option>)}
+                {holeOptionGroups.map((group) => (
+                  <optgroup key={group.label} label={group.label}>
+                    {group.holes.map((hole) => <option key={hole.id} value={hole.id}>{hole.label}</option>)}
+                  </optgroup>
+                ))}
               </select>
             </label>
           ))}

@@ -7,6 +7,7 @@ const KINDS: Array<{ kind: ComponentKind; icon: string }> = [
   { kind: 'ground', icon: 'GND' },
   { kind: 'resistor', icon: 'R' },
   { kind: 'led', icon: 'LED' },
+  { kind: 'capacitor', icon: 'C' },
   { kind: 'switch', icon: 'SW' },
   { kind: 'jumper-wire', icon: 'WIRE' },
 ];

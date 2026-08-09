@@ -110,16 +110,31 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
           onResistanceOhms: component.onResistanceOhms,
         });
         break;
-      case 'voltage-source':
-        if (project.powerOn) {
+      case 'capacitor':
+        if (component.capacitanceFarads <= 0) {
+          errors.push({
+            code: 'INVALID_CAPACITANCE',
+            message: `${component.label} must have capacitance greater than zero.`,
+            componentId: component.id,
+          });
+        } else {
           electricalComponents.push({
             id: component.id,
-            kind: 'voltage-source',
+            kind: 'capacitor',
             positiveNodeId: holeToNodeId[component.terminalHoleIds.positive],
             negativeNodeId: holeToNodeId[component.terminalHoleIds.negative],
-            voltageV: component.voltageV,
+            capacitanceFarads: component.capacitanceFarads,
           });
         }
+        break;
+      case 'voltage-source':
+        electricalComponents.push({
+          id: component.id,
+          kind: 'voltage-source',
+          positiveNodeId: holeToNodeId[component.terminalHoleIds.positive],
+          negativeNodeId: holeToNodeId[component.terminalHoleIds.negative],
+          voltageV: project.powerOn ? component.voltageV : 0,
+        });
         break;
       case 'ground':
       case 'switch':

@@ -14,6 +14,7 @@ import { ApiProjectRepository } from './persistence/apiProjectRepository';
 import type { ProjectSummary } from './persistence/projectRepository';
 import { simulateProject } from './simulation';
 import { connectionLearningTarget } from './state/connectionLearning';
+import { useTransientRuntime } from './state/useTransientRuntime';
 import { createPlacedComponent, movePlacedComponent, rotatePlacedComponent } from './state/workbenchActions';
 import {
   isProjectDirty,
@@ -47,6 +48,7 @@ export default function App() {
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [draggingComponentId, setDraggingComponentId] = useState<string>();
   const [dragCandidateHoleId, setDragCandidateHoleId] = useState<string>();
+  const [transientResetKey, setTransientResetKey] = useState(0);
   const past = useRef<WorkbenchProject[]>([]);
   const future = useRef<WorkbenchProject[]>([]);
 
@@ -54,7 +56,40 @@ export default function App() {
     () => createBreadboardDefinition(project.board.id, project.board.columns),
     [project.board.columns, project.board.id],
   );
-  const simulation = useMemo(() => simulateProject(project), [project]);
+  const dcSimulation = useMemo(() => simulateProject(project), [project]);
+  const circuitKey = useMemo(
+    () => JSON.stringify({ board: project.board, powerOn: project.powerOn, components: project.components }),
+    [project.board, project.components, project.powerOn],
+  );
+  const transientRuntime = useTransientRuntime(
+    dcSimulation.extraction.circuit,
+    circuitKey,
+    project.simulation,
+    transientResetKey,
+  );
+  const simulation = useMemo(() => {
+    if (
+      !transientRuntime.hasCapacitors
+      || !transientRuntime.frame
+      || dcSimulation.extraction.errors.length > 0
+    ) return dcSimulation;
+    const warnings = [
+      ...dcSimulation.extraction.warnings,
+      ...transientRuntime.frame.result.warnings,
+    ];
+    return {
+      extraction: dcSimulation.extraction,
+      result: {
+        ...transientRuntime.frame.result,
+        warnings,
+        status: transientRuntime.frame.result.status === 'error'
+          ? 'error' as const
+          : warnings.length > 0
+            ? 'warning' as const
+            : 'ok' as const,
+      },
+    };
+  }, [dcSimulation, transientRuntime.frame, transientRuntime.hasCapacitors]);
   const selectedProbeId = project.analysis.selectedProbeId ?? project.probes[0]?.id;
   const selectedComponent = project.components.find((component) => component.id === selectedComponentId);
   const selectedMeasurement = useMemo(
@@ -326,6 +361,7 @@ export default function App() {
       setSelectedComponentId(loaded.components[0]?.id ?? '');
       setSelectedHoleId(undefined);
       cancelDrag();
+      setTransientResetKey((key) => key + 1);
       setNotice(`Opened “${loaded.name}” from SQLite.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Open failed.');
@@ -343,6 +379,7 @@ export default function App() {
     setSelectedComponentId('');
     setSelectedHoleId(undefined);
     cancelDrag();
+    setTransientResetKey((key) => key + 1);
     setNotice('New empty workbench created. Add a part to begin.');
   };
 
@@ -360,6 +397,7 @@ export default function App() {
     setSelectedHoleId(undefined);
     cancelDrag();
     setCameraResetKey((key) => key + 1);
+    setTransientResetKey((key) => key + 1);
     setNotice(`${definition?.name ?? 'Starter project'} loaded as a new unsaved workbench.`);
   };
 
@@ -461,9 +499,50 @@ export default function App() {
 
       <footer className={`status-bar status-${simulation.result.status}`}>
         <span className="status-dot" />
-        <strong>{project.powerOn ? 'Simulation active' : 'Output off'}</strong>
+        <strong>{transientRuntime.hasCapacitors
+          ? `Transient ${transientRuntime.clock.status}`
+          : project.powerOn ? 'Simulation active' : 'Output off'}</strong>
         <span className="status-separator" />
         <span>{project.powerOn && activeVoltageSource ? `${activeVoltageSource.voltageV.toFixed(2)} V DC` : '0 V'}</span>
+        {transientRuntime.hasCapacitors && (
+          <div className="transient-controls" role="group" aria-label="Transient simulation clock">
+            <button onClick={transientRuntime.toggleRunning}>
+              {transientRuntime.clock.status === 'running' ? 'Pause' : 'Run'}
+            </button>
+            <button onClick={transientRuntime.stepOnce} disabled={transientRuntime.clock.status === 'running'}>Step</button>
+            <button onClick={transientRuntime.reset}>Reset</button>
+            <output>{transientRuntime.clock.timeSeconds.toFixed(3)} s</output>
+            <label>Step
+              <select
+                value={project.simulation.timeStepSeconds}
+                onChange={(event) => applyProject((current) => ({
+                  ...current,
+                  simulation: { ...current.simulation, timeStepSeconds: Number(event.target.value) },
+                }))}
+              >
+                <option value={0.001}>1 ms</option>
+                <option value={0.005}>5 ms</option>
+                <option value={0.01}>10 ms</option>
+                <option value={0.05}>50 ms</option>
+              </select>
+            </label>
+            <label>Speed
+              <select
+                value={project.simulation.speed}
+                onChange={(event) => applyProject((current) => ({
+                  ...current,
+                  simulation: { ...current.simulation, speed: Number(event.target.value) },
+                }))}
+              >
+                <option value={0.25}>0.25×</option>
+                <option value={0.5}>0.5×</option>
+                <option value={1}>1×</option>
+                <option value={2}>2×</option>
+                <option value={4}>4×</option>
+              </select>
+            </label>
+          </div>
+        )}
         <span className="status-message">{statusText}</span>
         <span className="sqlite-status">SQLite persistence</span>
       </footer>

@@ -107,7 +107,7 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
   const path = `components[${index}]`;
   const source = record(value, path);
   const kind = enumValue(source.kind, `${path}.kind`, [
-    'voltage-source', 'ground', 'resistor', 'led', 'switch', 'jumper-wire',
+    'voltage-source', 'ground', 'resistor', 'led', 'capacitor', 'switch', 'jumper-wire',
   ] as const);
   const base = {
     id: identifier(source.id, `${path}.id`),
@@ -148,6 +148,23 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
         forwardVoltageV: finiteNumber(source.forwardVoltageV, `${path}.forwardVoltageV`, 0.1, 20),
         onResistanceOhms: finiteNumber(source.onResistanceOhms, `${path}.onResistanceOhms`, 0.01, 1e6),
         terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['anode', 'cathode']),
+      };
+    case 'capacitor':
+      return {
+        ...base,
+        kind,
+        capacitanceFarads: finiteNumber(
+          source.capacitanceFarads,
+          `${path}.capacitanceFarads`,
+          1e-12,
+          10,
+        ),
+        ratedVoltageV: finiteNumber(source.ratedVoltageV, `${path}.ratedVoltageV`, 1, 1_000),
+        terminalHoleIds: terminals(
+          source.terminalHoleIds,
+          `${path}.terminalHoleIds`,
+          ['positive', 'negative'],
+        ),
       };
     case 'switch':
       return {
@@ -245,6 +262,20 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
   if (analysis.selectedProbeId && !probes.some((probe) => probe.id === analysis.selectedProbeId)) {
     throw new ProjectValidationError('analysis.selectedProbeId', 'must reference an existing probe');
   }
+  const simulation = sourceVersion < 4
+    ? { timeStepSeconds: 0.005, speed: 1 }
+    : (() => {
+        const simulationSource = record(source.simulation, 'simulation');
+        return {
+          timeStepSeconds: finiteNumber(
+            simulationSource.timeStepSeconds,
+            'simulation.timeStepSeconds',
+            1e-6,
+            1,
+          ),
+          speed: finiteNumber(simulationSource.speed, 'simulation.speed', 0.1, 10),
+        };
+      })();
   const project: WorkbenchProject = {
     version: PROJECT_SCHEMA_VERSION,
     revision: sourceVersion === 1 ? 0 : integer(source.revision, 'revision', 0, Number.MAX_SAFE_INTEGER),
@@ -258,6 +289,7 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
     components,
     probes,
     analysis,
+    simulation,
     view: {
       cameraPreset: enumValue(viewSource.cameraPreset, 'view.cameraPreset', ['3d', 'top'] as const),
       showConnections: booleanValue(viewSource.showConnections, 'view.showConnections'),

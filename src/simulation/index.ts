@@ -1,7 +1,14 @@
-import type { SimulationEngine, SimulationResult } from '../domain/circuit/types';
+import type {
+  SimulationEngine,
+  SimulationResult,
+  TransientSimulationEngine,
+} from '../domain/circuit/types';
 import type { WorkbenchProject } from '../domain/project';
 import { extractCircuit, type CircuitExtraction } from './circuitBuilder';
 import { solveDC } from './dc/solveDC';
+import { createTransientState, stepTransient } from './transient/solveTransient';
+
+export { createTransientState, runTransient, stepTransient } from './transient/solveTransient';
 
 export interface ProjectSimulation {
   extraction: CircuitExtraction;
@@ -9,6 +16,10 @@ export interface ProjectSimulation {
 }
 
 export const dcSimulationEngine: SimulationEngine = { solveDC };
+export const transientSimulationEngine: TransientSimulationEngine = {
+  createState: createTransientState,
+  step: stepTransient,
+};
 
 export function simulateProject(
   project: WorkbenchProject,

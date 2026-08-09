@@ -39,6 +39,15 @@ describe('MNA DC solver', () => {
     expect(result.errors[0].code).toBe('DIRECT_SHORT');
   });
 
+  it('ignores a redundant same-node zero-volt source without making MNA singular', () => {
+    const result = solveDC(circuit(['gnd'], [
+      { id: 'V1', kind: 'voltage-source', positiveNodeId: 'gnd', negativeNodeId: 'gnd', voltageV: 0 },
+    ]));
+    expect(result.status).toBe('ok');
+    expect(result.errors).toEqual([]);
+    expect(result.componentCurrents.V1).toBe(0);
+  });
+
   it('keeps a reverse-biased LED off', () => {
     const result = solveDC(circuit(['gnd', 'negative'], [
       { id: 'V1', kind: 'voltage-source', positiveNodeId: 'negative', negativeNodeId: 'gnd', voltageV: -5 },
@@ -54,6 +63,16 @@ describe('MNA DC solver', () => {
     expect(result.status).toBe('ok');
     expect(result.nodeVoltages).toEqual({ gnd: 0 });
     expect(result.componentCurrents).toEqual({});
+  });
+
+  it('treats capacitors as open circuits in DC analysis', () => {
+    const result = solveDC(circuit(['gnd', 'vcc'], [
+      { id: 'V1', kind: 'voltage-source', positiveNodeId: 'vcc', negativeNodeId: 'gnd', voltageV: 5 },
+      { id: 'C1', kind: 'capacitor', positiveNodeId: 'vcc', negativeNodeId: 'gnd', capacitanceFarads: 100e-6 },
+    ]));
+    expect(result.status).toBe('ok');
+    expect(result.nodeVoltages.vcc).toBeCloseTo(5, 9);
+    expect(result.componentCurrents.C1).toBe(0);
   });
 
   it('powers the starter LED and reacts to the physical switch', () => {

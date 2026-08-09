@@ -33,6 +33,13 @@ export interface LedComponent extends ComponentBase {
   terminalHoleIds: { anode: string; cathode: string };
 }
 
+export interface CapacitorComponent extends ComponentBase {
+  kind: 'capacitor';
+  capacitanceFarads: number;
+  ratedVoltageV: number;
+  terminalHoleIds: { positive: string; negative: string };
+}
+
 export interface SwitchComponent extends ComponentBase {
   kind: 'switch';
   closed: boolean;
@@ -50,6 +57,7 @@ export type PlacedComponent =
   | GroundComponent
   | ResistorComponent
   | LedComponent
+  | CapacitorComponent
   | SwitchComponent
   | JumperWireComponent;
 
@@ -73,6 +81,8 @@ export function componentDisplayName(kind: ComponentKind): string {
       return 'Resistor';
     case 'led':
       return 'LED';
+    case 'capacitor':
+      return 'Capacitor';
     case 'switch':
       return 'Switch';
     case 'jumper-wire':

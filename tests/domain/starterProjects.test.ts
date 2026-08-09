@@ -9,6 +9,7 @@ import {
 import { measureProbeVoltage } from '../../src/measurement/dcMeasurements';
 import { migrateProjectDocument } from '../../src/persistence/migrations';
 import { simulateProject } from '../../src/simulation';
+import { createTransientState, runTransient } from '../../src/simulation';
 
 describe('classic starter projects', () => {
   it.each(STARTER_PROJECTS)('builds a valid and solvable $name template', ({ id }) => {
@@ -44,5 +45,25 @@ describe('classic starter projects', () => {
   ] as const)('lights both LEDs in %s', (id, ledIds) => {
     const simulation = simulateProject(createStarterProject(id as StarterProjectId));
     for (const ledId of ledIds) expect(simulation.result.componentCurrents[ledId]).toBeGreaterThan(0.001);
+  });
+
+  it('provides a real RC starter circuit whose capacitor charges', () => {
+    const project = createStarterProject('rc-charge-discharge');
+    const simulation = simulateProject(project);
+    const run = runTransient(simulation.extraction.circuit, {
+      durationSeconds: 1,
+      timeStepSeconds: 0.005,
+      initialState: createTransientState(simulation.extraction.circuit),
+    });
+    expect(run.state.capacitorVoltages.C1).toBeCloseTo(5 * (1 - Math.exp(-1)), 2);
+
+    const outputOff = simulateProject({ ...project, powerOn: false });
+    const discharge = runTransient(outputOff.extraction.circuit, {
+      durationSeconds: 1,
+      timeStepSeconds: 0.005,
+      initialState: createTransientState(outputOff.extraction.circuit, run.state),
+    });
+    expect(discharge.state.capacitorVoltages.C1)
+      .toBeCloseTo(run.state.capacitorVoltages.C1 * Math.exp(-1), 2);
   });
 });

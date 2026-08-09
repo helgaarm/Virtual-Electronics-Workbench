@@ -1,6 +1,6 @@
 # Virtual Electronics Workbench
 
-A runnable Phase A–C foundation for physically building, simulating, and measuring breadboard circuits in the browser.
+A runnable Phase A–D foundation for physically building, simulating, and measuring breadboard circuits in the browser.
 
 The application opens with a working **Light an LED** example: a 5 V source, closed switch, 220 Ω axial resistor, red LED, ground reference, and curved return jumper. Turn output off, operate the switch, change resistance, rotate or re-snap parts, attach multimeter probes, inspect live readings, and save/reopen the complete project from SQLite.
 
@@ -34,9 +34,19 @@ The application opens with a working **Light an LED** example: a 5 V source, clo
 - Non-occupying 3D probe markers and consistent `+`/`COM` hole labels in Build and Test views.
 - Live disconnected/error guidance and a saved-reading rack for quickly comparing nodes.
 - Component telemetry showing available voltage, current, and power without fabricating unsupported ideal-connector currents.
-- Schema version 3 with automatic migration of Phase A/B version 1 and 2 projects.
+- Automatic migration of Phase A/B version 1 and 2 projects into the current project schema.
 
-Oscilloscope, signal generation, capacitors, and transient waveforms intentionally remain later phases. No waveform is fabricated.
+### Phase D — capacitors and transients
+
+- Polarized radial electrolytic capacitor with authentic package proportions, polarity markings, fixed lead geometry, configurable capacitance, and displayed voltage-rating metadata.
+- Shared transient solver using Modified Nodal Analysis and a backward-Euler capacitor companion model.
+- Deterministic fixed-step simulation clock with run, pause, single-step, reset, timestep, and speed controls.
+- Capacitor state is preserved while the circuit runs and across output on/off changes, enabling charge and discharge experiments.
+- Built-in **RC charge and discharge** starter project with a 10 kΩ resistor, 100 µF capacitor, and capacitor-voltage probe.
+- Schema version 4 persists capacitor data and transient settings through SQLite; older projects migrate automatically.
+- Verified RC response against the analytical time constant, including charge at one and five time constants and source-off discharge.
+
+Oscilloscope and signal generation intentionally remain a later phase. No waveform is fabricated.
 
 ## Requirements
 
@@ -73,13 +83,14 @@ Optional environment variables:
 npm run check
 ```
 
-This runs strict linting, the unit/integration test suite, TypeScript project checking, and the Vite production build. Tests cover breadboard topology, rail splits, occupancy, jumper obstacle routing, starter-project validity, drag/rotation snapping, resistor bands, measurement states, extraction, Ohm’s law, voltage division, source behavior, switch/LED behavior, document migration and validation, save races, API validation, stale-write conflicts, and in-memory plus on-disk SQLite durability.
+This runs strict linting, third-party-license inventory verification, the unit/integration test suite, TypeScript project checking, and the Vite production build. Tests cover breadboard topology, rail splits, occupancy, jumper obstacle routing, starter-project validity, drag/rotation snapping, resistor bands, capacitor packages, fixed-step timing, analytical RC charge/discharge response, measurement states, extraction, Ohm’s law, voltage division, source behavior, switch/LED behavior, document migration and validation, save races, API validation, stale-write conflicts, and in-memory plus on-disk SQLite durability.
 
 ## Interaction notes
 
 - Drag empty space to orbit; wheel/trackpad zooms; the camera controls also support pan.
 - Add parts from the left drawer. The editor chooses compatible free holes.
 - Choose a classic circuit under **Start projects** and load it as a fresh unsaved workbench.
+- Load **RC charge and discharge**, then use the footer controls to run, pause, single-step, reset, or change the transient timestep and speed. Turn output off to watch the capacitor discharge through the resistor.
 - Drag a part in 3D to preview compatible snapped holes, then release to commit a valid placement.
 - Components are anchored by default so selection cannot move them. Use **Unanchor** in the inspector before dragging, rotating, or changing terminal holes, then anchor the part again when finished.
 - Select a part in 3D, then change values or exact terminal holes in the inspector.
@@ -92,11 +103,13 @@ This runs strict linting, the unit/integration test suite, TypeScript project ch
 
 SQLite data is durable on disk once Save is used. A normal computer sleep state suspends local processes, including this server; when the computer wakes, an already-running server normally resumes. No application can continue CPU work during true system sleep without changing the operating system power policy. This project does not change that policy.
 
+Saved projects retain components and transient timestep/speed settings. Elapsed simulation time, run/pause state, and capacitor charge history are intentionally session-only and restart when a project is opened. Long browser stalls and system sleep do not trigger an unbounded simulation catch-up after wake.
+
 ## Architecture and limitations
 
 Start with [docs/architecture.md](docs/architecture.md) and [AGENTS.md](AGENTS.md). Solver assumptions are in [docs/simulation.md](docs/simulation.md); physical scale/topology is in [docs/physical-model.md](docs/physical-model.md).
 
-This is an educational simulator foundation, not SPICE and not a safety tool. The LED is simplified, disconnected nodes use a tiny numerical conductance, mechanical collision is discrete, and reactive/transient behavior is not part of Phase C. Jumper routing provides visual clearance around component packages; it is not a general collision solver and does not route around other jumper wires.
+This is an educational simulator foundation, not SPICE and not a safety tool. The LED is simplified, the capacitor is idealized, disconnected nodes use a tiny numerical conductance, and mechanical collision is discrete. Phase D supports capacitor transients only; inductors, AC sources, frequency-domain analysis, and semiconductor-accurate models are not yet supported. Jumper routing provides visual clearance around component packages; it is not a general collision solver and does not route around other jumper wires.
 
 ## License and dependencies
 

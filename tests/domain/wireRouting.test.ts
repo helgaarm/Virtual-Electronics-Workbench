@@ -1,24 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import type { GroundComponent, JumperWireComponent, LedComponent, ResistorComponent } from '../../src/domain/components/types';
+import { terminalEntries, type GroundComponent, type JumperWireComponent, type LedComponent, type PlacedComponent, type ResistorComponent } from '../../src/domain/components/types';
 import { createBreadboardDefinition, terminalHoleId } from '../../src/domain/physical/breadboard';
 import { PHYSICAL_PACKAGES } from '../../src/domain/physical/packages';
 import { routeJumperWire } from '../../src/domain/physical/wireRouting';
 import { createJumperCurve } from '../../src/workbench/scene/wireGeometry';
 
-function expectCurveToClearLed(
+function expectCurveToClearComponent(
   board: ReturnType<typeof createBreadboardDefinition>,
   route: ReturnType<typeof routeJumperWire>,
-  led: LedComponent,
+  component: Exclude<PlacedComponent, JumperWireComponent>,
 ) {
   const curve = createJumperCurve(route)!;
-  const ledHoles = Object.values(led.terminalHoleIds)
+  const componentHoles = terminalEntries(component)
+    .map(([, holeId]) => holeId)
     .map((holeId) => board.holes.find((hole) => hole.id === holeId)!);
   const center = {
-    x: (ledHoles[0].positionMm.x + ledHoles[1].positionMm.x) / 2,
-    y: (ledHoles[0].positionMm.y + ledHoles[1].positionMm.y) / 2,
-    z: (ledHoles[0].positionMm.z + ledHoles[1].positionMm.z) / 2,
+    x: componentHoles.reduce((sum, hole) => sum + hole.positionMm.x, 0) / componentHoles.length,
+    y: componentHoles.reduce((sum, hole) => sum + hole.positionMm.y, 0) / componentHoles.length,
+    z: componentHoles.reduce((sum, hole) => sum + hole.positionMm.z, 0) / componentHoles.length,
   };
-  const packageDefinition = PHYSICAL_PACKAGES.led;
+  const packageDefinition = PHYSICAL_PACKAGES[component.kind];
   const bodyRadius = Math.max(packageDefinition.dimensionsMm.x, packageDefinition.dimensionsMm.z) / 2;
   const bodyBottom = center.y + packageDefinition.mountingHeightMm - packageDefinition.dimensionsMm.y / 2;
   const bodyTop = center.y + packageDefinition.mountingHeightMm + packageDefinition.dimensionsMm.y / 2;
@@ -79,7 +80,7 @@ describe('jumper wire routing', () => {
 
     expect(Math.abs(detour.z - route[0].z)).toBeGreaterThan(2);
     expect(Math.max(...route.map((point) => point.y))).toBeGreaterThan(14);
-    expectCurveToClearLed(board, route, led);
+    expectCurveToClearComponent(board, route, led);
   });
 
   it('escapes around an endpoint-adjacent LED and its legs', () => {
@@ -98,10 +99,10 @@ describe('jumper wire routing', () => {
     };
     const route = routeJumperWire(board, wire, [wire, endpointLed]);
 
-    expect(route.length).toBeGreaterThan(5);
+    expect(route.length).toBeGreaterThanOrEqual(5);
     expect(route[1].y).toBeLessThan(PHYSICAL_PACKAGES.led.mountingHeightMm);
     expect(Math.hypot(route[1].x - route[0].x, route[1].z - route[0].z)).toBeGreaterThan(1.5);
-    expectCurveToClearLed(board, route, endpointLed);
+    expectCurveToClearComponent(board, route, endpointLed);
   });
 
   it('orders multiple detours by their projection and clears every package', () => {
@@ -130,8 +131,8 @@ describe('jumper wire routing', () => {
       expect(Math.abs(point.x)).toBeLessThanOrEqual(board.widthMm / 2);
       expect(Math.abs(point.z)).toBeLessThanOrEqual(board.depthMm / 2);
     }
-    expectCurveToClearLed(board, route, firstLed);
-    expectCurveToClearLed(board, route, secondLed);
+    expectCurveToClearComponent(board, route, firstLed);
+    expectCurveToClearComponent(board, route, secondLed);
   });
 
   it('never routes an endpoint escape below the breadboard surface', () => {
@@ -145,7 +146,7 @@ describe('jumper wire routing', () => {
 
     const route = routeJumperWire(board, wire, [wire, ground]);
 
-    expect(route.length).toBeGreaterThan(5);
+    expect(route.length).toBeGreaterThanOrEqual(5);
     expect(Math.min(...route.map((point) => point.y))).toBeGreaterThanOrEqual(board.holes[0].positionMm.y);
   });
 
@@ -177,6 +178,38 @@ describe('jumper wire routing', () => {
     expect(clearRoute[2].x).toBeCloseTo(routed[0].x);
     expect(Math.abs(routed[2].x - routed[0].x)).toBeGreaterThan(1.5);
     expect(routed[2].y).toBeGreaterThan(10);
+  });
+
+  it('does not create a long low-level loop around a resistor lead envelope near an endpoint', () => {
+    const adjacentWire: JumperWireComponent = {
+      ...wire,
+      id: 'W3',
+      terminalHoleIds: {
+        a: terminalHoleId(board.id, 'A', 1),
+        b: terminalHoleId(board.id, 'D', 10),
+      },
+    };
+    const resistor: ResistorComponent = {
+      id: 'R2',
+      kind: 'resistor',
+      label: 'Nearby resistor',
+      rotation: 0,
+      resistanceOhms: 220,
+      tolerancePercent: 5,
+      terminalHoleIds: {
+        a: terminalHoleId(board.id, 'E', 5),
+        b: terminalHoleId(board.id, 'E', 10),
+      },
+    };
+
+    const route = routeJumperWire(board, adjacentWire, [adjacentWire, resistor]);
+    const endpoint = route.at(-1)!;
+
+    expect(route).toHaveLength(5);
+    expect(route.at(-2)?.x).toBeCloseTo(endpoint.x);
+    expect(route.at(-2)?.z).toBeCloseTo(endpoint.z);
+    expect(route.at(-2)?.y).toBeGreaterThan(endpoint.y + 5);
+    expectCurveToClearComponent(board, route, resistor);
   });
 
   it('ignores components outside the direct route', () => {

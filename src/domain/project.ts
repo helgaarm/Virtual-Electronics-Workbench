@@ -1,7 +1,7 @@
 import type { PlacedComponent } from './components/types';
 import { railHoleId, terminalHoleId } from './physical/breadboard';
 
-export const PROJECT_SCHEMA_VERSION = 3 as const;
+export const PROJECT_SCHEMA_VERSION = 4 as const;
 export const MAX_PROJECT_PROBES = 16;
 
 export type ProbeTerminal = 'positive' | 'reference';
@@ -20,6 +20,11 @@ export interface AnalysisSettings {
   selectedProbeId?: string;
 }
 
+export interface SimulationSettings {
+  timeStepSeconds: number;
+  speed: number;
+}
+
 export interface WorkbenchProject {
   version: typeof PROJECT_SCHEMA_VERSION;
   revision: number;
@@ -36,6 +41,7 @@ export interface WorkbenchProject {
   components: PlacedComponent[];
   probes: MeasurementProbe[];
   analysis: AnalysisSettings;
+  simulation: SimulationSettings;
   view: {
     cameraPreset: '3d' | 'top';
     showConnections: boolean;
@@ -67,6 +73,10 @@ export function createEmptyProject(name = 'Untitled workbench'): WorkbenchProjec
     analysis: {
       activeInstrument: 'multimeter',
       activeProbeTerminal: 'positive',
+    },
+    simulation: {
+      timeStepSeconds: 0.005,
+      speed: 1,
     },
     view: { cameraPreset: '3d', showConnections: false },
   };
