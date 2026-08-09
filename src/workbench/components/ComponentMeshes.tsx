@@ -6,7 +6,8 @@ import { RESISTOR_BAND_HEX, resistorColorBands } from '../../domain/components/r
 import type { BreadboardDefinition } from '../../domain/physical/breadboard';
 import { PHYSICAL_PACKAGES } from '../../domain/physical/packages';
 import type { SimulationResult } from '../../domain/circuit/types';
-import { routeJumperWire } from '../../domain/physical/wireRouting';
+import { routeJumperWires } from '../../domain/physical/wireRouting';
+import type { Point3Mm } from '../../domain/physical/geometry';
 import { CylinderBetween, SmoothTube } from '../scene/geometry';
 import { createJumperCurve } from '../scene/wireGeometry';
 import { DIP_8_PACKAGE } from '../../domain/physical/dipPackages';
@@ -303,15 +304,13 @@ function RadialCapacitorMesh({ component, board, selected, onSelect, onBeginDrag
   );
 }
 
-function WireMesh({ component, board, components, selected, onSelect, onBeginDrag }: {
+function WireMesh({ component, route, selected, onSelect, onBeginDrag }: {
   component: Extract<PlacedComponent, { kind: 'jumper-wire' }>;
-  board: BreadboardDefinition;
-  components: PlacedComponent[];
+  route: Point3Mm[];
   selected: boolean;
   onSelect: () => void;
   onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
-  const route = routeJumperWire(board, component, components);
   const routeSignature = route.map((routePoint) => `${routePoint.x},${routePoint.y},${routePoint.z}`).join(';');
   const geometry = useMemo(() => {
     const stableRoute = routeSignature.split(';').filter(Boolean).map((entry) => {
@@ -495,16 +494,30 @@ function Dip8Mesh({ component, board, selected, onSelect, onBeginDrag }: {
     >
       {pinPoints.map((pin, index) => {
         const inward = center.clone().sub(pin).setY(0).normalize();
-        const shoulder = pin.clone().setY(bodyBottomY - 0.25);
-        const contact = shoulder.clone().addScaledVector(inward, 0.72).setY(bodyBottomY + 0.12);
+        const lowerBend = pin.clone().setY(bodyBottomY - 0.72);
+        const packageEdge = pin.clone().addScaledVector(inward, 0.54).setY(bodyBottomY + 0.22);
+        const embeddedContact = pin.clone()
+          .addScaledVector(inward, 1.18)
+          .setY(bodyBottomY + 0.72);
         return (
-          <SmoothTube
-            key={index}
-            points={[pin, shoulder, contact]}
-            radius={DIP_8_PACKAGE.leadWidthMm / 2}
-            color="#b9bec0"
-            metalness={0.9}
-          />
+          <group key={index}>
+            <SmoothTube
+              points={[pin, lowerBend, packageEdge, embeddedContact]}
+              radius={DIP_8_PACKAGE.leadWidthMm / 2}
+              color="#b9bec0"
+              roughness={0.3}
+              metalness={0.92}
+              tubularSegments={64}
+            />
+            <CylinderBetween
+              start={packageEdge}
+              end={embeddedContact}
+              radius={DIP_8_PACKAGE.leadWidthMm * 0.58}
+              color="#c3c8c9"
+              roughness={0.26}
+              metalness={0.94}
+            />
+          </group>
         );
       })}
       <group position={bodyCenter} rotation={[0, rotationY, 0]}>
@@ -597,6 +610,7 @@ function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: 
 }
 
 export function ComponentMeshes({ board, components, result, selectedComponentId, onSelect, onBeginDrag }: Props) {
+  const jumperRoutes = useMemo(() => routeJumperWires(board, components), [board, components]);
   return (
     <>
       {components.map((component) => {
@@ -611,7 +625,14 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         if (component.kind === 'resistor') return <AxialResistor key={component.id} component={component} {...common} />;
         if (component.kind === 'led') return <LedMesh key={component.id} component={component} current={result.componentCurrents[component.id] ?? 0} {...common} />;
         if (component.kind === 'capacitor') return <RadialCapacitorMesh key={component.id} component={component} {...common} />;
-        if (component.kind === 'jumper-wire') return <WireMesh key={component.id} component={component} components={components} {...common} />;
+        if (component.kind === 'jumper-wire') return (
+          <WireMesh
+            key={component.id}
+            component={component}
+            route={jumperRoutes.get(component.id) ?? []}
+            {...common}
+          />
+        );
         if (component.kind === 'switch') return <TactileSwitchMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'ne555') return <Dip8Mesh key={component.id} component={component} {...common} />;
         return <SimpleComponent key={component.id} component={component} {...common} />;

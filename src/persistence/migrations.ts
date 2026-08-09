@@ -1,11 +1,17 @@
 import type { PlacedComponent } from '../domain/components/types';
-import { LED_COLORS, terminalEntries } from '../domain/components/types';
+import { LED_COLORS, terminalEntries, WIRE_COLORS } from '../domain/components/types';
 import {
   createDefaultOscilloscopeSettings,
+  createDefaultFrequencyCounterSettings,
+  createDefaultLogicAnalyserSettings,
   createDefaultSignalGeneratorSettings,
+  LOGIC_ANALYSER_SAMPLE_RATES_HZ,
+  LOGIC_ANALYSER_TIME_DIVISIONS_SECONDS,
   OSCILLOSCOPE_TIME_DIVISIONS_SECONDS,
   OSCILLOSCOPE_VOLTS_PER_DIVISION,
   SIGNAL_GENERATOR_COMPONENT_ID,
+  type LogicAnalyserChannelId,
+  type LogicAnalyserChannelSettings,
   type OscilloscopeChannelId,
   type OscilloscopeChannelSettings,
 } from '../domain/instruments/types';
@@ -167,9 +173,26 @@ function parseOscilloscopeChannel(
   };
 }
 
-const ROTATIONS = [0, 90, 180, 270] as const;
-const WIRE_COLORS = ['red', 'black', 'blue', 'green', 'yellow', 'orange'] as const;
+const LOGIC_CHANNEL_IDS = [
+  'ch1', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'ch8',
+] as const;
 
+function parseLogicAnalyserChannel(
+  value: unknown,
+  path: string,
+  expectedId: LogicAnalyserChannelId,
+): LogicAnalyserChannelSettings {
+  const source = record(value, path);
+  const inputHoleId = optionalString(source.inputHoleId, `${path}.inputHoleId`, 160);
+  return {
+    id: enumValue(source.id, `${path}.id`, [expectedId] as const),
+    label: stringValue(source.label, `${path}.label`, 20),
+    enabled: booleanValue(source.enabled, `${path}.enabled`),
+    ...(inputHoleId ? { inputHoleId } : {}),
+  };
+}
+
+const ROTATIONS = [0, 90, 180, 270] as const;
 function rotationValue(value: unknown, path: string): (typeof ROTATIONS)[number] {
   if (typeof value !== 'number' || !ROTATIONS.includes(value as (typeof ROTATIONS)[number])) {
     throw new ProjectValidationError(path, 'must be one of 0, 90, 180, 270');
@@ -345,7 +368,9 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
             'analysis.activeInstrument',
             sourceVersion < 5
               ? ['multimeter'] as const
-              : ['multimeter', 'oscilloscope', 'signal-generator'] as const,
+              : sourceVersion < 8
+                ? ['multimeter', 'oscilloscope', 'signal-generator'] as const
+                : ['multimeter', 'oscilloscope', 'signal-generator', 'frequency-counter', 'logic-analyser'] as const,
           ),
           activeProbeTerminal: enumValue(
             analysisSource.activeProbeTerminal,
@@ -484,6 +509,113 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
           ...(referenceHoleId ? { referenceHoleId } : {}),
         };
       })();
+  const frequencyCounter = sourceVersion < 8
+    ? createDefaultFrequencyCounterSettings()
+    : (() => {
+        const counterSource = record(source.frequencyCounter, 'frequencyCounter');
+        const inputHoleId = optionalString(counterSource.inputHoleId, 'frequencyCounter.inputHoleId', 160);
+        const referenceHoleId = optionalString(
+          counterSource.referenceHoleId,
+          'frequencyCounter.referenceHoleId',
+          160,
+        );
+        return {
+          activeTerminal: enumValue(
+            counterSource.activeTerminal,
+            'frequencyCounter.activeTerminal',
+            ['input', 'reference'] as const,
+          ),
+          triggerEdge: enumValue(
+            counterSource.triggerEdge,
+            'frequencyCounter.triggerEdge',
+            ['rising', 'falling'] as const,
+          ),
+          triggerLevelV: finiteNumber(
+            counterSource.triggerLevelV,
+            'frequencyCounter.triggerLevelV',
+            -1_000,
+            1_000,
+          ),
+          ...(inputHoleId ? { inputHoleId } : {}),
+          ...(referenceHoleId ? { referenceHoleId } : {}),
+        };
+      })();
+  const logicAnalyser = sourceVersion < 8
+    ? createDefaultLogicAnalyserSettings()
+    : (() => {
+        const analyserSource = record(source.logicAnalyser, 'logicAnalyser');
+        const channelsSource = record(analyserSource.channels, 'logicAnalyser.channels');
+        const lowThresholdV = finiteNumber(
+          analyserSource.lowThresholdV,
+          'logicAnalyser.lowThresholdV',
+          -1_000,
+          1_000,
+        );
+        const highThresholdV = finiteNumber(
+          analyserSource.highThresholdV,
+          'logicAnalyser.highThresholdV',
+          -1_000,
+          1_000,
+        );
+        if (lowThresholdV >= highThresholdV) {
+          throw new ProjectValidationError(
+            'logicAnalyser.highThresholdV',
+            'must be greater than the LOW threshold',
+          );
+        }
+        const referenceHoleId = optionalString(
+          analyserSource.referenceHoleId,
+          'logicAnalyser.referenceHoleId',
+          160,
+        );
+        return {
+          sampleRateHz: numericEnumValue(
+            analyserSource.sampleRateHz,
+            'logicAnalyser.sampleRateHz',
+            LOGIC_ANALYSER_SAMPLE_RATES_HZ,
+          ),
+          timePerDivisionSeconds: numericEnumValue(
+            analyserSource.timePerDivisionSeconds,
+            'logicAnalyser.timePerDivisionSeconds',
+            LOGIC_ANALYSER_TIME_DIVISIONS_SECONDS,
+          ),
+          triggerEnabled: booleanValue(
+            analyserSource.triggerEnabled,
+            'logicAnalyser.triggerEnabled',
+          ),
+          triggerSource: enumValue(
+            analyserSource.triggerSource,
+            'logicAnalyser.triggerSource',
+            LOGIC_CHANNEL_IDS,
+          ),
+          triggerEdge: enumValue(
+            analyserSource.triggerEdge,
+            'logicAnalyser.triggerEdge',
+            ['rising', 'falling'] as const,
+          ),
+          lowThresholdV,
+          highThresholdV,
+          activeChannel: enumValue(
+            analyserSource.activeChannel,
+            'logicAnalyser.activeChannel',
+            LOGIC_CHANNEL_IDS,
+          ),
+          activeTerminal: enumValue(
+            analyserSource.activeTerminal,
+            'logicAnalyser.activeTerminal',
+            ['input', 'reference'] as const,
+          ),
+          ...(referenceHoleId ? { referenceHoleId } : {}),
+          channels: Object.fromEntries(LOGIC_CHANNEL_IDS.map((channelId) => [
+            channelId,
+            parseLogicAnalyserChannel(
+              channelsSource[channelId],
+              `logicAnalyser.channels.${channelId}`,
+              channelId,
+            ),
+          ])) as ReturnType<typeof createDefaultLogicAnalyserSettings>['channels'],
+        };
+      })();
   const project: WorkbenchProject = {
     version: PROJECT_SCHEMA_VERSION,
     revision: sourceVersion === 1 ? 0 : integer(source.revision, 'revision', 0, Number.MAX_SAFE_INTEGER),
@@ -500,6 +632,8 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
     simulation,
     oscilloscope,
     signalGenerator,
+    frequencyCounter,
+    logicAnalyser,
     view: {
       cameraPreset: enumValue(viewSource.cameraPreset, 'view.cameraPreset', ['3d', 'top'] as const),
       showConnections: booleanValue(viewSource.showConnections, 'view.showConnections'),
@@ -541,6 +675,20 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
     || (signalGenerator.referenceHoleId && !validHoleIds.has(signalGenerator.referenceHoleId))
   ) {
     throw new ProjectValidationError('signalGenerator', 'references an unknown hole');
+  }
+  if (
+    (frequencyCounter.inputHoleId && !validHoleIds.has(frequencyCounter.inputHoleId))
+    || (frequencyCounter.referenceHoleId && !validHoleIds.has(frequencyCounter.referenceHoleId))
+  ) {
+    throw new ProjectValidationError('frequencyCounter', 'references an unknown hole');
+  }
+  if (
+    (logicAnalyser.referenceHoleId && !validHoleIds.has(logicAnalyser.referenceHoleId))
+    || Object.values(logicAnalyser.channels).some(
+      (channel) => channel.inputHoleId && !validHoleIds.has(channel.inputHoleId),
+    )
+  ) {
+    throw new ProjectValidationError('logicAnalyser', 'references an unknown hole');
   }
 
   return project;

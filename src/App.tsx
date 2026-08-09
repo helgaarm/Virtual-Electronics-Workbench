@@ -23,7 +23,7 @@ import { connectionLearningTarget } from './state/connectionLearning';
 import {
   activeInstrumentMarkerId,
   instrumentProbeMarkers,
-  oscilloscopeSampleNodeIds,
+  instrumentSampleNodeIds,
 } from './state/instrumentSelectors';
 import { useTransientRuntime } from './state/useTransientRuntime';
 import { createPlacedComponent, movePlacedComponent, rotatePlacedComponent } from './state/workbenchActions';
@@ -80,7 +80,7 @@ export default function App() {
     [project.board, project.components, project.powerOn, project.signalGenerator],
   );
   const sampleNodeIds = useMemo(
-    () => oscilloscopeSampleNodeIds(project, dcSimulation.extraction.holeToNodeId),
+    () => instrumentSampleNodeIds(project, dcSimulation.extraction.holeToNodeId),
     [dcSimulation.extraction.holeToNodeId, project],
   );
   const circuitTopologyKey = useMemo(

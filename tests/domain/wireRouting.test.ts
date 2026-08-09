@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { terminalEntries, type GroundComponent, type JumperWireComponent, type LedComponent, type PlacedComponent, type ResistorComponent } from '../../src/domain/components/types';
+import { terminalEntries, type CapacitorComponent, type GroundComponent, type JumperWireComponent, type LedComponent, type PlacedComponent, type ResistorComponent } from '../../src/domain/components/types';
 import { createBreadboardDefinition, terminalHoleId } from '../../src/domain/physical/breadboard';
 import { PHYSICAL_PACKAGES } from '../../src/domain/physical/packages';
-import { routeJumperWire } from '../../src/domain/physical/wireRouting';
+import { routeJumperWire, routeJumperWires } from '../../src/domain/physical/wireRouting';
 import { createJumperCurve } from '../../src/workbench/scene/wireGeometry';
 
 function expectCurveToClearComponent(
@@ -23,7 +23,7 @@ function expectCurveToClearComponent(
   const bodyRadius = Math.max(packageDefinition.dimensionsMm.x, packageDefinition.dimensionsMm.z) / 2;
   const bodyBottom = center.y + packageDefinition.mountingHeightMm - packageDefinition.dimensionsMm.y / 2;
   const bodyTop = center.y + packageDefinition.mountingHeightMm + packageDefinition.dimensionsMm.y / 2;
-  const wireRadius = 0.48;
+  const wireRadius = 0.58;
 
   for (let index = 0; index <= 300; index += 1) {
     const sample = curve.getPoint(index / 300);
@@ -53,8 +53,8 @@ describe('jumper wire routing', () => {
     const endHole = board.holes.find((hole) => hole.id === wire.terminalHoleIds.b)!;
 
     expect(route).toHaveLength(5);
-    expect(route[0]).toEqual({ ...startHole.positionMm, y: startHole.positionMm.y + 0.2 });
-    expect(route.at(-1)).toEqual({ ...endHole.positionMm, y: endHole.positionMm.y + 0.2 });
+    expect(route[0]).toEqual({ ...startHole.positionMm, y: startHole.positionMm.y + 0.1 });
+    expect(route.at(-1)).toEqual({ ...endHole.positionMm, y: endHole.positionMm.y + 0.1 });
     expect(route[2].x).toBeCloseTo((route[0].x + route.at(-1)!.x) / 2);
     expect(route[2].z).toBeCloseTo(route[0].z);
     expect(route[2].y).toBeGreaterThan(route[0].y);
@@ -150,6 +150,48 @@ describe('jumper wire routing', () => {
     expect(Math.min(...route.map((point) => point.y))).toBeGreaterThanOrEqual(board.holes[0].positionMm.y);
   });
 
+  it('escapes beneath and around a tall capacitor beside a wire endpoint', () => {
+    const capacitor: CapacitorComponent = {
+      id: 'C-ENDPOINT',
+      kind: 'capacitor',
+      label: 'Nearby capacitor',
+      rotation: 0,
+      capacitanceFarads: 100e-6,
+      ratedVoltageV: 16,
+      terminalHoleIds: {
+        positive: terminalHoleId(board.id, 'A', 5),
+        negative: terminalHoleId(board.id, 'A', 6),
+      },
+    };
+    const nearbyWire: JumperWireComponent = {
+      ...wire,
+      id: 'W-CAPACITOR',
+      color: 'blue',
+      terminalHoleIds: {
+        a: terminalHoleId(board.id, 'B', 5),
+        b: terminalHoleId(board.id, 'E', 10),
+      },
+    };
+    const route = routeJumperWire(board, nearbyWire, [capacitor, nearbyWire]);
+
+    expect(route.length).toBeGreaterThanOrEqual(5);
+    expectCurveToClearComponent(board, route, capacitor);
+
+    const crossingWire: JumperWireComponent = {
+      ...wire,
+      id: 'W-CAPACITOR-CROSSING',
+      terminalHoleIds: {
+        a: terminalHoleId(board.id, 'A', 1),
+        b: terminalHoleId(board.id, 'A', 10),
+      },
+    };
+    expectCurveToClearComponent(
+      board,
+      routeJumperWire(board, crossingWire, [capacitor, crossingWire]),
+      capacitor,
+    );
+  });
+
   it('routes around the full resistor lead envelope, not only its body', () => {
     const crossingWire: JumperWireComponent = {
       ...wire,
@@ -229,6 +271,43 @@ describe('jumper wire routing', () => {
     };
 
     expect(routeJumperWire(board, wire, [wire, offPathLed])).toEqual(clearRoute);
+  });
+
+  it('routes a later jumper around an already-routed crossing jumper', () => {
+    const first: JumperWireComponent = {
+      ...wire,
+      id: 'W-CROSS-1',
+      terminalHoleIds: {
+        a: terminalHoleId(board.id, 'E', 1),
+        b: terminalHoleId(board.id, 'E', 10),
+      },
+    };
+    const second: JumperWireComponent = {
+      ...wire,
+      id: 'W-CROSS-2',
+      color: 'red',
+      terminalHoleIds: {
+        a: terminalHoleId(board.id, 'A', 5),
+        b: terminalHoleId(board.id, 'J', 5),
+      },
+    };
+    const routes = routeJumperWires(board, [first, second]);
+    const firstRoute = routes.get(first.id)!;
+    const secondRoute = routes.get(second.id)!;
+    const firstCurve = createJumperCurve(firstRoute)!;
+    const secondCurve = createJumperCurve(secondRoute)!;
+    let minimumDistanceMm = Number.POSITIVE_INFINITY;
+    for (let firstIndex = 0; firstIndex <= 160; firstIndex += 1) {
+      const firstPoint = firstCurve.getPoint(firstIndex / 160);
+      for (let secondIndex = 0; secondIndex <= 160; secondIndex += 1) {
+        const secondPoint = secondCurve.getPoint(secondIndex / 160);
+        minimumDistanceMm = Math.min(minimumDistanceMm, firstPoint.distanceTo(secondPoint));
+      }
+    }
+
+    expect(Math.max(...secondRoute.map((point) => point.y)))
+      .toBeGreaterThan(Math.max(...firstRoute.map((point) => point.y)));
+    expect(minimumDistanceMm).toBeGreaterThan(1);
   });
 
   it('returns no route when an endpoint is missing', () => {

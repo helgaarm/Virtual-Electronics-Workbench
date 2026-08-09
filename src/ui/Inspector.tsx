@@ -1,10 +1,11 @@
-import type { LedColor, PlacedComponent } from '../domain/components/types';
+import type { LedColor, PlacedComponent, WireColor } from '../domain/components/types';
 import {
   isComponentAnchored,
   LED_COLORS,
   LED_TYPICAL_FORWARD_VOLTAGE_V,
   NE555_PIN_NAMES,
   terminalEntries,
+  WIRE_COLORS,
 } from '../domain/components/types';
 import { recolorLed } from '../domain/components/led';
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
@@ -118,9 +119,9 @@ export function Inspector({
       {component.kind === 'led' && (
         <section className="inspector-section">
           <label htmlFor="led-color">LED color</label>
-          <div className="led-color-control">
+          <div className="component-color-control">
             <span
-              className={`led-color-preview led-color-${component.color}`}
+              className={`component-color-preview component-color-${component.color}`}
               aria-hidden="true"
             />
             <select
@@ -139,6 +140,33 @@ export function Inspector({
             {component.color[0].toUpperCase() + component.color.slice(1)} lens · typical forward voltage{' '}
             {LED_TYPICAL_FORWARD_VOLTAGE_V[component.color].toFixed(1)} V
           </small>
+        </section>
+      )}
+
+      {component.kind === 'jumper-wire' && (
+        <section className="inspector-section">
+          <label htmlFor="jumper-wire-color">Jumper wire color</label>
+          <div className="component-color-control">
+            <span
+              className={`component-color-preview component-color-${component.color}`}
+              aria-hidden="true"
+            />
+            <select
+              id="jumper-wire-color"
+              value={component.color}
+              onChange={(event) => onUpdate({
+                ...component,
+                color: event.target.value as WireColor,
+              })}
+            >
+              {WIRE_COLORS.map((color) => (
+                <option key={color} value={color}>
+                  {color[0].toUpperCase() + color.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <small>{component.color[0].toUpperCase() + component.color.slice(1)} insulation</small>
         </section>
       )}
 

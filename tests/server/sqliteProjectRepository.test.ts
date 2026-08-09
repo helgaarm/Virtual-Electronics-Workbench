@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { createLedExampleProject } from '../../src/domain/project';
+import { createLedExampleProject, PROJECT_SCHEMA_VERSION } from '../../src/domain/project';
 import { createStarterProject } from '../../src/domain/starterProjects';
 import { createApp } from '../../server/app';
 import { ProjectConflictError, SqliteProjectRepository } from '../../server/sqliteProjectRepository';
@@ -81,7 +81,11 @@ describe('SQLite project persistence', () => {
     const repo = repository();
     const app = createApp(repo);
     const project = createLedExampleProject();
-    await request(app).get('/api/health').expect(200, { status: 'ok', storage: 'sqlite' });
+    await request(app).get('/api/health').expect(200, {
+      status: 'ok',
+      storage: 'sqlite',
+      projectSchemaVersion: PROJECT_SCHEMA_VERSION,
+    });
     await request(app).put(`/api/projects/${project.id}`).send(project).expect(200);
     const response = await request(app).get(`/api/projects/${project.id}`).expect(200);
     expect(response.body.name).toBe('Light an LED');

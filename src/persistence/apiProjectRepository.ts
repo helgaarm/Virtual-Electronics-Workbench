@@ -8,9 +8,23 @@ export class ProjectConflictClientError extends Error {
   }
 }
 
+export class ProjectSchemaMismatchClientError extends Error {
+  constructor(serverMessage: string) {
+    super(
+      `The browser and SQLite service are running different application versions. `
+      + `Stop the existing service, restart npm run dev, and reload this page. (${serverMessage})`,
+    );
+  }
+}
+
 async function responseJson(response: Response): Promise<unknown> {
   const body = (await response.json()) as unknown;
   if (!response.ok) {
+    const message =
+      typeof body === 'object' && body && 'error' in body ? String(body.error) : response.statusText;
+    if (/Project version \d+ is not supported by version \d+\./.test(message)) {
+      throw new ProjectSchemaMismatchClientError(message);
+    }
     if (response.status === 409) {
       const currentRevision =
         typeof body === 'object' && body && 'currentRevision' in body &&
@@ -19,8 +33,6 @@ async function responseJson(response: Response): Promise<unknown> {
           : undefined;
       if (currentRevision !== undefined) throw new ProjectConflictClientError(currentRevision);
     }
-    const message =
-      typeof body === 'object' && body && 'error' in body ? String(body.error) : response.statusText;
     throw new Error(message);
   }
   return body;

@@ -43,6 +43,26 @@ export function instrumentProbeMarkers(project: WorkbenchProject): InstrumentPro
       positiveColor: '#d05c4f',
       referenceColor: '#252b2b',
     },
+    {
+      id: 'frequency-counter',
+      label: 'FREQ',
+      positiveHoleId: project.frequencyCounter.inputHoleId,
+      referenceHoleId: project.frequencyCounter.referenceHoleId,
+      positiveLabel: 'IN',
+      referenceLabel: 'REF',
+      positiveColor: '#9b6bd3',
+      referenceColor: '#252b2b',
+    },
+    ...Object.values(project.logicAnalyser.channels).map((channel, index) => ({
+      id: `logic-analyser-${channel.id}`,
+      label: channel.label,
+      positiveHoleId: channel.inputHoleId,
+      referenceHoleId: project.logicAnalyser.referenceHoleId,
+      positiveLabel: channel.label,
+      referenceLabel: 'GND',
+      positiveColor: ['#62b9ff', '#f2bc4b', '#db6b6b', '#71c88c'][index % 4],
+      referenceColor: '#252b2b',
+    })),
   ];
 }
 
@@ -53,7 +73,33 @@ export function activeInstrumentMarkerId(project: WorkbenchProject): string | un
   if (project.analysis.activeInstrument === 'oscilloscope') {
     return `oscilloscope-${project.oscilloscope.activeChannel}`;
   }
-  return 'signal-generator';
+  if (project.analysis.activeInstrument === 'signal-generator') return 'signal-generator';
+  if (project.analysis.activeInstrument === 'frequency-counter') return 'frequency-counter';
+  return `logic-analyser-${project.logicAnalyser.activeChannel}`;
+}
+
+function connectedInstrumentHoleIds(project: WorkbenchProject): Array<string | undefined> {
+  return [
+    ...Object.values(project.oscilloscope.channels).flatMap((channel) => [
+      channel.positiveHoleId,
+      channel.referenceHoleId,
+    ]),
+    project.frequencyCounter.inputHoleId,
+    project.frequencyCounter.referenceHoleId,
+    project.logicAnalyser.referenceHoleId,
+    ...Object.values(project.logicAnalyser.channels).map((channel) => channel.inputHoleId),
+  ];
+}
+
+export function instrumentSampleNodeIds(
+  project: WorkbenchProject,
+  holeToNodeId: Readonly<Record<string, string>>,
+): string[] {
+  return [...new Set(
+    connectedInstrumentHoleIds(project)
+      .map((holeId) => holeId ? holeToNodeId[holeId] : undefined)
+      .filter((nodeId): nodeId is string => Boolean(nodeId)),
+  )];
 }
 
 export function oscilloscopeSampleNodeIds(

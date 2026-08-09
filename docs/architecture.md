@@ -21,13 +21,13 @@ The project JSON is a stable but untrusted boundary. The client validates API re
 
 ## Local API contract
 
-- `GET /api/health` reports the SQLite service status.
+- `GET /api/health` reports the SQLite service status and supported project-schema version so stale frontend/backend combinations can be diagnosed explicitly.
 - `GET /api/projects` returns validated project summaries.
 - `GET /api/projects/:id` returns one complete versioned project or 404.
 - `PUT /api/projects/:id` requires matching URL/body IDs and the current revision. It returns the saved document with the next revision, 400 for invalid input, or 409 for a stale/future version.
 - `DELETE /api/projects/:id` removes one project or returns 404.
 
-JSON bodies are limited to 2 MB. Schema versions 1 through 6 migrate to version 7; legacy probes are assigned to the multimeter, missing transient and Phase E instrument settings are initialized, legacy continuous scales are mapped to supported controls, and version 1 revisions start at zero. Unsupported future schemas are rejected explicitly.
+JSON bodies are limited to 2 MB. Schema versions 1 through 7 migrate to version 8; legacy probes are assigned to the multimeter, missing transient and instrument settings are initialized, legacy continuous scales are mapped to supported controls, and version 1 revisions start at zero. Unsupported future schemas are rejected explicitly.
 
 ## Package, device, and model separation
 

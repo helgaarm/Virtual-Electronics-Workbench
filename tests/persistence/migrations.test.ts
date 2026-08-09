@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { WIRE_COLORS } from '../../src/domain/components/types';
 import { createLedExampleProject } from '../../src/domain/project';
 import { createStarterProject } from '../../src/domain/starterProjects';
 import {
@@ -30,7 +31,7 @@ describe('project document migrations', () => {
     delete legacy.simulation;
     for (const probe of legacy.probes as Array<Record<string, unknown>>) delete probe.instrumentId;
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(7);
+    expect(migrated.version).toBe(8);
     expect(migrated.revision).toBe(0);
     expect(migrated.probes[0].instrumentId).toBe('multimeter');
     expect(migrated.analysis).toMatchObject({
@@ -93,7 +94,7 @@ describe('project document migrations', () => {
     channels.ch1.voltsPerDivisionV = 0.001;
 
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(7);
+    expect(migrated.version).toBe(8);
     expect(migrated.simulation).toEqual({ timeStepSeconds: 0.00005, speed: 0.25 });
     expect(migrated.oscilloscope.timePerDivisionSeconds).toBe(0.00005);
     expect(migrated.oscilloscope.channels.ch1.voltsPerDivisionV).toBe(0.01);
@@ -110,6 +111,63 @@ describe('project document migrations', () => {
     if (!capacitor) throw new Error('RC starter capacitor is missing.');
     capacitor.capacitanceFarads = 0;
     expect(() => migrateProjectDocument(invalid)).toThrow(/capacitanceFarads/);
+  });
+
+  it('migrates schema 7 projects to disconnected counter and analyser defaults', () => {
+    const legacy = projectRecord();
+    legacy.version = 7;
+    delete legacy.frequencyCounter;
+    delete legacy.logicAnalyser;
+    const migrated = migrateProjectDocument(legacy);
+    expect(migrated.version).toBe(8);
+    expect(migrated.frequencyCounter).toMatchObject({
+      activeTerminal: 'input', triggerEdge: 'rising', triggerLevelV: 2.5,
+    });
+    expect(Object.keys(migrated.logicAnalyser.channels)).toHaveLength(8);
+    expect(migrated.logicAnalyser).toMatchObject({
+      sampleRateHz: 1_000,
+      lowThresholdV: 0.8,
+      highThresholdV: 2,
+    });
+  });
+
+  it('round-trips connected Phase 14 and 15 instrument settings', () => {
+    const project = createLedExampleProject();
+    project.analysis.activeInstrument = 'logic-analyser';
+    project.frequencyCounter = {
+      ...project.frequencyCounter,
+      triggerEdge: 'falling',
+      inputHoleId: 'main:A10',
+      referenceHoleId: 'main:rail:top:negative:3',
+    };
+    project.logicAnalyser = {
+      ...project.logicAnalyser,
+      sampleRateHz: 5_000,
+      activeChannel: 'ch8',
+      referenceHoleId: 'main:rail:top:negative:4',
+      channels: {
+        ...project.logicAnalyser.channels,
+        ch8: {
+          ...project.logicAnalyser.channels.ch8,
+          enabled: true,
+          label: 'CLOCK',
+          inputHoleId: 'main:A11',
+        },
+      },
+    };
+    expect(migrateProjectDocument(structuredClone(project))).toEqual(project);
+  });
+
+  it('round-trips every supported jumper-wire color', () => {
+    for (const color of WIRE_COLORS) {
+      const project = createLedExampleProject();
+      const wire = project.components.find((component) => component.kind === 'jumper-wire');
+      if (!wire) throw new Error('LED example jumper wire is missing.');
+      wire.color = color;
+      const migrated = migrateProjectDocument(structuredClone(project));
+      expect(migrated.components.find((component) => component.kind === 'jumper-wire'))
+        .toMatchObject({ color });
+    }
   });
 
   it('round-trips NE555 identity, package, orientation, and all eight pins', () => {
@@ -133,6 +191,8 @@ describe('project document migrations', () => {
     ['missing simulation settings', (value: Record<string, unknown>) => { delete value.simulation; }, /simulation/],
     ['missing oscilloscope settings', (value: Record<string, unknown>) => { delete value.oscilloscope; }, /oscilloscope/],
     ['missing signal generator settings', (value: Record<string, unknown>) => { delete value.signalGenerator; }, /signalGenerator/],
+    ['missing frequency counter settings', (value: Record<string, unknown>) => { delete value.frequencyCounter; }, /frequencyCounter/],
+    ['missing logic analyser settings', (value: Record<string, unknown>) => { delete value.logicAnalyser; }, /logicAnalyser/],
     ['invalid active instrument', (value: Record<string, unknown>) => {
       (value.analysis as Record<string, unknown>).activeInstrument = 'spectrum-analyzer';
     }, /activeInstrument/],
@@ -155,6 +215,11 @@ describe('project document migrations', () => {
     ['invalid signal-generator waveform', (value: Record<string, unknown>) => {
       (value.signalGenerator as Record<string, unknown>).waveform = 'triangle';
     }, /signalGenerator.waveform/],
+    ['invalid logic thresholds', (value: Record<string, unknown>) => {
+      const analyser = value.logicAnalyser as Record<string, unknown>;
+      analyser.lowThresholdV = 2;
+      analyser.highThresholdV = 0.8;
+    }, /LOW threshold/],
     ['signal-generator frequency above supported range', (value: Record<string, unknown>) => {
       (value.signalGenerator as Record<string, unknown>).frequencyHz = 1_001;
     }, /signalGenerator.frequencyHz/],
@@ -181,6 +246,12 @@ describe('project document migrations', () => {
     ['invalid electrical value', (value: Record<string, unknown>) => {
       (value.components as Array<Record<string, unknown>>)[3].resistanceOhms = 0;
     }, /resistanceOhms/],
+    ['invalid jumper-wire color', (value: Record<string, unknown>) => {
+      const wire = (value.components as Array<Record<string, unknown>>)
+        .find((component) => component.kind === 'jumper-wire');
+      if (!wire) throw new Error('LED example jumper wire is missing.');
+      wire.color = 'purple';
+    }, /color/],
     ['unknown hole', (value: Record<string, unknown>) => {
       const component = (value.components as Array<Record<string, unknown>>)[0];
       (component.terminalHoleIds as Record<string, unknown>).positive = 'main:not-a-hole';

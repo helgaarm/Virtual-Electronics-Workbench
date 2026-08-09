@@ -2,6 +2,8 @@ import type { QuarterTurn } from '../physical/geometry';
 
 export const LED_COLORS = ['red', 'green', 'yellow', 'blue', 'white'] as const;
 export type LedColor = (typeof LED_COLORS)[number];
+export const WIRE_COLORS = ['red', 'black', 'blue', 'green', 'yellow', 'orange'] as const;
+export type WireColor = (typeof WIRE_COLORS)[number];
 export const LED_TYPICAL_FORWARD_VOLTAGE_V: Record<LedColor, number> = {
   red: 1.9,
   green: 2.1,
@@ -58,7 +60,7 @@ export interface SwitchComponent extends ComponentBase {
 
 export interface JumperWireComponent extends ComponentBase {
   kind: 'jumper-wire';
-  color: 'red' | 'black' | 'blue' | 'green' | 'yellow' | 'orange';
+  color: WireColor;
   terminalHoleIds: { a: string; b: string };
 }
 

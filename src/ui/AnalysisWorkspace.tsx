@@ -18,6 +18,8 @@ import type { TransientRuntimeController } from '../state/useTransientRuntime';
 import { WorkbenchCanvas } from '../workbench/scene/WorkbenchCanvas';
 import { breadboardHoleOptionGroups } from './breadboardHoleOptions';
 import { formatCurrent, formatPower, formatVoltage } from './format';
+import { FrequencyCounterPanel } from './FrequencyCounterPanel';
+import { LogicAnalyserPanel } from './LogicAnalyserPanel';
 import { OscilloscopePanel } from './OscilloscopePanel';
 import { SignalGeneratorPanel } from './SignalGeneratorPanel';
 
@@ -57,21 +59,34 @@ export function AnalysisWorkspace({
   const multimeterActiveHoleId = probeConnection(selectedProbe, activeTerminal);
   const probeVoltage = measureProbeVoltage(selectedProbe, simulation.extraction, simulation.result);
   const activeScopeChannel = project.oscilloscope.channels[project.oscilloscope.activeChannel];
+  const activeLogicChannel = project.logicAnalyser.channels[project.logicAnalyser.activeChannel];
   const activeHoleId = project.analysis.activeInstrument === 'multimeter'
     ? multimeterActiveHoleId
     : project.analysis.activeInstrument === 'oscilloscope'
       ? project.oscilloscope.activeTerminal === 'positive'
         ? activeScopeChannel.positiveHoleId
         : activeScopeChannel.referenceHoleId
-      : project.signalGenerator.activeTerminal === 'output'
-        ? project.signalGenerator.outputHoleId
-        : project.signalGenerator.referenceHoleId;
+      : project.analysis.activeInstrument === 'signal-generator'
+        ? project.signalGenerator.activeTerminal === 'output'
+          ? project.signalGenerator.outputHoleId
+          : project.signalGenerator.referenceHoleId
+        : project.analysis.activeInstrument === 'frequency-counter'
+          ? project.frequencyCounter.activeTerminal === 'input'
+            ? project.frequencyCounter.inputHoleId
+            : project.frequencyCounter.referenceHoleId
+          : project.logicAnalyser.activeTerminal === 'input'
+            ? activeLogicChannel.inputHoleId
+            : project.logicAnalyser.referenceHoleId;
   const selectedEndpoints = new Set(
     (project.analysis.activeInstrument === 'multimeter'
       ? selectedProbe ? [selectedProbe.positiveHoleId, selectedProbe.referenceHoleId] : []
       : project.analysis.activeInstrument === 'oscilloscope'
         ? [activeScopeChannel.positiveHoleId, activeScopeChannel.referenceHoleId]
-        : [project.signalGenerator.outputHoleId, project.signalGenerator.referenceHoleId]
+        : project.analysis.activeInstrument === 'signal-generator'
+          ? [project.signalGenerator.outputHoleId, project.signalGenerator.referenceHoleId]
+          : project.analysis.activeInstrument === 'frequency-counter'
+            ? [project.frequencyCounter.inputHoleId, project.frequencyCounter.referenceHoleId]
+            : [activeLogicChannel.inputHoleId, project.logicAnalyser.referenceHoleId]
     ).filter((id): id is string => Boolean(id)),
   );
   const occupiedHoleIds = new Set(
@@ -156,12 +171,41 @@ export function AnalysisWorkspace({
       });
       return;
     }
+    if (project.analysis.activeInstrument === 'signal-generator') {
+      onEditProject((current) => {
+        const signalGenerator = { ...current.signalGenerator };
+        const key = signalGenerator.activeTerminal === 'output' ? 'outputHoleId' : 'referenceHoleId';
+        if (holeId) signalGenerator[key] = holeId;
+        else delete signalGenerator[key];
+        return { ...current, signalGenerator };
+      });
+      return;
+    }
+    if (project.analysis.activeInstrument === 'frequency-counter') {
+      onEditProject((current) => {
+        const frequencyCounter = { ...current.frequencyCounter };
+        const key = frequencyCounter.activeTerminal === 'input' ? 'inputHoleId' : 'referenceHoleId';
+        if (holeId) frequencyCounter[key] = holeId;
+        else delete frequencyCounter[key];
+        return { ...current, frequencyCounter };
+      });
+      return;
+    }
     onEditProject((current) => {
-      const signalGenerator = { ...current.signalGenerator };
-      const key = signalGenerator.activeTerminal === 'output' ? 'outputHoleId' : 'referenceHoleId';
-      if (holeId) signalGenerator[key] = holeId;
-      else delete signalGenerator[key];
-      return { ...current, signalGenerator };
+      const logicAnalyser = { ...current.logicAnalyser };
+      if (logicAnalyser.activeTerminal === 'reference') {
+        if (holeId) logicAnalyser.referenceHoleId = holeId;
+        else delete logicAnalyser.referenceHoleId;
+        return { ...current, logicAnalyser };
+      }
+      const channel = { ...logicAnalyser.channels[logicAnalyser.activeChannel] };
+      if (holeId) channel.inputHoleId = holeId;
+      else delete channel.inputHoleId;
+      logicAnalyser.channels = {
+        ...logicAnalyser.channels,
+        [logicAnalyser.activeChannel]: channel,
+      };
+      return { ...current, logicAnalyser };
     });
   };
 
@@ -188,6 +232,8 @@ export function AnalysisWorkspace({
         <button className={project.analysis.activeInstrument === 'multimeter' ? 'instrument active' : 'instrument'} aria-pressed={project.analysis.activeInstrument === 'multimeter'} onClick={() => selectInstrument('multimeter')}><span>V</span><strong>Multimeter</strong><small>DC voltage</small></button>
         <button className={project.analysis.activeInstrument === 'oscilloscope' ? 'instrument active' : 'instrument'} aria-pressed={project.analysis.activeInstrument === 'oscilloscope'} onClick={() => selectInstrument('oscilloscope')}><span>⌁</span><strong>Oscilloscope</strong><small>CH1 + CH2</small></button>
         <button className={project.analysis.activeInstrument === 'signal-generator' ? 'instrument active' : 'instrument'} aria-pressed={project.analysis.activeInstrument === 'signal-generator'} onClick={() => selectInstrument('signal-generator')}><span>∿</span><strong>Signal generator</strong><small>Square + sine</small></button>
+        <button className={project.analysis.activeInstrument === 'frequency-counter' ? 'instrument active' : 'instrument'} aria-pressed={project.analysis.activeInstrument === 'frequency-counter'} onClick={() => selectInstrument('frequency-counter')}><span>Hz</span><strong>Frequency counter</strong><small>Frequency + period</small></button>
+        <button className={project.analysis.activeInstrument === 'logic-analyser' ? 'instrument active' : 'instrument'} aria-pressed={project.analysis.activeInstrument === 'logic-analyser'} onClick={() => selectInstrument('logic-analyser')}><span>01</span><strong>Logic analyser</strong><small>8 digital channels</small></button>
         <div className="probe-rack">
           <div className="probe-rack-heading"><span>Saved readings</span><button onClick={addProbe} disabled={!canAddProbe}>+ Add</button></div>
           {project.probes.length === 0 && <p>No voltage probes yet.</p>}
@@ -304,6 +350,26 @@ export function AnalysisWorkspace({
           />
         )}
 
+        {project.analysis.activeInstrument === 'frequency-counter' && (
+          <FrequencyCounterPanel
+            project={project}
+            board={board}
+            extraction={simulation.extraction}
+            runtime={transientRuntime}
+            onEditProject={onEditProject}
+          />
+        )}
+
+        {project.analysis.activeInstrument === 'logic-analyser' && (
+          <LogicAnalyserPanel
+            project={project}
+            board={board}
+            extraction={simulation.extraction}
+            runtime={transientRuntime}
+            onEditProject={onEditProject}
+          />
+        )}
+
         <div className="analysis-grid">
           <section className="analysis-table panel">
             <div className="panel-heading"><span className="eyebrow">Circuit telemetry</span><h2>Component readings</h2></div>
@@ -333,7 +399,11 @@ export function AnalysisWorkspace({
                 ? selectedProbe ? `Attach ${activeTerminal === 'positive' ? '+' : 'COM'} lead` : 'Live board'
                 : project.analysis.activeInstrument === 'oscilloscope'
                   ? `Attach ${activeScopeChannel.label} ${project.oscilloscope.activeTerminal === 'positive' ? 'probe' : 'ground'}`
-                  : `Attach generator ${project.signalGenerator.activeTerminal === 'output' ? 'output' : 'common'}`}</span>
+                  : project.analysis.activeInstrument === 'signal-generator'
+                    ? `Attach generator ${project.signalGenerator.activeTerminal === 'output' ? 'output' : 'common'}`
+                    : project.analysis.activeInstrument === 'frequency-counter'
+                      ? `Attach counter ${project.frequencyCounter.activeTerminal}`
+                      : `Attach ${activeLogicChannel.label} ${project.logicAnalyser.activeTerminal}`}</span>
               <button onClick={onSwitchToBuild}>Return to Build ↗</button>
             </div>
             <WorkbenchCanvas

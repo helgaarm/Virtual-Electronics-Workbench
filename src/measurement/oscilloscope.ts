@@ -94,7 +94,7 @@ export function oscilloscopeTrace(
       };
 }
 
-function crossingTimes(
+export function thresholdCrossingTimes(
   points: readonly WaveformPoint[],
   thresholdV: number,
   edge: OscilloscopeTriggerEdge,
@@ -121,7 +121,7 @@ export function latestThresholdCrossing(
   edge: OscilloscopeTriggerEdge,
   notAfterSeconds = Number.POSITIVE_INFINITY,
 ): number | undefined {
-  const crossings = crossingTimes(points, thresholdV, edge);
+  const crossings = thresholdCrossingTimes(points, thresholdV, edge);
   for (let index = crossings.length - 1; index >= 0; index -= 1) {
     if (crossings[index] <= notAfterSeconds) return crossings[index];
   }
@@ -149,7 +149,7 @@ export function measureWaveform(points: readonly WaveformPoint[]): WaveformMeasu
     totalSquaredV += point.voltageV * point.voltageV;
   }
   const thresholdV = (minimumV + maximumV) / 2;
-  const crossings = crossingTimes(points, thresholdV, 'rising');
+  const crossings = thresholdCrossingTimes(points, thresholdV, 'rising');
   const periods = crossings.slice(1).map((crossing, index) => crossing - crossings[index]);
   const periodSeconds = periods.length > 0
     ? periods.reduce((total, period) => total + period, 0) / periods.length

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import express, { type Express } from 'express';
+import { PROJECT_SCHEMA_VERSION } from '../src/domain/project';
 import { UnsupportedProjectVersionError } from '../src/persistence/migrations';
 import { ProjectConflictError, SqliteProjectRepository } from './sqliteProjectRepository';
 
@@ -19,7 +20,11 @@ export function createApp(repository: SqliteProjectRepository, staticDirectory?:
   });
 
   app.get('/api/health', (_request, response) => {
-    response.json({ status: 'ok', storage: 'sqlite' });
+    response.json({
+      status: 'ok',
+      storage: 'sqlite',
+      projectSchemaVersion: PROJECT_SCHEMA_VERSION,
+    });
   });
 
   app.get('/api/projects', (_request, response) => {

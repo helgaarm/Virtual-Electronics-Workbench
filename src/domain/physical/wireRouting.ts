@@ -12,11 +12,39 @@ interface Obstacle {
   projection: number;
 }
 
+interface RoutedWire {
+  wire: JumperWireComponent;
+  route: Point3Mm[];
+}
+
 const WIRE_CLEARANCE_MM = 1.4;
-const MAX_WIRE_RADIUS_MM = 0.6;
+const MAX_WIRE_RADIUS_MM = 0.58;
+const WIRE_ENDPOINT_HEIGHT_MM = 0.1;
+const UNDER_BODY_CLEARANCE_MM = 0.04;
+const WIRE_TO_WIRE_CLEARANCE_MM = 1.65;
+const WIRE_OBSTACLE_SAMPLE_SPACING_MM = 1.5;
 
 function distance2d(left: Point3Mm, right: Point3Mm): number {
   return Math.hypot(left.x - right.x, left.z - right.z);
+}
+
+function projectionAlongRoute(
+  point: Point3Mm,
+  start: Point3Mm,
+  end: Point3Mm,
+): { projection: number; distanceMm: number } {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  const lengthSquared = dx * dx + dz * dz;
+  const projection = lengthSquared === 0
+    ? 0
+    : Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.z - start.z) * dz) / lengthSquared));
+  const closest = {
+    x: start.x + dx * projection,
+    y: point.y,
+    z: start.z + dz * projection,
+  };
+  return { projection, distanceMm: distance2d(point, closest) };
 }
 
 function componentObstacle(
@@ -54,21 +82,65 @@ function componentObstacle(
   const bottomY = center.y + packageDefinition.mountingHeightMm
     - packageDefinition.dimensionsMm.y / 2;
 
-  const dx = end.x - start.x;
-  const dz = end.z - start.z;
-  const lengthSquared = dx * dx + dz * dz;
-  const projection = lengthSquared === 0
-    ? 0
-    : Math.max(0, Math.min(1, ((center.x - start.x) * dx + (center.z - start.z) * dz) / lengthSquared));
-  const closest = {
-    x: start.x + dx * projection,
-    y: center.y,
-    z: start.z + dz * projection,
-  };
+  const { projection, distanceMm } = projectionAlongRoute(center, start, end);
 
-  return distance2d(center, closest) < radiusMm
+  return distanceMm < radiusMm
     ? { center, bodyRadiusMm, radiusMm, bottomY, topY, projection }
     : undefined;
+}
+
+function sampleWireRoute(route: readonly Point3Mm[]): Point3Mm[] {
+  return route.slice(0, -1).flatMap((start, segmentIndex) => {
+    const end = route[segmentIndex + 1];
+    const length = Math.hypot(end.x - start.x, end.y - start.y, end.z - start.z);
+    const stepCount = Math.max(1, Math.ceil(length / WIRE_OBSTACLE_SAMPLE_SPACING_MM));
+    return Array.from({ length: stepCount }, (_, stepIndex) => {
+      const amount = stepIndex / stepCount;
+      return {
+        x: start.x + (end.x - start.x) * amount,
+        y: start.y + (end.y - start.y) * amount,
+        z: start.z + (end.z - start.z) * amount,
+      };
+    });
+  });
+}
+
+function wireRouteObstacles(
+  board: BreadboardDefinition,
+  wire: JumperWireComponent,
+  routedWires: readonly RoutedWire[],
+  start: Point3Mm,
+  end: Point3Mm,
+): Obstacle[] {
+  const currentTerminalIds = new Set(Object.values(wire.terminalHoleIds));
+  const obstacles = routedWires.flatMap(({ wire: routedWire, route }) => {
+    const sharedHoleIds = Object.values(routedWire.terminalHoleIds)
+      .filter((holeId) => currentTerminalIds.has(holeId));
+    const sharedPoints = sharedHoleIds
+      .map((holeId) => getHole(board, holeId)?.positionMm)
+      .filter((point) => point !== undefined);
+    return sampleWireRoute(route).flatMap((sample): Obstacle[] => {
+      if (sharedPoints.some((point) => distance2d(point, sample) < WIRE_TO_WIRE_CLEARANCE_MM)) {
+        return [];
+      }
+      const { projection, distanceMm } = projectionAlongRoute(sample, start, end);
+      if (distanceMm >= WIRE_TO_WIRE_CLEARANCE_MM) return [];
+      return [{
+        center: sample,
+        bodyRadiusMm: WIRE_TO_WIRE_CLEARANCE_MM,
+        radiusMm: WIRE_TO_WIRE_CLEARANCE_MM,
+        bottomY: sample.y - MAX_WIRE_RADIUS_MM,
+        topY: sample.y + MAX_WIRE_RADIUS_MM,
+        projection,
+      }];
+    });
+  }).sort((left, right) => left.projection - right.projection);
+
+  return obstacles.filter((obstacle, index) => {
+    const previous = obstacles[index - 1];
+    if (!previous || obstacle.projection - previous.projection >= 0.045) return true;
+    return obstacle.topY > previous.topY + 0.2;
+  });
 }
 
 function isInsideBoard(board: BreadboardDefinition, point: Point3Mm): boolean {
@@ -80,24 +152,27 @@ function isInsideBoard(board: BreadboardDefinition, point: Point3Mm): boolean {
  * Produces a raised, rounded jumper path. Components crossing the direct route
  * add lateral waypoints and determine the minimum safe height of the wire.
  */
-export function routeJumperWire(
+function routeSingleJumperWire(
   board: BreadboardDefinition,
   wire: JumperWireComponent,
-  components: PlacedComponent[],
+  solidComponents: Array<Exclude<PlacedComponent, JumperWireComponent>>,
+  routedWires: readonly RoutedWire[],
 ): Point3Mm[] {
   const startHole = getHole(board, wire.terminalHoleIds.a);
   const endHole = getHole(board, wire.terminalHoleIds.b);
   if (!startHole || !endHole) return [];
 
-  const start = { ...startHole.positionMm, y: startHole.positionMm.y + 0.2 };
-  const end = { ...endHole.positionMm, y: endHole.positionMm.y + 0.2 };
+  const start = { ...startHole.positionMm, y: startHole.positionMm.y + WIRE_ENDPOINT_HEIGHT_MM };
+  const end = { ...endHole.positionMm, y: endHole.positionMm.y + WIRE_ENDPOINT_HEIGHT_MM };
   const directDistance = distance2d(start, end);
   const rise = Math.min(14, 5 + directDistance * 0.16);
   const defaultPeakY = Math.max(start.y, end.y) + rise + 1;
-  const obstacles = components
-    .filter((component): component is Exclude<PlacedComponent, JumperWireComponent> => component.kind !== 'jumper-wire')
+  const obstacles = [
+    ...solidComponents
     .map((component) => componentObstacle(board, component, start, end))
-    .filter((obstacle) => obstacle !== undefined)
+    .filter((obstacle) => obstacle !== undefined),
+    ...wireRouteObstacles(board, wire, routedWires, start, end),
+  ]
     .sort((left, right) => left.projection - right.projection);
 
   if (obstacles.length === 0 || directDistance < 0.001) {
@@ -152,8 +227,11 @@ export function routeJumperWire(
     }));
   const escapePoint = (obstacle: Obstacle, endpoint: Point3Mm) => ({
     x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
-    y: obstacle.bottomY - MAX_WIRE_RADIUS_MM - 0.2 > endpoint.y
-      ? Math.min(endpoint.y + 0.25, obstacle.bottomY - MAX_WIRE_RADIUS_MM - 0.2)
+    y: obstacle.bottomY - MAX_WIRE_RADIUS_MM - UNDER_BODY_CLEARANCE_MM > endpoint.y
+      ? Math.min(
+        endpoint.y + 0.25,
+        obstacle.bottomY - MAX_WIRE_RADIUS_MM - UNDER_BODY_CLEARANCE_MM,
+      )
       : obstacle.topY + 1.2,
     z: obstacle.center.z + perpendicular.z * obstacle.bodyRadiusMm * side,
   });
@@ -171,4 +249,35 @@ export function routeJumperWire(
     ...endEscapes.reverse(),
     end,
   ];
+}
+
+/** Routes jumpers in stable component order so later wires avoid the already
+ * established insulated paths without introducing circular route decisions. */
+export function routeJumperWires(
+  board: BreadboardDefinition,
+  components: PlacedComponent[],
+): Map<string, Point3Mm[]> {
+  const solidComponents = components.filter(
+    (component): component is Exclude<PlacedComponent, JumperWireComponent> => component.kind !== 'jumper-wire',
+  );
+  const routedWires: RoutedWire[] = [];
+  const routes = new Map<string, Point3Mm[]>();
+  for (const component of components) {
+    if (component.kind !== 'jumper-wire') continue;
+    const route = routeSingleJumperWire(board, component, solidComponents, routedWires);
+    routedWires.push({ wire: component, route });
+    routes.set(component.id, route);
+  }
+  return routes;
+}
+
+export function routeJumperWire(
+  board: BreadboardDefinition,
+  wire: JumperWireComponent,
+  components: PlacedComponent[],
+): Point3Mm[] {
+  return routeJumperWires(
+    board,
+    components.some((component) => component.id === wire.id) ? components : [...components, wire],
+  ).get(wire.id) ?? [];
 }

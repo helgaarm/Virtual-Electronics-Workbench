@@ -1,6 +1,6 @@
 # Virtual Electronics Workbench
 
-A runnable Phase A–F foundation for physically building, simulating, generating, and measuring breadboard circuits in the browser.
+A runnable Phase A–F foundation, completed through the original instrument phases 14–15, for physically building, simulating, generating, and measuring breadboard circuits in the browser.
 
 The application opens with a working **Light an LED** example: a 5 V source, closed switch, 220 Ω axial resistor, red LED, ground reference, and curved return jumper. Turn output off, operate the switch, change resistance, rotate or re-snap parts, attach multimeter probes, inspect live readings, and save/reopen the complete project from SQLite.
 
@@ -43,7 +43,7 @@ The application opens with a working **Light an LED** example: a 5 V source, clo
 - Deterministic fixed-step simulation clock with run, pause, single-step, reset, timestep, and speed controls.
 - Capacitor state is preserved while the circuit runs and across output on/off changes, enabling charge and discharge experiments.
 - Built-in **RC charge and discharge** starter project with a 10 kΩ resistor, 100 µF capacitor, and capacitor-voltage probe.
-- Schema version 7 persists capacitors, NE555/DIP-8 placements, transient settings, oscilloscope settings, and signal-generator settings through SQLite; older projects migrate automatically.
+- Schema version 8 persists capacitors, NE555/DIP-8 placements, transient settings, and every instrument setup through SQLite; older projects migrate automatically.
 - Verified RC response against the analytical time constant, including charge at one and five time constants and source-off discharge.
 
 ### Phase E — oscilloscope and signal generation
@@ -65,6 +65,13 @@ The application opens with a working **Light an LED** example: a 5 V source, clo
 - The NE555N is a breadboard-ready DIP-8 component with standard pin mapping, centre-channel placement rules, 180-degree rotation, anchoring, undo/redo, and save/reload support.
 - Its educational hybrid analogue subcircuit uses a physical three-resistor reference divider, smooth comparator stages, an analogue latch, and finite-resistance output/discharge stages. It does not contain a decorative waveform or a 555 oscillator equation.
 - The built-in **NE555 astable oscillator** connects genuine timing resistors/capacitor and preconfigures scope channels for the output and timing-capacitor voltage.
+
+### Original phases 14–15 — digital timing instruments
+
+- Frequency counter with physical input/reference leads, selectable rising/falling edge and threshold, and frequency/period derived from the shared captured waveform.
+- Eight-channel logic analyser with named and independently visible inputs, shared reference, sample-rate control, Run/Stop/Single, edge trigger, and time zoom.
+- Explicit 5 V TTL classification: below 0.8 V is LOW, above 2.0 V is HIGH, and the region between is retained as undefined.
+- Oscilloscope, counter, and logic analyser capture the same simulated nodes on one deterministic clock; none contains its own circuit or display-only waveform generator.
 
 ## Requirements
 
@@ -109,7 +116,7 @@ This runs strict linting, third-party-license inventory verification, the unit/i
 - Add parts from the left drawer. The editor chooses compatible free holes.
 - Choose a classic circuit under **Start projects** and load it as a fresh unsaved workbench.
 - Load **RC charge and discharge**, then use the footer controls to run, pause, single-step, reset, or change the transient timestep and speed. The generator’s 0–5 V square wave alternately charges and discharges the capacitor through the resistor.
-- In **Test & Analysis**, select **Oscilloscope** to compare CH1 and CH2, or **Signal generator** to choose square/sine output and connect OUT/COM to printed breadboard holes. For high frequencies, reduce the footer Step until the sampling warning disappears. At the 50 µs step, speed is limited to 2× so the clock can keep pace.
+- In **Test & Analysis**, select **Oscilloscope** to compare CH1 and CH2, **Signal generator** to drive a square/sine signal, **Frequency counter** to measure an input edge stream, or **Logic analyser** to inspect up to eight threshold-aware digital channels. Every lead can be attached by a board click or printed-hole selector. For high frequencies, reduce the footer Step until the sampling warning disappears. At the 50 µs step, speed is limited to 2× so the clock can keep pace.
 - Select a capacitor and use **Hard reset charge to 0 V** to force only that capacitor to an uncharged state; the simulation pauses and other capacitors retain their charge. **Reset all** clears every capacitor and returns transient time to zero.
 - Load **NE555 astable oscillator**, open **Test & Analysis**, select the oscilloscope, and run the transient simulation. CH1 shows pin 3 output while CH2 shows the timing capacitor on pins 2/6. Changing RA, RB, or C changes the simulated frequency naturally.
 - Drag a part in 3D to preview compatible snapped holes, then release to commit a valid placement.
@@ -124,13 +131,13 @@ This runs strict linting, third-party-license inventory verification, the unit/i
 
 SQLite data is durable on disk once Save is used. A normal computer sleep state suspends local processes, including this server; when the computer wakes, an already-running server normally resumes. No application can continue CPU work during true system sleep without changing the operating system power policy. This project does not change that policy.
 
-Saved projects retain components, transient timestep/speed, oscilloscope setup, and signal-generator setup. Elapsed simulation time, run/pause state, captured samples, and capacitor charge history are intentionally session-only and restart when a project is opened. Long browser stalls and system sleep do not trigger an unbounded simulation catch-up after wake.
+Saved projects retain components, transient timestep/speed, oscilloscope, signal-generator, frequency-counter, and logic-analyser setup. Elapsed simulation time, run/pause state, captured samples, and capacitor charge history are intentionally session-only and restart when a project is opened. Long browser stalls and system sleep do not trigger an unbounded simulation catch-up after wake.
 
 ## Architecture and limitations
 
 Start with [docs/architecture.md](docs/architecture.md) and [AGENTS.md](AGENTS.md). Solver assumptions are in [docs/simulation.md](docs/simulation.md), NE555 sources and limits are in [docs/ne555.md](docs/ne555.md), physical scale/topology is in [docs/physical-model.md](docs/physical-model.md), and the extension workflow is in [docs/component-authoring.md](docs/component-authoring.md).
 
-This is an educational simulator foundation, not SPICE and not a safety tool. The LED, capacitor, signal source, BJT model, and NE555 internals are deliberately simplified; disconnected nodes use a tiny numerical conductance, and mechanical collision is discrete. The NE555 is a hybrid analogue subcircuit, not a proprietary die-level transistor replica. Inductors, frequency-domain analysis, semiconductor capacitances, temperature sweeps, and arbitrary SPICE import remain unsupported. Jumper routing provides visual clearance around component packages; it is not a general collision solver and does not route around other jumper wires.
+This is an educational simulator foundation, not SPICE and not a safety tool. The LED, capacitor, signal source, BJT model, and NE555 internals are deliberately simplified; disconnected nodes use a tiny numerical conductance, and mechanical collision is discrete. The NE555 is a hybrid analogue subcircuit, not a proprietary die-level transistor replica. Inductors, frequency-domain analysis, semiconductor capacitances, temperature sweeps, and arbitrary SPICE import remain unsupported. Jumper routing provides visual clearance around component packages and previously routed jumper spans, but remains a deterministic visual router rather than a general-purpose mechanical solver.
 
 ## License and dependencies
 

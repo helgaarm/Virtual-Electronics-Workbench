@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLedExampleProject } from '../../src/domain/project';
-import { ApiProjectRepository, ProjectConflictClientError } from '../../src/persistence/apiProjectRepository';
+import {
+  ApiProjectRepository,
+  ProjectConflictClientError,
+  ProjectSchemaMismatchClientError,
+} from '../../src/persistence/apiProjectRepository';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -43,5 +47,16 @@ describe('API project repository', () => {
       body: JSON.stringify(project),
     }));
     await expect(repository.save(saved)).rejects.toBeInstanceOf(ProjectConflictClientError);
+  });
+
+  it('explains how to recover when the SQLite service is an older application version', async () => {
+    const project = createLedExampleProject();
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      error: 'Project version 8 is not supported by version 7.',
+    }, 409)));
+    await expect(new ApiProjectRepository('/projects').save(project))
+      .rejects.toBeInstanceOf(ProjectSchemaMismatchClientError);
+    await expect(new ApiProjectRepository('/projects').save(project))
+      .rejects.toThrow(/restart npm run dev/);
   });
 });
