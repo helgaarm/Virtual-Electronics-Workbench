@@ -31,7 +31,7 @@ describe('project document migrations', () => {
     delete legacy.simulation;
     for (const probe of legacy.probes as Array<Record<string, unknown>>) delete probe.instrumentId;
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(8);
+    expect(migrated.version).toBe(9);
     expect(migrated.revision).toBe(0);
     expect(migrated.probes[0].instrumentId).toBe('multimeter');
     expect(migrated.analysis).toMatchObject({
@@ -94,7 +94,7 @@ describe('project document migrations', () => {
     channels.ch1.voltsPerDivisionV = 0.001;
 
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(8);
+    expect(migrated.version).toBe(9);
     expect(migrated.simulation).toEqual({ timeStepSeconds: 0.00005, speed: 0.25 });
     expect(migrated.oscilloscope.timePerDivisionSeconds).toBe(0.00005);
     expect(migrated.oscilloscope.channels.ch1.voltsPerDivisionV).toBe(0.01);
@@ -119,7 +119,7 @@ describe('project document migrations', () => {
     delete legacy.frequencyCounter;
     delete legacy.logicAnalyser;
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(8);
+    expect(migrated.version).toBe(9);
     expect(migrated.frequencyCounter).toMatchObject({
       activeTerminal: 'input', triggerEdge: 'rising', triggerLevelV: 2.5,
     });
