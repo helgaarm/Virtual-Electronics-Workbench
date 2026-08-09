@@ -85,6 +85,15 @@ export interface Ne555Component extends ComponentBase {
   terminalHoleIds: Record<Ne555PinId, string>;
 }
 
+export interface Tmp36Component extends ComponentBase {
+  kind: 'tmp36';
+  deviceId: 'tmp36';
+  packageId: 'TO-92-inline';
+  simulationModel: 'temperature-controlled-source';
+  temperatureC: number;
+  terminalHoleIds: { vs: string; vout: string; gnd: string };
+}
+
 export type PlacedComponent =
   | VoltageSourceComponent
   | GroundComponent
@@ -93,7 +102,8 @@ export type PlacedComponent =
   | CapacitorComponent
   | SwitchComponent
   | JumperWireComponent
-  | Ne555Component;
+  | Ne555Component
+  | Tmp36Component;
 
 export type ComponentKind = PlacedComponent['kind'];
 
@@ -123,5 +133,7 @@ export function componentDisplayName(kind: ComponentKind): string {
       return 'Jumper wire';
     case 'ne555':
       return 'NE555N timer';
+    case 'tmp36':
+      return 'TMP36 thermometer';
   }
 }

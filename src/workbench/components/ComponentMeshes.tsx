@@ -559,8 +559,50 @@ function Dip8Mesh({ component, board, selected, onSelect, onBeginDrag }: {
   );
 }
 
+function Tmp36Mesh({ component, board, selected, onSelect, onBeginDrag }: {
+  component: Extract<PlacedComponent, { kind: 'tmp36' }>;
+  board: BreadboardDefinition;
+  selected: boolean;
+  onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
+}) {
+  const physicalPackage = PHYSICAL_PACKAGES.tmp36;
+  const pins = Object.values(component.terminalHoleIds).map((holeId) => point(board, holeId, 0.25));
+  const center = pins.reduce((sum, pin) => sum.add(pin), new THREE.Vector3()).multiplyScalar(1 / pins.length);
+  const axis = pins[2].clone().sub(pins[0]);
+  const rotationY = -Math.atan2(axis.z, axis.x);
+  const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const bodyBottomY = bodyCenter.y - physicalPackage.dimensionsMm.y / 2;
+  return (
+    <group
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+    >
+      {pins.map((pin, index) => (
+        <SmoothTube
+          key={index}
+          points={[pin, pin.clone().setY(bodyBottomY - 0.5), center.clone().lerp(pin, 0.72).setY(bodyBottomY + 0.35)]}
+          radius={physicalPackage.leadDiameterMm / 2}
+          color="#b9bec0"
+          metalness={0.9}
+        />
+      ))}
+      <group position={bodyCenter} rotation={[0, rotationY, 0]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[physicalPackage.dimensionsMm.x / 2, physicalPackage.dimensionsMm.x / 2, physicalPackage.dimensionsMm.y, 24, 1, false, 0, Math.PI]} />
+          <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.16} />
+        </mesh>
+        <mesh position={[0, 0, physicalPackage.dimensionsMm.z / 2 - 0.15]}>
+          <boxGeometry args={[physicalPackage.dimensionsMm.x, physicalPackage.dimensionsMm.y, 0.3]} />
+          <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
 function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: {
-  component: Exclude<PlacedComponent, { kind: 'resistor' | 'led' | 'capacitor' | 'jumper-wire' | 'switch' | 'ne555' }>;
+  component: Exclude<PlacedComponent, { kind: 'resistor' | 'led' | 'capacitor' | 'jumper-wire' | 'switch' | 'ne555' | 'tmp36' }>;
   board: BreadboardDefinition;
   selected: boolean;
   onSelect: () => void;
@@ -635,6 +677,7 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         );
         if (component.kind === 'switch') return <TactileSwitchMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'ne555') return <Dip8Mesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'tmp36') return <Tmp36Mesh key={component.id} component={component} {...common} />;
         return <SimpleComponent key={component.id} component={component} {...common} />;
       })}
     </>

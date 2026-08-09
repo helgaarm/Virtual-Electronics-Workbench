@@ -195,6 +195,19 @@ export function Inspector({
         </section>
       )}
 
+      {component.kind === 'tmp36' && (
+        <section className="inspector-section">
+          <div className="section-label">TMP36 temperature sensor · TO-92</div>
+          <label htmlFor="tmp36-temperature">Sensed temperature</label>
+          <div className="input-with-unit">
+            <input id="tmp36-temperature" type="number" min="-40" max="125" step="0.1" value={component.temperatureC}
+              onChange={(event) => onUpdate({ ...component, temperatureC: Math.min(125, Math.max(-40, Number(event.target.value))) })} />
+            <span>°C</span>
+          </div>
+          <small>Nominal output: {(0.5 + component.temperatureC * 0.01).toFixed(3)} V · supply 2.7–5.5 V</small>
+        </section>
+      )}
+
       <section className="inspector-section placement-lock">
         <div className="section-label">Placement</div>
         <button
@@ -234,7 +247,7 @@ export function Inspector({
       <section className="inspector-section measurements">
         <div className="section-label">Live simulation</div>
         <dl>
-          <div title={measurement?.voltage.reason}><dt>{component.kind === 'ne555' ? 'Supply voltage' : 'Voltage drop'}</dt><dd>{reading(measurement?.voltage, formatVoltage)}</dd></div>
+          <div title={measurement?.voltage.reason}><dt>{component.kind === 'ne555' ? 'Supply voltage' : component.kind === 'tmp36' ? 'Sensor output' : 'Voltage drop'}</dt><dd>{reading(measurement?.voltage, formatVoltage)}</dd></div>
           <div title={measurement?.current.reason}><dt>Current</dt><dd>{reading(measurement?.current, formatCurrent)}</dd></div>
           <div title={measurement?.power.reason}><dt>Power</dt><dd>{reading(measurement?.power, (value) => `${Math.abs(value * 1_000).toFixed(2)} mW`)}</dd></div>
         </dl>
@@ -244,7 +257,7 @@ export function Inspector({
       </section>
 
       <div className="inspector-actions">
-        <button disabled={anchored} onClick={onRotate} title={anchored ? 'Unanchor before rotating' : `Rotate ${component.kind === 'ne555' ? 180 : 90} degrees`}>↻ Rotate</button>
+        <button disabled={anchored} onClick={onRotate} title={anchored ? 'Unanchor before rotating' : `Rotate ${component.kind === 'ne555' || component.kind === 'tmp36' ? 180 : 90} degrees`}>↻ Rotate</button>
         <button className="danger-quiet" onClick={onDelete}>Delete</button>
       </div>
     </aside>

@@ -8,6 +8,7 @@ import { createBreadboardDefinition } from '../domain/physical/breadboard';
 import { validateOccupancy } from '../domain/physical/occupancy';
 import { UnionFind } from './unionFind';
 import { createNe555Subcircuit } from './models/ne555';
+import { tmp36Output } from './models/tmp36';
 
 export interface CircuitExtraction {
   circuit: Circuit;
@@ -153,6 +154,22 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
           vcc: holeToNodeId[component.terminalHoleIds.pin8],
         }));
         break;
+      case 'tmp36': {
+        const output = tmp36Output(component.temperatureC, project.powerOn ? 5 : 0);
+        electricalComponents.push({
+          id: component.id,
+          kind: 'voltage-source',
+          positiveNodeId: holeToNodeId[component.terminalHoleIds.vout],
+          negativeNodeId: holeToNodeId[component.terminalHoleIds.gnd],
+          voltageV: output.outputVoltageV,
+        });
+        if (!output.validSupply) warnings.push({
+          code: 'TMP36_SUPPLY_RANGE',
+          message: `${component.label} requires a 2.7–5.5 V supply; its output is disabled while workbench power is off.`,
+          componentId: component.id,
+        });
+        break;
+      }
       case 'ground':
       case 'switch':
       case 'jumper-wire':

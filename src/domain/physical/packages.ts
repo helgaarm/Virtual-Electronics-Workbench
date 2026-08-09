@@ -1,6 +1,7 @@
 import type { ComponentKind } from '../components/types';
 import type { QuarterTurn } from './geometry';
 import { DIP_8_PACKAGE } from './dipPackages';
+import { TO_92_PACKAGE } from './to92Package';
 
 export interface PhysicalPackageDefinition {
   packageType: string;
@@ -73,6 +74,17 @@ export const PHYSICAL_PACKAGES: Record<ComponentKind, PhysicalPackageDefinition>
     dimensionsMm: DIP_8_PACKAGE.bodyDimensionsMm,
     leadDiameterMm: DIP_8_PACKAGE.leadWidthMm,
     mountingHeightMm: 5.2,
+    allowedOrientations: [0, 180],
+  },
+  tmp36: {
+    packageType: TO_92_PACKAGE.id,
+    dimensionsMm: {
+      x: TO_92_PACKAGE.bodyDimensionsMm.width,
+      y: TO_92_PACKAGE.bodyDimensionsMm.height,
+      z: TO_92_PACKAGE.bodyDimensionsMm.depth,
+    },
+    leadDiameterMm: TO_92_PACKAGE.leadDiameterMm,
+    mountingHeightMm: 5.4,
     allowedOrientations: [0, 180],
   },
 };

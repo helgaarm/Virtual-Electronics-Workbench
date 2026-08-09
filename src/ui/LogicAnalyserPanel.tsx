@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type {
   LogicAnalyserChannelId,
   LogicAnalyserChannelSettings,
@@ -59,7 +60,7 @@ export function LogicAnalyserPanel({ project, board, extraction, runtime, onEdit
   const duration = settings.timePerDivisionSeconds * 10;
   const fullStart = runtime.samples[0]?.timeSeconds ?? latestTime;
   const triggerChannel = settings.channels[settings.triggerSource];
-  const triggerTrace = logicAnalyserTrace(
+  const triggerTrace = useMemo(() => logicAnalyserTrace(
     triggerChannel,
     settings.referenceHoleId,
     extraction,
@@ -69,13 +70,13 @@ export function LogicAnalyserPanel({ project, board, extraction, runtime, onEdit
     settings.sampleRateHz,
     settings.lowThresholdV,
     settings.highThresholdV,
-  );
+  ), [extraction, fullStart, latestTime, runtime.samples, settings.highThresholdV, settings.lowThresholdV, settings.referenceHoleId, settings.sampleRateHz, triggerChannel]);
   const triggerTime = settings.triggerEnabled
     ? latestDigitalTrigger(triggerTrace.points, settings.triggerEdge, latestTime - duration * 0.2)
     : undefined;
   const endTime = triggerTime === undefined ? latestTime : triggerTime + duration * 0.2;
   const startTime = endTime - duration;
-  const traces = Object.fromEntries(CHANNEL_IDS.map((channelId) => [
+  const traces = useMemo(() => Object.fromEntries(CHANNEL_IDS.map((channelId) => [
     channelId,
     logicAnalyserTrace(
       settings.channels[channelId],
@@ -88,7 +89,7 @@ export function LogicAnalyserPanel({ project, board, extraction, runtime, onEdit
       settings.lowThresholdV,
       settings.highThresholdV,
     ),
-  ])) as Record<LogicAnalyserChannelId, DigitalTrace>;
+  ])) as Record<LogicAnalyserChannelId, DigitalTrace>, [endTime, extraction, runtime.samples, settings.channels, settings.highThresholdV, settings.lowThresholdV, settings.referenceHoleId, settings.sampleRateHz, startTime]);
   const activeChannel = settings.channels[settings.activeChannel];
   const activeHoleId = settings.activeTerminal === 'input'
     ? activeChannel.inputHoleId
