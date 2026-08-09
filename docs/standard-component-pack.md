@@ -31,8 +31,12 @@ The ATtiny85 adapter loads checksum-validated Intel HEX and executes a deliberat
 
 Seven-segment visual persistence is an exponential 40 ms integration of instantaneous segment current. It is renderer-only derived state; with no current it decays and is not persisted.
 
+## Built-in thermometer project
+
+The **Digital Breadboard Thermometer** starter places a TMP36, an ATtiny85, two cascaded-package 74HC595 devices, a four-digit common-cathode display, eight 330 Ω segment resistors, four TO-92 NPN digit drivers, local decoupling capacitors, and a reset pull-up on a 50-column breadboard. Its saved multimeter probe targets the TMP36 output. The standard parts drawer also exposes the 1N4148, four transistor variants, 10 kΩ trimmer, both display sizes, shift register, and microcontroller instead of leaving their models accessible only to tests.
+
 ## Current milestone limitations
 
-This changeset establishes and tests the reusable package, metadata, temperature transfer, potentiometer split, mixed-signal, shift-register, display-persistence, Intel HEX, AVR stepping, GPIO, and ADC foundations. Visible device renderers, persistence shapes, full electrical stamps for behavioural controlled sources, complete ATtiny85 peripheral emulation, compiled thermometer firmware, and the wired starter project remain dependent follow-on work. Consequently the complete sensor → ADC → firmware → cascaded registers → LED chain and browser manual acceptance sequence are **not yet claimed as validated**.
+The analogue devices, potentiometer and display LED junctions now have circuit-extraction stamps. The behavioural 74HC595 and incremental AVR core remain validated as independent deterministic models; the application transient worker does not yet schedule their pin events together. The bundled `thermometer-v1` association is therefore a stable firmware identifier rather than a compiled full thermometer image, and the complete live sensor → ADC → firmware → cascaded registers → LED acceptance chain is **not yet claimed as validated**. The starter deliberately contains no direct temperature-to-display binding.
 
 No runtime dependency or third-party asset was added; licensing remains MIT-only for new source.

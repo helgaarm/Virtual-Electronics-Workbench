@@ -9,6 +9,7 @@ import { validateOccupancy } from '../domain/physical/occupancy';
 import { UnionFind } from './unionFind';
 import { createNe555Subcircuit } from './models/ne555';
 import { tmp36Output } from './models/tmp36';
+import { potentiometerResistances } from './models/potentiometer';
 
 export interface CircuitExtraction {
   circuit: Circuit;
@@ -170,6 +171,31 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
         });
         break;
       }
+      case 'diode-1n4148':
+        electricalComponents.push({ id: component.id, kind: 'diode', positiveNodeId: holeToNodeId[component.terminalHoleIds.anode], negativeNodeId: holeToNodeId[component.terminalHoleIds.cathode], model: { saturationCurrentA: 4e-9, emissionCoefficient: 1.9, temperatureK: 298.15 } });
+        break;
+      case 'bc547': case 'bc557': case '2n3904': case '2n3906':
+        electricalComponents.push({ id: component.id, kind: 'bjt', polarity: component.polarity, collectorNodeId: holeToNodeId[component.terminalHoleIds.collector], baseNodeId: holeToNodeId[component.terminalHoleIds.base], emitterNodeId: holeToNodeId[component.terminalHoleIds.emitter], model: { saturationCurrentA: 1e-14, emissionCoefficient: 1, temperatureK: 298.15, forwardBeta: component.kind.startsWith('bc') ? 200 : 100, reverseBeta: 1 } });
+        break;
+      case 'potentiometer': {
+        const resistance = potentiometerResistances(component.totalResistanceOhms, component.wiperPosition);
+        electricalComponents.push(
+          { id: `${component.id}:a-wiper`, kind: 'resistor', positiveNodeId: holeToNodeId[component.terminalHoleIds.a], negativeNodeId: holeToNodeId[component.terminalHoleIds.wiper], resistanceOhms: resistance.terminalAToWiperOhms },
+          { id: `${component.id}:wiper-b`, kind: 'resistor', positiveNodeId: holeToNodeId[component.terminalHoleIds.wiper], negativeNodeId: holeToNodeId[component.terminalHoleIds.b], resistanceOhms: resistance.wiperToTerminalBOhms },
+        );
+        break;
+      }
+      case 'seven-segment': {
+        const common = holeToNodeId[component.terminalHoleIds.common1];
+        for (const segment of ['a','b','c','d','e','f','g','dp'] as const) electricalComponents.push({ id: `${component.id}:${segment}`, kind: 'led', positiveNodeId: holeToNodeId[component.terminalHoleIds[segment]], negativeNodeId: common, forwardVoltageV: 1.9, onResistanceOhms: 20 });
+        break;
+      }
+      case 'four-digit-seven-segment':
+        for (const digit of ['digit1','digit2','digit3','digit4'] as const) for (const segment of ['a','b','c','d','e','f','g','dp'] as const) electricalComponents.push({ id: `${component.id}:${digit}:${segment}`, kind: 'led', positiveNodeId: holeToNodeId[component.terminalHoleIds[segment]], negativeNodeId: holeToNodeId[component.terminalHoleIds[digit]], forwardVoltageV: 1.9, onResistanceOhms: 20 });
+        break;
+      case '74hc595': case 'attiny85':
+        warnings.push({ code: 'DIGITAL_COSIMULATION_TRANSIENT_ONLY', message: `${component.label} executes through the deterministic mixed-signal transient runtime.`, componentId: component.id });
+        break;
       case 'ground':
       case 'switch':
       case 'jumper-wire':

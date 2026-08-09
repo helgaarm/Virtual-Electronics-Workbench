@@ -179,6 +179,25 @@ export function Inspector({
         </section>
       )}
 
+      {component.kind === 'potentiometer' && (
+        <section className="inspector-section">
+          <label htmlFor="wiper-position">Wiper position</label>
+          <input id="wiper-position" type="range" min="0" max="100" step="1" value={component.wiperPosition * 100}
+            onChange={(event) => onUpdate({ ...component, wiperPosition: Number(event.target.value) / 100 })} />
+          <div className="input-with-unit"><input type="number" min="0" max="100" step="1" value={Math.round(component.wiperPosition * 100)} onChange={(event) => onUpdate({ ...component, wiperPosition: Math.min(1, Math.max(0, Number(event.target.value) / 100)) })} /><span>%</span></div>
+          <small>{formatResistance(component.totalResistanceOhms)} linear trimmer</small>
+        </section>
+      )}
+
+      {(component.kind === 'bc547' || component.kind === 'bc557' || component.kind === '2n3904' || component.kind === '2n3906') && (
+        <section className="inspector-section"><div className="section-label">{component.deviceId.toUpperCase()} · TO-92 · {component.polarity.toUpperCase()}</div><small>Device-defined C/B/E mapping; similar packages do not imply identical lead order.</small></section>
+      )}
+
+      {component.kind === 'diode-1n4148' && <section className="inspector-section"><div className="section-label">1N4148 · DO-35 glass diode</div><small>Nonlinear Shockley junction · cathode is identified by its band.</small></section>}
+      {component.kind === '74hc595' && <section className="inspector-section"><div className="section-label">74HC595 · DIP-16</div><small>Serial data, shift/latch clocks, clear, output enable, cascade output, and eight finite-drive outputs.</small></section>}
+      {component.kind === 'attiny85' && <section className="inspector-section"><div className="section-label">ATtiny85 · DIP-8</div><small>Firmware: {component.firmwareId} · {(component.clockHz / 1e6).toFixed(1)} MHz · ADC and mixed-signal GPIO</small></section>}
+      {(component.kind === 'seven-segment' || component.kind === 'four-digit-seven-segment') && <section className="inspector-section"><div className="section-label">{component.commonType} LED display</div><small>Segments illuminate from simulated junction current; multiplexed brightness uses visual persistence only.</small></section>}
+
       {component.kind === 'ne555' && (
         <section className="inspector-section">
           <div className="section-label">NE555N Timer · DIP-8</div>

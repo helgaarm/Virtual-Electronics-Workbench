@@ -1,6 +1,7 @@
 import type { ComponentKind } from '../components/types';
 import type { QuarterTurn } from './geometry';
 import { DIP_8_PACKAGE } from './dipPackages';
+import { DIP_16_PACKAGE } from './dipPackages';
 import { TO_92_PACKAGE } from './to92Package';
 
 export interface PhysicalPackageDefinition {
@@ -87,7 +88,18 @@ export const PHYSICAL_PACKAGES: Record<ComponentKind, PhysicalPackageDefinition>
     mountingHeightMm: 5.4,
     allowedOrientations: [0, 180],
   },
+  'diode-1n4148': { packageType: 'DO-35', dimensionsMm: { x: 4.1, y: 2, z: 2 }, leadDiameterMm: 0.46, leadSpanMm: { minimum: 7.62, maximum: 20.32 }, mountingHeightMm: 2.2, allowedOrientations: QUARTER_TURNS },
+  bc547: to92Physical(), bc557: to92Physical(), '2n3904': to92Physical(), '2n3906': to92Physical(),
+  potentiometer: { packageType: 'THT_TRIMMER_10MM', dimensionsMm: { x: 9.5, y: 4.8, z: 9.5 }, leadDiameterMm: 0.5, mountingHeightMm: 4.8, allowedOrientations: QUARTER_TURNS },
+  'seven-segment': { packageType: 'DIP-10-DISPLAY', dimensionsMm: { x: 12.7, y: 7, z: 19 }, leadDiameterMm: 0.5, mountingHeightMm: 6, allowedOrientations: [0, 180] },
+  'four-digit-seven-segment': { packageType: '12-PIN-4-DIGIT-DISPLAY', dimensionsMm: { x: 40, y: 8, z: 19 }, leadDiameterMm: 0.5, mountingHeightMm: 6, allowedOrientations: [0, 180] },
+  '74hc595': { packageType: DIP_16_PACKAGE.id, dimensionsMm: DIP_16_PACKAGE.bodyDimensionsMm, leadDiameterMm: DIP_16_PACKAGE.leadWidthMm, mountingHeightMm: 5.2, allowedOrientations: [0, 180] },
+  attiny85: { packageType: DIP_8_PACKAGE.id, dimensionsMm: DIP_8_PACKAGE.bodyDimensionsMm, leadDiameterMm: DIP_8_PACKAGE.leadWidthMm, mountingHeightMm: 5.2, allowedOrientations: [0, 180] },
 };
+
+function to92Physical(): PhysicalPackageDefinition {
+  return { packageType: TO_92_PACKAGE.id, dimensionsMm: { x: TO_92_PACKAGE.bodyDimensionsMm.width, y: TO_92_PACKAGE.bodyDimensionsMm.height, z: TO_92_PACKAGE.bodyDimensionsMm.depth }, leadDiameterMm: TO_92_PACKAGE.leadDiameterMm, mountingHeightMm: 5.4, allowedOrientations: [0, 180] };
+}
 
 export function leadSpanViolation(
   kind: ComponentKind,

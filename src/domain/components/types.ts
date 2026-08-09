@@ -94,6 +94,37 @@ export interface Tmp36Component extends ComponentBase {
   terminalHoleIds: { vs: string; vout: string; gnd: string };
 }
 
+export type TransistorDeviceId = 'bc547' | 'bc557' | '2n3904' | '2n3906';
+export interface SmallSignalDiodeComponent extends ComponentBase {
+  kind: 'diode-1n4148'; deviceId: '1n4148'; packageId: 'DO-35';
+  terminalHoleIds: { anode: string; cathode: string };
+}
+export interface TransistorComponent extends ComponentBase {
+  kind: TransistorDeviceId; deviceId: TransistorDeviceId; packageId: 'TO-92-inline';
+  polarity: 'npn' | 'pnp';
+  terminalHoleIds: { collector: string; base: string; emitter: string };
+}
+export interface PotentiometerComponent extends ComponentBase {
+  kind: 'potentiometer'; totalResistanceOhms: number; wiperPosition: number;
+  terminalHoleIds: { a: string; wiper: string; b: string };
+}
+export interface SevenSegmentComponent extends ComponentBase {
+  kind: 'seven-segment'; packageId: 'DIP-10'; commonType: 'common-cathode';
+  terminalHoleIds: Record<'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'dp' | 'common1' | 'common2', string>;
+}
+export interface FourDigitSevenSegmentComponent extends ComponentBase {
+  kind: 'four-digit-seven-segment'; packageId: '12-pin-multiplexed'; commonType: 'common-cathode';
+  terminalHoleIds: Record<'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'dp' | 'digit1' | 'digit2' | 'digit3' | 'digit4', string>;
+}
+export interface ShiftRegisterComponent extends ComponentBase {
+  kind: '74hc595'; deviceId: '74hc595'; packageId: 'DIP-16'; firmwareState: 'electrical-pins';
+  terminalHoleIds: Record<`pin${number}`, string>;
+}
+export interface Attiny85Component extends ComponentBase {
+  kind: 'attiny85'; deviceId: 'attiny85'; packageId: 'DIP-8'; firmwareId: string;
+  clockHz: number; terminalHoleIds: Record<`pin${number}`, string>;
+}
+
 export type PlacedComponent =
   | VoltageSourceComponent
   | GroundComponent
@@ -103,7 +134,9 @@ export type PlacedComponent =
   | SwitchComponent
   | JumperWireComponent
   | Ne555Component
-  | Tmp36Component;
+  | Tmp36Component
+  | SmallSignalDiodeComponent | TransistorComponent | PotentiometerComponent
+  | SevenSegmentComponent | FourDigitSevenSegmentComponent | ShiftRegisterComponent | Attiny85Component;
 
 export type ComponentKind = PlacedComponent['kind'];
 
@@ -134,6 +167,16 @@ export function componentDisplayName(kind: ComponentKind): string {
     case 'ne555':
       return 'NE555N timer';
     case 'tmp36':
-      return 'TMP36 thermometer';
+      return 'TMP36 temperature sensor';
+    case 'diode-1n4148': return '1N4148 diode';
+    case 'bc547': return 'BC547 NPN transistor';
+    case 'bc557': return 'BC557 PNP transistor';
+    case '2n3904': return '2N3904 NPN transistor';
+    case '2n3906': return '2N3906 PNP transistor';
+    case 'potentiometer': return '10 kΩ trimmer';
+    case 'seven-segment': return '1-digit 7-segment display';
+    case 'four-digit-seven-segment': return '4-digit 7-segment display';
+    case '74hc595': return '74HC595 shift register';
+    case 'attiny85': return 'ATtiny85 microcontroller';
   }
 }
