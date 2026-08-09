@@ -21,6 +21,14 @@ describe('single-sided PCB workflow', () => {
     expect(runPcbDrc(pcb).routedConnections).toBe(runPcbDrc(pcb).totalConnections);
   });
 
+  it('opens the PCB workflow for the default switched LED project', () => {
+    const conversion = convertBreadboardToPcb(createStarterProject('switched-led'));
+
+    expect(conversion.missing).toEqual([]);
+    expect(conversion.pcb?.components.find((component) => component.sourceComponentId === 'S1'))
+      .toMatchObject({ footprintId: 'SW-Push-P5.08', value: 'Normally open switch (closed)' });
+  });
+
   it('repairs only genuinely disconnected nets and remains idempotent', () => {
     const initial = convertBreadboardToPcb(createStarterProject('voltage-divider')).pcb!;
     const routed = routeRemainingConnections(initial).pcb;
@@ -66,4 +74,3 @@ describe('single-sided PCB workflow', () => {
     expect(exportKicadPcb(pcb)).toBe(output);
   });
 });
-
