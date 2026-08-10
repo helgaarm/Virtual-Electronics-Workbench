@@ -2,12 +2,14 @@
 
 [![CI](https://github.com/helgaarm/Virtual-Electronics-Workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/helgaarm/Virtual-Electronics-Workbench/actions/workflows/ci.yml)
 
-## From Breadboard to Real PCB
+## Learn, Build, and Test Circuits
 
-Build and test a circuit, then open **Design PCB** to convert its simulator-backed electrical nets
-into an approachable single-sided through-hole board. The current milestone provides realistic
-millimetre footprints, initial placement, a ratsnest, deterministic bottom-copper routing, board
-flipping, DRC, stable project persistence, KiCad PCB export, a CSV BOM and a manufacturing summary.
+Virtual Electronics Workbench is first and foremost a place to learn electronics by building,
+simulating, measuring, and refining breadboard circuits. Once a circuit works, **Design PCB** is an
+optional next step that converts its simulator-backed electrical nets into an approachable
+through-hole board. The PCB workspace supports single- and double-sided boards, realistic
+millimetre footprints, initial placement, a ratsnest, deterministic copper routing, vias, board
+flipping, DRC, stable project persistence, KiCad PCB export, a CSV BOM, and a manufacturing summary.
 It deliberately reports missing footprints and keeps manufacturing ZIP unavailable rather than
 creating unvalidated fabrication data. See [the PCB designer documentation](docs/pcb-designer.md)
 for supported packages and current limitations.
