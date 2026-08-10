@@ -19,7 +19,8 @@ interface RoutedWire {
 
 const WIRE_CLEARANCE_MM = 1.4;
 const MAX_WIRE_RADIUS_MM = 0.58;
-const WIRE_ENDPOINT_HEIGHT_MM = 0.1;
+const WIRE_INSERTION_DEPTH_MM = 0.65;
+const WIRE_STRAIGHT_LEAD_HEIGHT_MM = 0.1;
 const UNDER_BODY_CLEARANCE_MM = 0.04;
 const WIRE_TO_WIRE_CLEARANCE_MM = 1.65;
 const WIRE_OBSTACLE_SAMPLE_SPACING_MM = 1.5;
@@ -162,8 +163,22 @@ function routeSingleJumperWire(
   const endHole = getHole(board, wire.terminalHoleIds.b);
   if (!startHole || !endHole) return [];
 
-  const start = { ...startHole.positionMm, y: startHole.positionMm.y + WIRE_ENDPOINT_HEIGHT_MM };
-  const end = { ...endHole.positionMm, y: endHole.positionMm.y + WIRE_ENDPOINT_HEIGHT_MM };
+  const startInsertion = {
+    ...startHole.positionMm,
+    y: startHole.positionMm.y - WIRE_INSERTION_DEPTH_MM,
+  };
+  const endInsertion = {
+    ...endHole.positionMm,
+    y: endHole.positionMm.y - WIRE_INSERTION_DEPTH_MM,
+  };
+  const start = {
+    ...startHole.positionMm,
+    y: startHole.positionMm.y + WIRE_STRAIGHT_LEAD_HEIGHT_MM,
+  };
+  const end = {
+    ...endHole.positionMm,
+    y: endHole.positionMm.y + WIRE_STRAIGHT_LEAD_HEIGHT_MM,
+  };
   const directDistance = distance2d(start, end);
   const rise = Math.min(14, 5 + directDistance * 0.16);
   const defaultPeakY = Math.max(start.y, end.y) + rise + 1;
@@ -182,11 +197,13 @@ function routeSingleJumperWire(
       z: (start.z + end.z) / 2,
     };
     return [
+      startInsertion,
       start,
       { ...start, y: defaultPeakY - 1 },
       midpoint,
       { ...end, y: defaultPeakY - 1 },
       end,
+      endInsertion,
     ];
   }
 
@@ -241,6 +258,7 @@ function routeSingleJumperWire(
   const raisedEnd = endEscapes[0] ?? end;
 
   return [
+    startInsertion,
     start,
     ...startEscapes,
     { ...raisedStart, y: peakY - 0.8 },
@@ -248,6 +266,7 @@ function routeSingleJumperWire(
     { ...raisedEnd, y: peakY - 0.8 },
     ...endEscapes.reverse(),
     end,
+    endInsertion,
   ];
 }
 

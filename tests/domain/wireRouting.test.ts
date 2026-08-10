@@ -52,12 +52,16 @@ describe('jumper wire routing', () => {
     const startHole = board.holes.find((hole) => hole.id === wire.terminalHoleIds.a)!;
     const endHole = board.holes.find((hole) => hole.id === wire.terminalHoleIds.b)!;
 
-    expect(route).toHaveLength(5);
-    expect(route[0]).toEqual({ ...startHole.positionMm, y: startHole.positionMm.y + 0.1 });
-    expect(route.at(-1)).toEqual({ ...endHole.positionMm, y: endHole.positionMm.y + 0.1 });
-    expect(route[2].x).toBeCloseTo((route[0].x + route.at(-1)!.x) / 2);
-    expect(route[2].z).toBeCloseTo(route[0].z);
-    expect(route[2].y).toBeGreaterThan(route[0].y);
+    expect(route).toHaveLength(7);
+    expect(route[0]).toEqual({ ...startHole.positionMm, y: startHole.positionMm.y - 0.65 });
+    expect(route.at(-1)).toEqual({ ...endHole.positionMm, y: endHole.positionMm.y - 0.65 });
+    expect(route[1].x).toBe(route[0].x);
+    expect(route[1].z).toBe(route[0].z);
+    expect(route.at(-2)?.x).toBe(route.at(-1)?.x);
+    expect(route.at(-2)?.z).toBe(route.at(-1)?.z);
+    expect(route[3].x).toBeCloseTo((route[0].x + route.at(-1)!.x) / 2);
+    expect(route[3].z).toBeCloseTo(route[0].z);
+    expect(route[3].y).toBeGreaterThan(route[0].y);
   });
 
   it('moves laterally and above a component crossing the direct route', () => {
@@ -76,7 +80,7 @@ describe('jumper wire routing', () => {
     };
 
     const route = routeJumperWire(board, wire, [wire, led]);
-    const detour = route[2];
+    const detour = route[3];
 
     expect(Math.abs(detour.z - route[0].z)).toBeGreaterThan(2);
     expect(Math.max(...route.map((point) => point.y))).toBeGreaterThan(14);
@@ -100,8 +104,8 @@ describe('jumper wire routing', () => {
     const route = routeJumperWire(board, wire, [wire, endpointLed]);
 
     expect(route.length).toBeGreaterThanOrEqual(5);
-    expect(route[1].y).toBeLessThan(PHYSICAL_PACKAGES.led.mountingHeightMm);
-    expect(Math.hypot(route[1].x - route[0].x, route[1].z - route[0].z)).toBeGreaterThan(1.5);
+    expect(route[2].y).toBeLessThan(PHYSICAL_PACKAGES.led.mountingHeightMm);
+    expect(Math.hypot(route[2].x - route[1].x, route[2].z - route[1].z)).toBeGreaterThan(1.5);
     expectCurveToClearComponent(board, route, endpointLed);
   });
 
@@ -125,8 +129,8 @@ describe('jumper wire routing', () => {
 
     const route = routeJumperWire(board, wire, [wire, secondLed, firstLed]);
 
-    expect(route).toHaveLength(6);
-    expect(route[2].x).toBeLessThan(route[3].x);
+    expect(route).toHaveLength(8);
+    expect(route[3].x).toBeLessThan(route[4].x);
     for (const point of route) {
       expect(Math.abs(point.x)).toBeLessThanOrEqual(board.widthMm / 2);
       expect(Math.abs(point.z)).toBeLessThanOrEqual(board.depthMm / 2);
@@ -147,7 +151,8 @@ describe('jumper wire routing', () => {
     const route = routeJumperWire(board, wire, [wire, ground]);
 
     expect(route.length).toBeGreaterThanOrEqual(5);
-    expect(Math.min(...route.map((point) => point.y))).toBeGreaterThanOrEqual(board.holes[0].positionMm.y);
+    expect(Math.min(...route.slice(1, -1).map((point) => point.y)))
+      .toBeGreaterThanOrEqual(board.holes[0].positionMm.y);
   });
 
   it('escapes beneath and around a tall capacitor beside a wire endpoint', () => {
@@ -217,9 +222,9 @@ describe('jumper wire routing', () => {
     const clearRoute = routeJumperWire(board, crossingWire, [crossingWire]);
     const routed = routeJumperWire(board, crossingWire, [crossingWire, resistor]);
 
-    expect(clearRoute[2].x).toBeCloseTo(routed[0].x);
-    expect(Math.abs(routed[2].x - routed[0].x)).toBeGreaterThan(1.5);
-    expect(routed[2].y).toBeGreaterThan(10);
+    expect(clearRoute[3].x).toBeCloseTo(routed[1].x);
+    expect(Math.abs(routed[3].x - routed[1].x)).toBeGreaterThan(1.5);
+    expect(routed[3].y).toBeGreaterThan(10);
   });
 
   it('does not create a long low-level loop around a resistor lead envelope near an endpoint', () => {
@@ -247,10 +252,10 @@ describe('jumper wire routing', () => {
     const route = routeJumperWire(board, adjacentWire, [adjacentWire, resistor]);
     const endpoint = route.at(-1)!;
 
-    expect(route).toHaveLength(5);
-    expect(route.at(-2)?.x).toBeCloseTo(endpoint.x);
-    expect(route.at(-2)?.z).toBeCloseTo(endpoint.z);
-    expect(route.at(-2)?.y).toBeGreaterThan(endpoint.y + 5);
+    expect(route).toHaveLength(7);
+    expect(route.at(-3)?.x).toBeCloseTo(endpoint.x);
+    expect(route.at(-3)?.z).toBeCloseTo(endpoint.z);
+    expect(route.at(-3)?.y).toBeGreaterThan(endpoint.y + 5);
     expectCurveToClearComponent(board, route, resistor);
   });
 
