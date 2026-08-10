@@ -1,5 +1,7 @@
 # Virtual Electronics Workbench
 
+[![CI](https://github.com/helgaarm/Virtual-Electronics-Workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/helgaarm/Virtual-Electronics-Workbench/actions/workflows/ci.yml)
+
 ## From Breadboard to Real PCB
 
 Build and test a circuit, then open **Design PCB** to convert its simulator-backed electrical nets
@@ -152,3 +154,7 @@ This is an educational simulator foundation, not SPICE and not a safety tool. Th
 ## License and dependencies
 
 The application source is licensed under the [MIT License](LICENSE). The installed production dependency graph uses permissive MIT, ISC, Apache-2.0, and BSD-3-Clause terms; one package omits its package metadata but includes an MIT license file. Redistributable dependency notices and terms are collected in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) and can be refreshed with `npm run licenses:generate`. See [docs/dependency-review.md](docs/dependency-review.md) for the dated security, freshness, and license review.
+
+## Contributing and security
+
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Please report suspected vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not through a public issue.

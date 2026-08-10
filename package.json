@@ -15,7 +15,8 @@
     "lint": "eslint . --max-warnings 0",
     "licenses:generate": "node scripts/generate-third-party-licenses.mjs",
     "licenses:check": "node scripts/generate-third-party-licenses.mjs --check",
-    "check": "npm run lint && npm run licenses:check && npm test && npm run build"
+    "security:repo": "node scripts/validate-repository-security.mjs",
+    "check": "npm run security:repo && npm run lint && npm run licenses:check && npm test && npm run build"
   },
   "engines": {
     "node": ">=24.0.0"

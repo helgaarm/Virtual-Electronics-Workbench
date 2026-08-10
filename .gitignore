@@ -1,10 +1,19 @@
 node_modules/
 dist/
 coverage/
-data/*.sqlite
-data/*.sqlite-*
+data/
 *.log
 .DS_Store
 .vite/
 playwright-report/
 test-results/
+
+# Local configuration and credentials. Commit only the documented example.
+.env
+.env.*
+!.env.example
+.npmrc
+*.key
+*.pem
+*.p12
+*.pfx

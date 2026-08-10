@@ -1,0 +1,20 @@
+# The maintainer reviews all changes. More-specific entries make sensitive
+# repository surfaces visible in GitHub's ownership UI.
+* @helgaarm
+
+/.github/ @helgaarm
+/.github/workflows/ @helgaarm
+/.github/CODEOWNERS @helgaarm
+/AGENTS.md @helgaarm
+/SECURITY.md @helgaarm
+/.gitignore @helgaarm
+/package.json @helgaarm
+/package-lock.json @helgaarm
+/eslint.config.js @helgaarm
+/tsconfig*.json @helgaarm
+/vite.config.ts @helgaarm
+/.env.example @helgaarm
+/Dockerfile* @helgaarm
+/docker-compose*.yml @helgaarm
+/scripts/ @helgaarm
+/server/ @helgaarm
