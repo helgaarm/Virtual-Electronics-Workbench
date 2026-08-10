@@ -10,6 +10,9 @@ interface Obstacle {
   bottomY: number;
   topY: number;
   projection: number;
+  // Solid parts need a lateral detour; insulated wires are tidier and remain
+  // physically clear when crossed on a higher, straight vertical layer.
+  routingMode: 'detour' | 'overpass';
 }
 
 interface RoutedWire {
@@ -86,7 +89,7 @@ function componentObstacle(
   const { projection, distanceMm } = projectionAlongRoute(center, start, end);
 
   return distanceMm < radiusMm
-    ? { center, bodyRadiusMm, radiusMm, bottomY, topY, projection }
+    ? { center, bodyRadiusMm, radiusMm, bottomY, topY, projection, routingMode: 'detour' }
     : undefined;
 }
 
@@ -133,6 +136,7 @@ function wireRouteObstacles(
         bottomY: sample.y - MAX_WIRE_RADIUS_MM,
         topY: sample.y + MAX_WIRE_RADIUS_MM,
         projection,
+        routingMode: 'overpass',
       }];
     });
   }).sort((left, right) => left.projection - right.projection);
@@ -212,14 +216,15 @@ function routeSingleJumperWire(
   const perpendicular = { x: -directionZ, z: directionX };
   const peakY = Math.max(defaultPeakY, ...obstacles.map((obstacle) => obstacle.topY + 1.2));
 
-  const sideScore = (side: -1 | 1) => obstacles.reduce((score, obstacle) => {
+  const detourObstacles = obstacles.filter((obstacle) => obstacle.routingMode === 'detour');
+  const sideScore = (side: -1 | 1) => detourObstacles.reduce((score, obstacle) => {
     const candidate = {
       x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
       y: peakY,
       z: obstacle.center.z + perpendicular.z * obstacle.bodyRadiusMm * side,
     };
     const boundaryPenalty = isInsideBoard(board, candidate) ? 0 : 10_000;
-    const crowdingPenalty = obstacles.reduce((penalty, other) => {
+    const crowdingPenalty = detourObstacles.reduce((penalty, other) => {
       if (other === obstacle) return penalty;
       const overlap = other.bodyRadiusMm - distance2d(candidate, other.center);
       return penalty + Math.max(0, overlap) * 100;
@@ -228,14 +233,14 @@ function routeSingleJumperWire(
       + distance2d(start, candidate) + distance2d(candidate, end);
   }, 0);
   const side: -1 | 1 = sideScore(-1) <= sideScore(1) ? -1 : 1;
-  const startObstacles = obstacles.filter(
+  const startObstacles = detourObstacles.filter(
     (obstacle) => distance2d(start, obstacle.center) < obstacle.bodyRadiusMm,
   );
-  const endObstacles = obstacles.filter(
+  const endObstacles = detourObstacles.filter(
     (obstacle) => distance2d(end, obstacle.center) < obstacle.bodyRadiusMm,
   );
   const endpointObstacles = new Set([...startObstacles, ...endObstacles]);
-  const detours = obstacles
+  const detours = detourObstacles
     .filter((obstacle) => !endpointObstacles.has(obstacle))
     .map((obstacle) => ({
       x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
