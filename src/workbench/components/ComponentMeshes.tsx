@@ -764,13 +764,14 @@ function PotentiometerMesh({ component, board, selected, onSelect, onBeginDrag }
   const center = pins.reduce((sum, pin) => sum.add(pin), new THREE.Vector3()).multiplyScalar(1 / pins.length);
   const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
   const bodyBottomY = bodyCenter.y - physicalPackage.dimensionsMm.y / 2;
+  const wiperRotationY = (component.wiperPosition - 0.5) * Math.PI * 1.5;
   const marking = useComponentMarkingTexture(['10K']);
   return <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
     {pins.map((pin, index) => <SmoothTube key={index} points={[pin, pin.clone().setY(bodyBottomY + 0.4)]} radius={physicalPackage.leadDiameterMm / 2} color="#b9bec0" metalness={0.9} />)}
     <group position={bodyCenter}>
       <RoundedBox args={[9.5, 4.8, 5.2]} radius={0.55} smoothness={6} castShadow><meshStandardMaterial color={selected ? '#287bb4' : '#17679e'} roughness={0.48} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.15} /></RoundedBox>
       <mesh position={[0, 2.5, 0]} castShadow><cylinderGeometry args={[2.15, 2.15, 0.8, 32]} /><meshStandardMaterial color="#d0d2ce" metalness={0.72} roughness={0.3} /></mesh>
-      <mesh position={[0, 2.92, 0]}><boxGeometry args={[0.45, 0.1, 3.15]} /><meshStandardMaterial color="#555b5b" /></mesh>
+      <mesh position={[0, 2.92, 0]} rotation={[0, wiperRotationY, 0]}><boxGeometry args={[0.45, 0.1, 3.15]} /><meshStandardMaterial color="#555b5b" /></mesh>
       {marking && <mesh position={[0, 0, 2.62]}><planeGeometry args={[3.7, 1.5]} /><meshBasicMaterial map={marking} transparent depthWrite={false} /></mesh>}
     </group>
   </group>;
