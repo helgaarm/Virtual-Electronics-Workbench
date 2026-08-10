@@ -69,6 +69,21 @@ describe('PCB physical netlist and copper regression coverage', () => {
     expect(runPcbDrc(result.pcb).status).toBe('not-ready');
   });
 
+  it('stores routed grid paths as bends rather than every half-millimetre search step', () => {
+    const initial = convertBreadboardToPcb(createStarterProject('ne555-astable')).pcb!;
+    const routed = routeRemainingConnections(initial).pcb;
+
+    expect(routed.traces.length).toBeGreaterThan(0);
+    for (const routedTrace of routed.traces) {
+      for (let index = 2; index < routedTrace.pointsMm.length; index += 1) {
+        const a = routedTrace.pointsMm[index - 2]; const b = routedTrace.pointsMm[index - 1]; const c = routedTrace.pointsMm[index];
+        const ab = { x: b.xMm - a.xMm, y: b.yMm - a.yMm }; const bc = { x: c.xMm - b.xMm, y: c.yMm - b.yMm };
+        expect(ab.x * bc.y === ab.y * bc.x && Math.sign(ab.x) === Math.sign(bc.x) && Math.sign(ab.y) === Math.sign(bc.y)).toBe(false);
+      }
+    }
+    expect(routed.traces.reduce((count, routedTrace) => count + routedTrace.pointsMm.length, 0)).toBeLessThan(100);
+  });
+
   it('repairs a cleared small PCB without entering the placement-search slow path', () => {
     const initial = convertBreadboardToPcb(createStarterProject('voltage-divider')).pcb!;
     const startedAt = performance.now();
