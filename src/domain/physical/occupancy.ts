@@ -4,10 +4,45 @@ import type { BreadboardDefinition } from './breadboard';
 import { leadSpanViolation, PHYSICAL_PACKAGES } from './packages';
 
 export interface OccupancyIssue {
-  code: 'UNKNOWN_HOLE' | 'HOLE_OCCUPIED' | 'DUPLICATE_TERMINAL' | 'LEAD_SPAN_OUT_OF_RANGE' | 'INVALID_PACKAGE_PLACEMENT';
+  code: 'UNKNOWN_HOLE' | 'HOLE_OCCUPIED' | 'DUPLICATE_TERMINAL' | 'LEAD_SPAN_OUT_OF_RANGE' | 'INVALID_PACKAGE_PLACEMENT' | 'PACKAGE_OVERLAP';
   message: string;
   componentId: string;
   holeId: string;
+}
+
+interface PackageFootprint {
+  component: PlacedComponent;
+  centerX: number;
+  centerZ: number;
+  halfX: number;
+  halfZ: number;
+}
+
+function packageFootprint(
+  board: BreadboardDefinition,
+  component: PlacedComponent,
+): PackageFootprint | undefined {
+  // Jumper wires are deliberately routed around packages and do not have a
+  // board-level solid body to reserve.
+  if (component.kind === 'jumper-wire') return undefined;
+  const holes = terminalEntries(component)
+    .map(([, holeId]) => board.holes.find((hole) => hole.id === holeId))
+    .filter((hole) => hole !== undefined);
+  if (holes.length === 0) return undefined;
+  const centerX = holes.reduce((sum, hole) => sum + hole.positionMm.x, 0) / holes.length;
+  const centerZ = holes.reduce((sum, hole) => sum + hole.positionMm.z, 0) / holes.length;
+  const dimensions = PHYSICAL_PACKAGES[component.kind].dimensionsMm;
+  const first = holes[0];
+  const second = holes[1];
+  const axisRunsAlongZ = Boolean(first && second
+    && Math.abs(second.positionMm.z - first.positionMm.z) > Math.abs(second.positionMm.x - first.positionMm.x));
+  return {
+    component,
+    centerX,
+    centerZ,
+    halfX: (axisRunsAlongZ ? dimensions.z : dimensions.x) / 2,
+    halfZ: (axisRunsAlongZ ? dimensions.x : dimensions.z) / 2,
+  };
 }
 
 export function buildOccupancy(components: PlacedComponent[]): Map<string, string> {
@@ -123,6 +158,35 @@ export function validateOccupancy(
           holeId: terminals[1][1],
         });
       }
+    }
+  }
+
+
+  return issues;
+}
+
+/** Checks the board-space footprints of solid packages without affecting circuit extraction. */
+export function validatePackageOverlaps(
+  board: BreadboardDefinition,
+  components: PlacedComponent[],
+): OccupancyIssue[] {
+  const issues: OccupancyIssue[] = [];
+  const footprints = components
+    .map((component) => packageFootprint(board, component))
+    .filter((footprint) => footprint !== undefined);
+  for (let index = 0; index < footprints.length; index += 1) {
+    const current = footprints[index];
+    for (let otherIndex = 0; otherIndex < index; otherIndex += 1) {
+      const other = footprints[otherIndex];
+      const overlapsX = Math.abs(current.centerX - other.centerX) < current.halfX + other.halfX;
+      const overlapsZ = Math.abs(current.centerZ - other.centerZ) < current.halfZ + other.halfZ;
+      if (!overlapsX || !overlapsZ) continue;
+      issues.push({
+        code: 'PACKAGE_OVERLAP',
+        message: `${current.component.label} overlaps ${other.component.label}. Choose a placement with room for both packages.`,
+        componentId: current.component.id,
+        holeId: terminalEntries(current.component)[0]?.[1] ?? '',
+      });
     }
   }
 
