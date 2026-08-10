@@ -101,9 +101,21 @@ function findPath(pcb: PcbProject, netId: string, start: PcbPointMm, end: PcbPoi
 
 function addPath(pcb: PcbProject, netId: string, path: RoutedPath, widthMm: number, ordinal: number): PcbProject {
   const traces: PcbTrace[] = []; const vias: PcbVia[] = []; let points: PcbPointMm[] = [path[0].point]; let layer = path[0].layer; let part = 1;
+  const appendPoint = (point: PcbPointMm) => {
+    const previous = points.at(-1); const beforePrevious = points.at(-2);
+    if (previous && beforePrevious) {
+      const previousDx = previous.xMm - beforePrevious.xMm; const previousDy = previous.yMm - beforePrevious.yMm;
+      const nextDx = point.xMm - previous.xMm; const nextDy = point.yMm - previous.yMm;
+      if (previousDx * nextDy === previousDy * nextDx && Math.sign(previousDx) === Math.sign(nextDx) && Math.sign(previousDy) === Math.sign(nextDy)) {
+        points[points.length - 1] = point;
+        return;
+      }
+    }
+    points.push(point);
+  };
   for (let index = 1; index < path.length; index += 1) {
     const step = path[index];
-    if (step.layer !== layer) { if (points.length > 1) traces.push({ id: `auto-${netId}-${ordinal}-${part++}`, netId, widthMm, layer, ownership: 'auto', pointsMm: points }); vias.push({ id: `auto-via-${netId}-${ordinal}-${vias.length + 1}`, netId, positionMm: step.point, drillDiameterMm: VIA_DRILL_MM, copperDiameterMm: VIA_COPPER_MM, fromLayer: 'F.Cu', toLayer: 'B.Cu', ownership: 'auto' }); layer = step.layer; points = [step.point]; } else points.push(step.point);
+    if (step.layer !== layer) { if (points.length > 1) traces.push({ id: `auto-${netId}-${ordinal}-${part++}`, netId, widthMm, layer, ownership: 'auto', pointsMm: points }); vias.push({ id: `auto-via-${netId}-${ordinal}-${vias.length + 1}`, netId, positionMm: step.point, drillDiameterMm: VIA_DRILL_MM, copperDiameterMm: VIA_COPPER_MM, fromLayer: 'F.Cu', toLayer: 'B.Cu', ownership: 'auto' }); layer = step.layer; points = [step.point]; } else appendPoint(step.point);
   }
   if (points.length > 1) traces.push({ id: `auto-${netId}-${ordinal}-${part}`, netId, widthMm, layer, ownership: 'auto', pointsMm: points });
   return { ...pcb, traces: [...pcb.traces, ...traces], vias: [...pcb.vias, ...vias] };
