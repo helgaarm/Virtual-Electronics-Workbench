@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an improvement to the educational workbench.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or learning goal
+      description: What should become easier, clearer, or more realistic?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired interaction or result.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public information
+      options:
+        - label: I have not included credentials, private data, or a vulnerability report.
+          required: true
