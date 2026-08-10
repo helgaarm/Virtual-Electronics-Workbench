@@ -30,8 +30,8 @@ export const STARTER_PROJECTS = [
   },
   {
     id: 'ne555-astable',
-    name: 'NE555 Astable Oscillator',
-    description: 'A real NE555 subcircuit charges and discharges a timing capacitor; CH1 and CH2 show the resulting waveforms.',
+    name: 'NE555 5 mm LED Blinker',
+    description: 'A 91 kΩ / 100 kΩ / 100 µF NE555 astable drives a 5 mm red LED from a 9 V supply.',
   },
   {
     id: 'digital-thermometer',
@@ -187,11 +187,11 @@ function rcChargeDischargeProject(): WorkbenchProject {
 }
 
 function ne555AstableProject(): WorkbenchProject {
-  const project = createEmptyProject('NE555 Astable Oscillator');
+  const project = createEmptyProject('NE555N — 5 mm LED Blink Every 10 Seconds');
   const boardId = project.board.id;
   const components: PlacedComponent[] = [
     {
-      id: 'V1', kind: 'voltage-source', label: 'V1', rotation: 0, voltageV: 5,
+      id: 'V1', kind: 'voltage-source', label: '9V supply', rotation: 0, voltageV: 9,
       terminalHoleIds: {
         positive: railHoleId(boardId, 'top', 'positive', 2),
         negative: railHoleId(boardId, 'top', 'negative', 2),
@@ -216,34 +216,45 @@ function ne555AstableProject(): WorkbenchProject {
       },
     },
     {
-      id: 'RA', kind: 'resistor', label: 'RA', rotation: 0,
-      resistanceOhms: 10_000, tolerancePercent: 5,
+      id: 'RA', kind: 'resistor', label: 'R1 91k', rotation: 0,
+      resistanceOhms: 91_000, tolerancePercent: 5,
       terminalHoleIds: { a: terminalHoleId(boardId, 'J', 11), b: terminalHoleId(boardId, 'J', 16) },
     },
     {
-      id: 'RB', kind: 'resistor', label: 'RB', rotation: 0,
-      resistanceOhms: 10_000, tolerancePercent: 5,
+      id: 'RB', kind: 'resistor', label: 'R2 100k', rotation: 0,
+      resistanceOhms: 100_000, tolerancePercent: 5,
       terminalHoleIds: { a: terminalHoleId(boardId, 'I', 11), b: terminalHoleId(boardId, 'I', 18) },
     },
     {
       id: 'C1', kind: 'capacitor', label: 'C1', rotation: 0,
-      capacitanceFarads: 10e-6, ratedVoltageV: 16,
+      capacitanceFarads: 100e-6, ratedVoltageV: 16,
       terminalHoleIds: { positive: terminalHoleId(boardId, 'G', 18), negative: terminalHoleId(boardId, 'G', 19) },
     },
     {
-      id: 'RLOAD', kind: 'resistor', label: 'RLOAD', rotation: 0,
-      resistanceOhms: 1_000, tolerancePercent: 5,
+      id: 'R3', kind: 'resistor', label: 'R3 330Ω', rotation: 0,
+      resistanceOhms: 330, tolerancePercent: 5,
       terminalHoleIds: { a: terminalHoleId(boardId, 'A', 12), b: terminalHoleId(boardId, 'A', 17) },
+    },
+    {
+      id: 'LED1', kind: 'led', label: '5 mm LED', rotation: 0, color: 'red',
+      forwardVoltageV: 1.9, onResistanceOhms: 12,
+      terminalHoleIds: { anode: terminalHoleId(boardId, 'E', 17), cathode: terminalHoleId(boardId, 'E', 18) },
+    },
+    {
+      id: 'C2', kind: 'capacitor', label: 'C2 10nF', rotation: 0,
+      capacitanceFarads: 10e-9, ratedVoltageV: 50,
+      terminalHoleIds: { positive: terminalHoleId(boardId, 'J', 13), negative: terminalHoleId(boardId, 'J', 14) },
     },
     ...([
       ['W-GND', 'black', terminalHoleId(boardId, 'A', 10), railHoleId(boardId, 'top', 'negative', 5)],
       ['W-VCC', 'red', terminalHoleId(boardId, 'J', 10), railHoleId(boardId, 'top', 'positive', 5)],
-      ['W-RESET', 'red', terminalHoleId(boardId, 'A', 13), railHoleId(boardId, 'top', 'positive', 7)],
+      ['W-RESET', 'red', terminalHoleId(boardId, 'C', 13), railHoleId(boardId, 'top', 'positive', 7)],
       ['W-TRIG-THRESH', 'blue', terminalHoleId(boardId, 'A', 11), terminalHoleId(boardId, 'J', 12)],
       ['W-TIMING', 'blue', terminalHoleId(boardId, 'I', 12), terminalHoleId(boardId, 'J', 18)],
       ['W-RA-VCC', 'red', terminalHoleId(boardId, 'F', 16), railHoleId(boardId, 'top', 'positive', 9)],
       ['W-C-GND', 'black', terminalHoleId(boardId, 'H', 19), railHoleId(boardId, 'top', 'negative', 9)],
-      ['W-LOAD-GND', 'black', terminalHoleId(boardId, 'E', 17), railHoleId(boardId, 'top', 'negative', 13)],
+      ['W-LED-GND', 'black', terminalHoleId(boardId, 'A', 18), railHoleId(boardId, 'top', 'negative', 13)],
+      ['W-CONTROL-GND', 'black', terminalHoleId(boardId, 'I', 14), railHoleId(boardId, 'top', 'negative', 17)],
     ] as const).map(([id, color, a, b], index) => ({
       id,
       kind: 'jumper-wire' as const,
@@ -258,24 +269,24 @@ function ne555AstableProject(): WorkbenchProject {
     powerOn: true,
     workspace: 'analysis',
     components,
-    simulation: { timeStepSeconds: 0.001, speed: 0.5 },
+    simulation: { timeStepSeconds: 0.01, speed: 4 },
     analysis: { ...project.analysis, activeInstrument: 'oscilloscope' },
     oscilloscope: {
       ...project.oscilloscope,
-      timePerDivisionSeconds: 0.05,
-      triggerLevelV: 2.5,
+      timePerDivisionSeconds: 2,
+      triggerLevelV: 4.5,
       channels: {
         ch1: {
           ...project.oscilloscope.channels.ch1,
-          voltsPerDivisionV: 1,
-          verticalOffsetV: 2.5,
+          voltsPerDivisionV: 2,
+          verticalOffsetV: 4.5,
           positiveHoleId: terminalHoleId(boardId, 'C', 12),
           referenceHoleId: railHoleId(boardId, 'top', 'negative', 14),
         },
         ch2: {
           ...project.oscilloscope.channels.ch2,
-          voltsPerDivisionV: 1,
-          verticalOffsetV: 2.5,
+          voltsPerDivisionV: 2,
+          verticalOffsetV: 4.5,
           positiveHoleId: terminalHoleId(boardId, 'H', 18),
           referenceHoleId: railHoleId(boardId, 'top', 'negative', 15),
         },
