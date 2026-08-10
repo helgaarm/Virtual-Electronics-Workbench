@@ -5,6 +5,12 @@ import { PHYSICAL_PACKAGES } from '../../src/domain/physical/packages';
 import { routeJumperWire, routeJumperWires } from '../../src/domain/physical/wireRouting';
 import { createJumperCurve } from '../../src/workbench/scene/wireGeometry';
 
+function distanceFromLineMm(point: { x: number; z: number }, start: { x: number; z: number }, end: { x: number; z: number }): number {
+  const dx = end.x - start.x;
+  const dz = end.z - start.z;
+  return Math.abs(dx * (start.z - point.z) - (start.x - point.x) * dz) / Math.hypot(dx, dz);
+}
+
 function expectCurveToClearComponent(
   board: ReturnType<typeof createBreadboardDefinition>,
   route: ReturnType<typeof routeJumperWire>,
@@ -313,6 +319,34 @@ describe('jumper wire routing', () => {
     expect(Math.max(...secondRoute.map((point) => point.y)))
       .toBeGreaterThan(Math.max(...firstRoute.map((point) => point.y)));
     expect(minimumDistanceMm).toBeGreaterThan(1);
+  });
+
+  it('combs crossing jumpers into straight overpasses instead of lateral loops', () => {
+    const first: JumperWireComponent = {
+      ...wire,
+      id: 'W-TIDY-1',
+      terminalHoleIds: {
+        a: terminalHoleId(board.id, 'E', 1),
+        b: terminalHoleId(board.id, 'E', 10),
+      },
+    };
+    const second: JumperWireComponent = {
+      ...wire,
+      id: 'W-TIDY-2',
+      color: 'red',
+      terminalHoleIds: {
+        a: terminalHoleId(board.id, 'A', 5),
+        b: terminalHoleId(board.id, 'J', 5),
+      },
+    };
+
+    const secondRoute = routeJumperWires(board, [first, second]).get(second.id)!;
+    const start = secondRoute[1];
+    const end = secondRoute.at(-2)!;
+
+    for (const point of secondRoute.slice(1, -1)) {
+      expect(distanceFromLineMm(point, start, end)).toBeLessThan(0.001);
+    }
   });
 
   it('returns no route when an endpoint is missing', () => {
