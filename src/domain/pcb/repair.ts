@@ -3,7 +3,7 @@ import { componentCourtyard, rectsOverlap } from './geometry';
 import { routeRemainingConnections } from './router';
 import type { PcbComponent, PcbProject } from './types';
 
-export type RepairActionCode = 'REROUTED_NET' | 'MOVED_COMPONENT' | 'ROTATED_COMPONENT' | 'ADDED_VIA' | 'EXPANDED_BOARD' | 'CANNOT_AUTOFIX_FOOTPRINT' | 'LOCKED_COMPONENT_BLOCKS_ROUTE' | 'NO_ROUTE_FOUND' | 'NO_SINGLE_LAYER_ROUTE';
+export type RepairActionCode = 'REROUTED_NET' | 'MOVED_COMPONENT' | 'ROTATED_COMPONENT' | 'ADDED_VIA' | 'EXPANDED_BOARD' | 'CHANGED_TO_TWO_LAYER' | 'CANNOT_AUTOFIX_FOOTPRINT' | 'LOCKED_COMPONENT_BLOCKS_ROUTE' | 'NO_ROUTE_FOUND' | 'NO_SINGLE_LAYER_ROUTE';
 export interface RepairAction { code: RepairActionCode; description: string; relatedIds: string[] }
 export interface RepairProblem { issue: PcbDrcIssue; category: PcbRepairCategory }
 export interface RepairScore { shorts: number; blocking: number; unrouted: number; vias: number; traceLengthMm: number; movementMm: number; boardAreaMm2: number }
@@ -42,16 +42,25 @@ export function autoRepairPcb(input: PcbProject): AutoRepairResult {
     const routed = routeRemainingConnections(clone(working));
     const routedAction: RepairAction = { code: 'REROUTED_NET', description: `Rerouted automatic copper${routed.pcb.vias.length > working.vias.length ? ` and added ${routed.pcb.vias.length - working.vias.length} via(s)` : ''}.`, relatedIds: routed.pcb.traces.filter((trace) => trace.ownership === 'auto').map((trace) => trace.netId) };
     const routedScore = scorePcb(routed.pcb, original);
-    diagnostics.push(...routed.diagnostics.map((item) => item.message));
     if (routedScore.blocking === 0 && compareScore(routedScore, score) < 0) { working = routed.pcb; score = routedScore; actions.push(routedAction); break; }
-    let best = { pcb: routed.pcb, action: routedAction, score: routedScore };
-    const consider = (candidatePcb: PcbProject, action: RepairAction) => {
-      const candidate = { pcb: candidatePcb, action, score: scorePcb(candidatePcb, original) };
+    if (working.board.layerMode === 'single') {
+      const twoLayer = clone(working); twoLayer.board.layerMode = 'double';
+      const twoLayerRoute = routeRemainingConnections(twoLayer); const twoLayerScore = scorePcb(twoLayerRoute.pcb, original);
+      if (twoLayerScore.blocking === 0 && compareScore(twoLayerScore, score) < 0) {
+        working = twoLayerRoute.pcb; score = twoLayerScore;
+        actions.push({ code: 'CHANGED_TO_TWO_LAYER', description: 'Changed the board to two-layer routing because no complete single-layer route was available.', relatedIds: [] });
+        break;
+      }
+    }
+    let best = { pcb: routed.pcb, action: routedAction, score: routedScore, diagnostics: routed.diagnostics.map((item) => item.message) };
+    const consider = (candidatePcb: PcbProject, action: RepairAction, candidateDiagnostics: string[] = []) => {
+      const candidate = { pcb: candidatePcb, action, score: scorePcb(candidatePcb, original), diagnostics: candidateDiagnostics };
       if (compareScore(candidate.score, best.score) < 0 || (compareScore(candidate.score, best.score) === 0 && candidate.action.code.localeCompare(best.action.code) < 0)) best = candidate;
     };
     for (const candidate of placementCandidates(working).slice(0, MAX_PLACEMENT_CANDIDATES)) consider(routeRemainingConnections(candidate).pcb, { code: 'MOVED_COMPONENT', description: 'Moved an unlocked component on the 2.5 mm placement grid and rerouted affected automatic copper.', relatedIds: [] });
     const expanded = clone(working); expanded.board.widthMm += 5; expanded.board.heightMm += 5; consider(routeRemainingConnections(expanded).pcb, { code: 'EXPANDED_BOARD', description: 'Expanded the board by 5 mm in each dimension.', relatedIds: [] });
     if (!best || compareScore(best.score, score) >= 0) break; working = best.pcb; score = best.score; actions.push(best.action); if (runPcbDrc(working).status === 'manufacturing-checks-passed') break;
+    diagnostics.push(...best.diagnostics);
   }
   const remainingProblems = analyzePcb(working); for (const problem of remainingProblems.filter((item) => item.category === 'FOOTPRINT_INTRINSIC')) actions.push({ code: 'CANNOT_AUTOFIX_FOOTPRINT', description: problem.issue.message, relatedIds: problem.issue.relatedIds ?? [] });
   if (!actions.length) diagnostics.push(input.board.layerMode === 'single' ? 'No legal single-layer repair was found; manual routing, a physical jumper, or an explicit board-type change may be required.' : 'No improving repair candidate was found within the bounded search.');
