@@ -17,6 +17,14 @@ function renderPcb(routed: boolean): string {
 }
 
 describe('PCB designer repair state', () => {
+  it('always identifies the PCB workspace as testing-only', () => {
+    const output = renderPcb(true);
+    expect(output).toContain('role="note"');
+    expect(output).toContain('PCB testing warning');
+    expect(output).toContain('PCB functionality is not ready for manufacturing');
+    expect(output).toContain('Do not fabricate boards from these exports');
+  });
+
   it('offers an automatic repair beside an unrouted DRC error', () => {
     const output = renderPcb(false);
     expect(output).toContain('UNROUTED_CONNECTIONS');

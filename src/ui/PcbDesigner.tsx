@@ -31,6 +31,7 @@ export function PcbDesigner({ pcb, onChange, onBack }: Props) {
   return <main className="pcb-layout">
     <aside className="pcb-tools panel">
       <div className="panel-heading"><span className="eyebrow">Through-hole PCB</span><h2>PCB Designer</h2></div>
+      <div className="pcb-testing-warning" role="note" aria-label="PCB testing warning"><strong>Testing only</strong><span>PCB functionality is not ready for manufacturing. Do not fabricate boards from these exports.</span></div>
       <button onClick={onBack}>← Breadboard</button><button className="primary" onClick={fixAutomatically}>Repair PCB</button><button onClick={() => onChange(clearAutoRoutes(pcb))}>Clear auto-routes</button>
       <fieldset><legend>Board type</legend><label><input type="radio" name="layer-mode" checked={pcb.board.layerMode === 'single'} onChange={() => changeLayerMode('single')} /> Single-sided · B.Cu only</label><label><input type="radio" name="layer-mode" checked={pcb.board.layerMode === 'double'} onChange={() => changeLayerMode('double')} /> 2-layer · F.Cu + B.Cu</label></fieldset>
       <label>Board width (mm)<input type="number" min="20" max="300" value={pcb.board.widthMm} onChange={(event) => onChange({ ...pcb, board: { ...pcb.board, widthMm: Number(event.target.value) } })} /></label>

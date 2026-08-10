@@ -1,5 +1,9 @@
 # Single-sided PCB designer
 
+The entire PCB workspace is experimental and intended only for testing. It is not ready for
+manufacturing, and boards must not be fabricated from its exports. The workspace displays this
+warning persistently.
+
 The PCB workspace builds a static physical netlist from breadboard strips and permanent jumper
 wires. Device state is deliberately excluded: an open and a closed switch produce the same two-pad
 physical netlist, so bottom copper cannot bypass the switch merely because it was closed during
