@@ -21,11 +21,11 @@ describe('classic starter projects', () => {
     const simulation = simulateProject(project);
     if (id === 'ne555-astable') {
       const transient = runTransient(simulation.extraction.circuit, {
-        durationSeconds: 1.5,
-        timeStepSeconds: 0.001,
+        durationSeconds: 50,
+        timeStepSeconds: 0.01,
       });
       expect(transient.result.errors).toEqual([]);
-      expect(transient.samples).toHaveLength(1_500);
+      expect(transient.samples).toHaveLength(5_000);
       const outputNodeId = simulation.extraction.componentTerminalNodes.U1.pin3;
       const timingNodeId = simulation.extraction.componentTerminalNodes.U1.pin2;
       expect(simulation.extraction.componentTerminalNodes.U1.pin6).toBe(timingNodeId);
@@ -36,19 +36,19 @@ describe('classic starter projects', () => {
           ? [transient.samples[index + 1].timeSeconds]
           : [],
       );
-      expect(risingEdgeTimes.length).toBeGreaterThanOrEqual(4);
+      expect(risingEdgeTimes.length).toBeGreaterThanOrEqual(2);
       const measuredFrequencyHz = 1 / (risingEdgeTimes.at(-1)! - risingEdgeTimes.at(-2)!);
-      expect(measuredFrequencyHz).toBeGreaterThan(4.5);
-      expect(measuredFrequencyHz).toBeLessThan(5.5);
+      expect(measuredFrequencyHz).toBeGreaterThan(0.045);
+      expect(measuredFrequencyHz).toBeLessThan(0.055);
       const steadyOutput = outputVoltages.slice(100);
       const highDutyFraction = steadyOutput.filter((voltage) => voltage >= 2).length
         / steadyOutput.length;
-      expect(highDutyFraction).toBeGreaterThan(0.55);
-      expect(highDutyFraction).toBeLessThan(0.8);
+      expect(highDutyFraction).toBeGreaterThan(0.6);
+      expect(highDutyFraction).toBeLessThan(0.75);
       expect(Math.min(...outputVoltages)).toBeLessThan(0.5);
-      expect(Math.max(...outputVoltages)).toBeGreaterThan(4);
-      expect(Math.min(...timingVoltages)).toBeLessThan(2);
-      expect(Math.max(...timingVoltages)).toBeGreaterThan(3);
+      expect(Math.max(...outputVoltages)).toBeGreaterThan(8);
+      expect(Math.min(...timingVoltages)).toBeLessThan(3.5);
+      expect(Math.max(...timingVoltages)).toBeGreaterThan(5.5);
       expect(simulation.extraction.holeToNodeId[project.oscilloscope.channels.ch1.positiveHoleId!])
         .toBe(outputNodeId);
       expect(simulation.extraction.holeToNodeId[project.oscilloscope.channels.ch2.positiveHoleId!])
@@ -65,6 +65,20 @@ describe('classic starter projects', () => {
     expect(first.id).not.toBe(second.id);
     expect(first.revision).toBe(0);
     expect(second.revision).toBe(0);
+  });
+
+  it('matches the corrected NE555 LED blinker drawing parts list', () => {
+    const project = createStarterProject('ne555-astable');
+    expect(project.name).toContain('5 mm LED Blink Every 10 Seconds');
+    expect(project.components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'V1', kind: 'voltage-source', voltageV: 9 }),
+      expect.objectContaining({ id: 'RA', kind: 'resistor', resistanceOhms: 91_000 }),
+      expect.objectContaining({ id: 'RB', kind: 'resistor', resistanceOhms: 100_000 }),
+      expect.objectContaining({ id: 'R3', kind: 'resistor', resistanceOhms: 330 }),
+      expect.objectContaining({ id: 'C1', kind: 'capacitor', capacitanceFarads: 100e-6, ratedVoltageV: 16 }),
+      expect.objectContaining({ id: 'C2', kind: 'capacitor', capacitanceFarads: 10e-9 }),
+      expect.objectContaining({ id: 'LED1', kind: 'led', label: '5 mm LED', color: 'red' }),
+    ]));
   });
 
   it('includes the complete thermometer component inventory and TMP36 probe', () => {
