@@ -22,6 +22,7 @@ No known credential needs rotation. If a secret is discovered later, revoke or r
 ## Repository safeguards in this change
 
 - CI runs the repository security policy, lint, license inventory check, tests, type checking, and production build.
+- CI audits the complete locked dependency graph and fails at moderate severity or higher.
 - Pull requests receive a dependency review that fails at moderate severity or higher.
 - Every third-party action is pinned to an immutable commit SHA, checkout credentials are not persisted, and workflows have read-only repository permissions.
 - Dependabot monitors npm and GitHub Actions weekly.
@@ -32,9 +33,22 @@ No known credential needs rotation. If a secret is discovered later, revoke or r
 
 ## Owner actions required in GitHub
 
-These settings cannot be safely represented by a commit and must be completed by a repository administrator. Do them after this hardening pull request's checks have run so GitHub can find the two required check names.
+These settings cannot be safely represented by a commit and must be completed by a repository administrator. Enable the dependency graph first, then complete the other actions after this hardening pull request's checks have run so GitHub can find the two required check names.
 
-### 1. Protect `main`
+### 1. Enable the dependency graph and alerts
+
+The first GitHub run of **Dependency review** correctly refused to run because GitHub reported that the repository's dependency graph was disabled. Under **Settings → Code security and analysis**, enable **Dependency graph** and **Dependabot alerts**, then re-run the failed workflow from the pull request.
+
+An administrator with a working GitHub CLI credential can enable dependency alerts and the dependency graph together:
+
+```powershell
+gh auth refresh -h github.com -s repo
+gh api --method PUT -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2026-03-10" repos/helgaarm/Virtual-Electronics-Workbench/vulnerability-alerts
+```
+
+GitHub may take a few minutes to parse `package-lock.json`. Re-run **Dependency review** after the graph is populated. The separate CI job already runs `npm audit --audit-level=moderate`, so the locked dependency graph still has a mandatory vulnerability check while the GitHub setting is being enabled.
+
+### 2. Protect `main`
 
 Go to **Settings → Rules → Rulesets**, create a branch ruleset named **Protect main**, target the default branch, and configure:
 
@@ -60,7 +74,7 @@ gh api -H "X-GitHub-Api-Version: 2026-03-10" repos/helgaarm/Virtual-Electronics-
 
 If the current CLI credential cannot be refreshed, run `gh auth login -h github.com -p https -w -s repo` first. Review the generated ruleset in the UI; do not delete another ruleset if one has appeared meanwhile.
 
-### 2. Lock down GitHub Actions
+### 3. Lock down GitHub Actions
 
 Under **Settings → Actions → General**:
 
@@ -71,11 +85,10 @@ Under **Settings → Actions → General**:
 
 The committed workflows request only `contents: read`, use no repository secrets, and never run privileged deployment or publishing jobs.
 
-### 3. Enable GitHub security features
+### 4. Enable GitHub security features
 
 Under **Settings → Code security and analysis**, verify or enable:
 
-- Dependabot alerts;
 - Dependabot security updates;
 - secret scanning;
 - push protection for contributors and repository administrators;
@@ -84,7 +97,7 @@ Under **Settings → Code security and analysis**, verify or enable:
 
 Public repositories may receive some features automatically, but each switch must be verified. Keep private vulnerability reporting enabled so the link in `SECURITY.md` remains usable.
 
-### 4. Configure Codex reviews
+### 5. Configure Codex reviews
 
 First connect the repository to Codex cloud. In **Codex settings → Code review**, enable Code review for the repository and turn on **Automatic reviews**. The root `AGENTS.md` contains repository-specific `## Code Review Rules` that Codex will apply.
 

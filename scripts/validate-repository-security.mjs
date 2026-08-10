@@ -100,6 +100,11 @@ if (workflowNames.length === 0) {
 const ci = await requireFile('.github/workflows/ci.yml')
 requireMatch(ci, /name:\s*Required validation/u, 'CI must expose the Required validation check.')
 requireMatch(ci, /npm ci --ignore-scripts/u, 'CI must install from the lockfile without lifecycle scripts.')
+requireMatch(
+  ci,
+  /npm audit --audit-level=moderate --ignore-scripts/u,
+  'CI must fail on moderate-or-higher vulnerabilities in the locked graph.',
+)
 requireMatch(ci, /npm run check/u, 'CI must run the complete repository check.')
 
 const dependencyReview = await requireFile('.github/workflows/dependency-review.yml')

@@ -33,5 +33,8 @@ jobs:
       - name: Install locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
 
+      - name: Audit locked dependencies
+        run: npm audit --audit-level=moderate --ignore-scripts
+
       - name: Run repository checks
         run: npm run check
