@@ -1,10 +1,10 @@
 import { connectedPadCount, connectedPadCountsByNet, copperConnectivity, resolvedPads } from './connectivity';
-import { pointToSegmentDistanceMm, polylineSegments } from './geometry';
+import { PCB_GEOMETRY_EPSILON_MM, pointToSegmentDistanceMm, polylineSegments } from './geometry';
 import type { PcbCopperLayer, PcbNet, PcbPointMm, PcbProject, PcbTrace, PcbVia } from './types';
 
 export interface RouteDiagnostic { netId: string; message: string }
 export interface RouteResult { pcb: PcbProject; diagnostics: RouteDiagnostic[] }
-const GRID_MM = 0.5; const VIA_DRILL_MM = 0.6; const VIA_COPPER_MM = 1.2; const VIA_COST = 16; const BEND_COST = 0.25;
+const GRID_MM = 0.5; const ROUTING_GRID_MARGIN_MM = GRID_MM / 2; const VIA_DRILL_MM = 0.6; const VIA_COPPER_MM = 1.2; const VIA_COST = 16; const BEND_COST = 0.25;
 
 export function routedConnectionsForNet(pcb: PcbProject, net: PcbNet): number { return connectedPadCount(pcb, net); }
 export function routedConnectionCounts(pcb: PcbProject): Map<string, number> { return connectedPadCountsByNet(pcb); }
@@ -69,9 +69,9 @@ function findPath(pcb: PcbProject, netId: string, start: PcbPointMm, end: PcbPoi
     const point = { xMm: x * GRID_MM, yMm: y * GRID_MM }; const radius = forVia ? VIA_COPPER_MM / 2 : widthMm / 2;
     if (point.xMm < pcb.rules.copperToEdgeMm + radius || point.yMm < pcb.rules.copperToEdgeMm + radius || point.xMm > pcb.board.widthMm - pcb.rules.copperToEdgeMm - radius || point.yMm > pcb.board.heightMm - pcb.rules.copperToEdgeMm - radius) return true;
     if ((x === sx && y === sy) || (x === ex && y === ey)) return false;
-    return foreignPads.some((pad) => Math.hypot(point.xMm - pad.positionMm.xMm, point.yMm - pad.positionMm.yMm) < pad.radiusMm + radius + pcb.rules.copperClearanceMm)
-      || foreignSegments.some((item) => (forVia || item.layer === layer) && pointToSegmentDistanceMm(point, item.segment) < item.radius + radius + pcb.rules.copperClearanceMm)
-      || foreignVias.some((via) => Math.hypot(point.xMm - via.positionMm.xMm, point.yMm - via.positionMm.yMm) < via.copperDiameterMm / 2 + radius + pcb.rules.copperClearanceMm);
+    return foreignPads.some((pad) => Math.hypot(point.xMm - pad.positionMm.xMm, point.yMm - pad.positionMm.yMm) < pad.radiusMm + radius + pcb.rules.copperClearanceMm + ROUTING_GRID_MARGIN_MM + PCB_GEOMETRY_EPSILON_MM)
+      || foreignSegments.some((item) => (forVia || item.layer === layer) && pointToSegmentDistanceMm(point, item.segment) < item.radius + radius + pcb.rules.copperClearanceMm + PCB_GEOMETRY_EPSILON_MM)
+      || foreignVias.some((via) => Math.hypot(point.xMm - via.positionMm.xMm, point.yMm - via.positionMm.yMm) < via.copperDiameterMm / 2 + radius + pcb.rules.copperClearanceMm + PCB_GEOMETRY_EPSILON_MM);
   };
   const layers: PcbCopperLayer[] = pcb.board.layerMode === 'double' ? ['B.Cu', 'F.Cu'] : ['B.Cu'];
   const open = new StateMinHeap(); const best = new Map<string, number>(); const previous = new Map<string, string>(); const states = new Map<string, State>();

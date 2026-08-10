@@ -3,6 +3,7 @@ import { convertBreadboardToPcb } from '../../src/domain/pcb/converter';
 import { pointForViewedSide, rotatePoint } from '../../src/domain/pcb/geometry';
 import { routeRemainingConnections } from '../../src/domain/pcb/router';
 import { runPcbDrc } from '../../src/domain/pcb/drc';
+import { autoRepairPcb } from '../../src/domain/pcb/repair';
 import { exportBomCsv, exportKicadPcb } from '../../src/domain/pcb/exporters';
 import { createStarterProject } from '../../src/domain/starterProjects';
 
@@ -27,6 +28,18 @@ describe('single-sided PCB workflow', () => {
     expect(conversion.missing).toEqual([]);
     expect(conversion.pcb?.components.find((component) => component.sourceComponentId === 'S1'))
       .toMatchObject({ footprintId: 'SW-Push-P5.08', value: 'Normally open switch (closed)' });
+  });
+
+  it('automatically produces a DRC-clean board for the NE555 starter circuit', () => {
+    const initial = convertBreadboardToPcb(createStarterProject('ne555-astable')).pcb!;
+
+    const repaired = autoRepairPcb(initial);
+
+    expect(repaired.changed).toBe(true);
+    expect(repaired.pcb.board.layerMode).toBe('double');
+    expect(repaired.appliedActions.map((action) => action.code)).toContain('CHANGED_TO_TWO_LAYER');
+    expect(repaired.remainingProblems).toEqual([]);
+    expect(runPcbDrc(repaired.pcb).status).toBe('manufacturing-checks-passed');
   });
 
   it('repairs only genuinely disconnected nets and remains idempotent', () => {
