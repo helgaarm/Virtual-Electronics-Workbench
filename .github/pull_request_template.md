@@ -7,6 +7,8 @@ Describe the user-visible or internal change and why it is needed.
 - [ ] `npm run check` passes locally
 - [ ] Tests cover changed behavior, or no behavior changed
 - [ ] Documentation is updated where needed
+- [ ] Simulation, persistence, package, instrument, PCB-export, or security changes update their authoritative documentation
+- [ ] Renderer/interaction changes were smoke-tested at desktop and narrow widths, or the limitation is explained
 
 ## Security and data review
 

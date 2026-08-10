@@ -2,7 +2,16 @@
 
 ## Current scope
 
-Phase A provides the true-3D, millimetre-based breadboard and physical editing foundation. Phase B connects that physical state to a deterministic DC circuit and persists projects in SQLite. Phase C adds persistent multimeter state and an attachable probe workflow over the same measurement boundary. Phase D adds polarized capacitors, transient MNA state, and a shared deterministic simulation clock. Phase E adds a time-dependent ideal signal source and a two-channel oscilloscope over bounded samples from that same clock. Phase F adds generic nonlinear semiconductor primitives, internal electrical subcircuits, reusable DIP packages, and the NE555N proof component.
+The primary workflow teaches circuit construction and testing: learners place real-scale packages on
+a 2.54 mm-pitch breadboard, extract electrical connectivity from physical holes and strips, simulate
+the circuit deterministically, and measure the result with instruments that share the solver output.
+The catalogue extends from introductory DC and RC parts through nonlinear devices, NE555, sensors,
+displays, shift-register, and microcontroller foundations. Behavioural digital models that are not
+yet integrated into the application runtime are labelled as such rather than presented as complete.
+
+PCB conversion is a secondary, experimental projection of a working breadboard design. It consumes
+physical electrical nets after circuit construction; it never becomes the source of breadboard
+connectivity and is not required for the learning and measurement workflow.
 
 ## Boundaries
 
@@ -16,6 +25,7 @@ Phase A provides the true-3D, millimetre-based breadboard and physical editing f
 | Rendering | meshes, materials, camera, picking | authoritative connectivity |
 | State/UI | commands and orchestration | solver algorithms |
 | Persistence | versioned project JSON in SQLite | domain behavior |
+| PCB domain | optional net conversion, footprints, placement, routing, DRC, repair and export | breadboard connectivity, simulation results, fabrication certification |
 
 The project JSON is a stable but untrusted boundary. The client validates API responses and the server exhaustively validates nested values, component discriminators, holes, occupancy, limits, and schema versions before a document reaches SQLite. SQLite stores the complete validated document plus indexed metadata. Revision numbers are advanced transactionally and stale revisions receive HTTP 409 instead of overwriting a newer document.
 
@@ -27,7 +37,13 @@ The project JSON is a stable but untrusted boundary. The client validates API re
 - `PUT /api/projects/:id` requires matching URL/body IDs and the current revision. It returns the saved document with the next revision, 400 for invalid input, or 409 for a stale/future version.
 - `DELETE /api/projects/:id` removes one project or returns 404.
 
-JSON bodies are limited to 2 MB. Schema versions 1 through 7 migrate to version 8; legacy probes are assigned to the multimeter, missing transient and instrument settings are initialized, legacy continuous scales are mapped to supported controls, and version 1 revisions start at zero. Unsupported future schemas are rejected explicitly.
+JSON bodies are limited to 2 MB. Supported older schemas migrate to the current version exported by
+`src/domain/project.ts`; legacy fields are initialized or transformed by explicit migration code.
+Unsupported future schemas are rejected. See [persistence and recovery](persistence-and-recovery.md)
+for the local trust boundary and safe backup procedure.
+
+The API binds to `127.0.0.1` and intentionally has no authentication. It is a single-user local
+service, not a network deployment surface; changing `PORT` does not make it suitable for shared use.
 
 ## Package, device, and model separation
 
@@ -65,3 +81,5 @@ This internal representation already resembles the useful subset of a future SPI
 8. Polarized capacitor, reusable MNA primitives, fixed-step transient clock, and verified RC charge/discharge response.
 9. Square/sine signal source, bounded sample capture, two oscilloscope channels, trigger/scale controls, and waveform measurements.
 10. Generic nonlinear devices, internal subcircuits, reusable DIP-8, and a breadboard-ready NE555N astable demonstration.
+11. Standard analogue/digital component foundations, reusable package families, and an explicitly limited thermometer teaching project.
+12. Optional experimental PCB conversion, deterministic routing/repair, DRC, persistence, and non-fabrication exports.

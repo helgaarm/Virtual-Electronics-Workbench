@@ -1,5 +1,8 @@
 # PCB designer
 
+PCB design is an optional continuation after a circuit has been built, simulated, and measured on
+the breadboard. It is secondary to the educational circuit-design and testing workflow.
+
 The entire PCB workspace is experimental and intended only for testing. It is not ready for
 manufacturing, and boards must not be fabricated from its exports. The workspace displays this
 warning persistently.

@@ -18,3 +18,8 @@
 /docker-compose*.yml @helgaarm
 /scripts/ @helgaarm
 /server/ @helgaarm
+/docs/architecture.md @helgaarm
+/docs/simulation.md @helgaarm
+/docs/physical-model.md @helgaarm
+/docs/persistence-and-recovery.md @helgaarm
+/docs/pcb-designer.md @helgaarm

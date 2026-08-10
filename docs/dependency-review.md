@@ -1,5 +1,8 @@
 # Dependency security, freshness, and license review
 
+> **Point-in-time report:** This file records the review date below; it is not a live vulnerability
+> status. Run `npm outdated`, `npm audit`, and `npm run licenses:check` for current release evidence.
+
 Review date: 2026-08-09. Runtime used: Node.js 26.7.0 and npm 11.19.0.
 
 ## Results

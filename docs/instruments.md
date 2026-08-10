@@ -8,7 +8,9 @@ Users can attach either lead by clicking a real hole in the live 3D board or by 
 
 The meter derives voltage from circuit extraction plus `SimulationResult`, never directly from React or renderer state. When the shared timeline is active because of a capacitor, signal source, or connected oscilloscope channel, it reads the latest accepted transient solution; otherwise it reads the DC operating point. Component telemetry uses the same boundary for voltage, current, and power. Every reading has a typed state: `valid`, `unavailable`, `disconnected`, or `simulation-error`. Missing ideal-connector branch currents are shown as unavailable rather than fabricated as zero.
 
-Instrument selection, active lead, selected reading, names, probe connections, and transient settings are stored in schema version 8 and persist through SQLite. Versions 1 through 7 migrate automatically.
+Instrument selection, active lead, selected reading, names, probe connections, and transient settings
+persist through SQLite. The current version and supported migrations are defined by the project
+persistence layer rather than duplicated here.
 
 Transient timestep and speed persist, but the live clock, run/pause state, and capacitor charge history do not. Opening a project begins a fresh transient session at zero seconds.
 

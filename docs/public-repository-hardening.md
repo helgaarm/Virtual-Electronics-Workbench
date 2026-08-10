@@ -1,5 +1,8 @@
 # Public repository hardening
 
+> **Point-in-time setup record:** GitHub owner settings cannot be continuously verified from this
+> repository. Re-run the committed security checks and manually confirm the owner actions below.
+
 Audit date: 2026-08-10
 Repository: `helgaarm/Virtual-Electronics-Workbench`
 
