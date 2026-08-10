@@ -17,8 +17,23 @@ explicit grounds. Device conductive state is never an input. Stable net IDs deri
 lexically first physical hole in each connected group rather than traversal-dependent simulation
 node numbering. All supported terminals must map explicitly to footprint pads and nets.
 
-The domain pipeline is static physical net conversion, courtyard-aware placement, single-layer
-obstacle-aware routing, copper-geometry connectivity and DRC, then rendering/export. Shared geometry
-functions define segment intersection, point/segment and segment/segment distance, polylines and
-courtyard overlap, so routing and validation use the same physical interpretation. KiCad export
-serializes the validated stored geometry rather than reconstructing a different route.
+The reusable foundation was the static physical-net extractor, verified through-hole footprint
+library, millimetre geometry helpers, courtyard-aware row placement, and deterministic grid router.
+The remaining root limitation was that the PCB types only admitted `B.Cu`, connectivity flattened
+copper into XY space, routing had no layer state, DRC had no via geometry, and the UI's “fix” action
+was only a direct router call. Persistence and KiCad export consequently had no first-class layer or
+via object to preserve.
+
+The domain pipeline is now static physical net conversion, explicit single/double board mode,
+layer-aware copper connectivity, bounded X/Y/layer routing, DRC, copy-on-write repair, and
+rendering/export of the same stored geometry. Plated pads and routing vias are the only ordinary
+F.Cu/B.Cu transitions; coincident copper on opposite layers remains disconnected. The deterministic
+router treats foreign pads, traces and vias as clearance-expanded obstacles and prices vias above
+ordinary movement. Repair evaluates rerouting, local 2.5 mm placement moves, and bounded 5 mm board
+expansion without changing rules or deleting manual copper.
+
+This remains an educational heuristic engine rather than an industrial global optimizer. The current
+repair budget does not yet synthesize single-sided jumper objects, search alternate footprints, move
+individual vias, or perform multi-net rip-up combinations. Initial placement is courtyard-aware but
+is not yet a full force-directed/topology clusterer. These cases correctly remain visible as DRC or
+repair diagnostics instead of being reported as fabrication-ready.

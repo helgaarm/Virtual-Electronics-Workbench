@@ -20,3 +20,20 @@ export const PCB_FOOTPRINTS: Readonly<Record<string, PcbFootprint>> = {
 export function footprintForKind(kind: string): PcbFootprint | undefined {
   return Object.values(PCB_FOOTPRINTS).find((footprint) => footprint.compatibleKinds.includes(kind));
 }
+
+export interface FootprintValidationIssue { footprintId: string; code: 'DUPLICATE_PAD_NUMBER' | 'DUPLICATE_TERMINAL' | 'INVALID_DRILL' | 'INVALID_PAD' | 'INVALID_BODY' | 'UNVERIFIED'; message: string }
+export function validateFootprintLibrary(): FootprintValidationIssue[] {
+  const issues: FootprintValidationIssue[] = [];
+  for (const footprint of Object.values(PCB_FOOTPRINTS)) {
+    if (footprint.bodySizeMm.widthMm <= 0 || footprint.bodySizeMm.heightMm <= 0 || footprint.courtyardMarginMm < 0) issues.push({ footprintId: footprint.id, code: 'INVALID_BODY', message: 'Body and courtyard dimensions must be physically positive.' });
+    if (!footprint.verified || !footprint.source.trim()) issues.push({ footprintId: footprint.id, code: 'UNVERIFIED', message: 'Manufacturing footprints require verification metadata.' });
+    const numbers = new Set<string>(); const terminals = new Set<string>();
+    for (const pad of footprint.pads) {
+      if (numbers.has(pad.number)) issues.push({ footprintId: footprint.id, code: 'DUPLICATE_PAD_NUMBER', message: `Pad ${pad.number} is duplicated.` }); numbers.add(pad.number);
+      if (terminals.has(pad.terminalId)) issues.push({ footprintId: footprint.id, code: 'DUPLICATE_TERMINAL', message: `Terminal ${pad.terminalId} is mapped more than once.` }); terminals.add(pad.terminalId);
+      if (pad.drillDiameterMm <= 0) issues.push({ footprintId: footprint.id, code: 'INVALID_DRILL', message: `Pad ${pad.number} has an invalid drill.` });
+      if (pad.sizeMm.widthMm <= pad.drillDiameterMm || pad.sizeMm.heightMm <= pad.drillDiameterMm) issues.push({ footprintId: footprint.id, code: 'INVALID_PAD', message: `Pad ${pad.number} has no annular copper.` });
+    }
+  }
+  return issues;
+}

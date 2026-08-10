@@ -1,5 +1,7 @@
 export type PcbPointMm = Readonly<{ xMm: number; yMm: number }>;
 export type PcbSide = 'top' | 'bottom';
+export type PcbCopperLayer = 'F.Cu' | 'B.Cu';
+export type PcbLayerMode = 'single' | 'double';
 export type PcbPadShape = 'circle' | 'rect' | 'oval';
 
 export interface PcbPadDefinition {
@@ -44,10 +46,11 @@ export interface PcbNetPadRef {
 
 export interface PcbNet { id: string; name: string; pads: PcbNetPadRef[] }
 export interface PcbTrace {
-  id: string; netId: string; widthMm: number; layer: 'B.Cu';
+  id: string; netId: string; widthMm: number; layer: PcbCopperLayer;
   pointsMm: PcbPointMm[]; ownership: 'auto' | 'manual' | 'manual-modified';
 }
-export interface PcbJumper { id: string; reference: string; netId: string; startMm: PcbPointMm; endMm: PcbPointMm; drillDiameterMm: number }
+export interface PcbVia { id: string; netId: string; positionMm: PcbPointMm; drillDiameterMm: number; copperDiameterMm: number; fromLayer: 'F.Cu'; toLayer: 'B.Cu'; ownership: 'auto' | 'manual' | 'manual-modified' }
+export interface PcbJumper { id: string; reference: string; netId: string; startMm: PcbPointMm; endMm: PcbPointMm; drillDiameterMm: number; copperDiameterMm: number; ownership: 'auto' | 'manual' | 'manual-modified' }
 export interface PcbMountingHole { id: string; positionMm: PcbPointMm; drillDiameterMm: number; plated: false }
 export interface PcbDesignRules {
   profileId: 'generic-conservative'; minimumTrackWidthMm: number; copperClearanceMm: number;
@@ -55,11 +58,11 @@ export interface PcbDesignRules {
   componentToEdgeMm: number; silkscreenToPadMm: number;
 }
 export interface PcbProject {
-  version: 1;
+  version: 2;
   sourceCircuitFingerprint: string;
-  board: { widthMm: number; heightMm: number; title: string };
+  board: { widthMm: number; heightMm: number; title: string; layerMode: PcbLayerMode };
   components: PcbComponent[]; nets: PcbNet[]; traces: PcbTrace[]; jumpers: PcbJumper[];
-  mountingHoles: PcbMountingHole[]; rules: PcbDesignRules;
+  vias: PcbVia[]; mountingHoles: PcbMountingHole[]; rules: PcbDesignRules;
 }
 
 export const DEFAULT_PCB_RULES: PcbDesignRules = {
