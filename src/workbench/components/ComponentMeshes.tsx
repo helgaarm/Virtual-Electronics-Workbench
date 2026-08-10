@@ -110,6 +110,59 @@ function useComponentMarkingTexture(lines: readonly string[]): THREE.CanvasTextu
   return texture;
 }
 
+function createTo92BodyShape(widthMm: number, depthMm: number): THREE.Shape {
+  const shape = new THREE.Shape();
+  const halfWidthMm = widthMm / 2;
+  const halfDepthMm = depthMm / 2;
+  const curvedEdgeSegments = 20;
+
+  shape.moveTo(-halfWidthMm, halfDepthMm);
+  shape.lineTo(halfWidthMm, halfDepthMm);
+  for (let segment = 1; segment <= curvedEdgeSegments; segment += 1) {
+    const angle = (segment / curvedEdgeSegments) * Math.PI;
+    shape.lineTo(
+      Math.cos(angle) * halfWidthMm,
+      halfDepthMm - Math.sin(angle) * depthMm,
+    );
+  }
+  shape.closePath();
+  return shape;
+}
+
+function To92Body({
+  dimensionsMm,
+  selected,
+  marking,
+}: {
+  dimensionsMm: { x: number; y: number; z: number };
+  selected: boolean;
+  marking?: THREE.Texture;
+}) {
+  const shape = useMemo(
+    () => createTo92BodyShape(dimensionsMm.x, dimensionsMm.z),
+    [dimensionsMm.x, dimensionsMm.z],
+  );
+  const extrudeSettings = useMemo(() => ({
+    depth: dimensionsMm.y,
+    bevelEnabled: false,
+  }), [dimensionsMm.y]);
+
+  return (
+    <>
+      <mesh position={[0, dimensionsMm.y / 2, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <extrudeGeometry args={[shape, extrudeSettings]} />
+        <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.16} />
+      </mesh>
+      {marking && (
+        <mesh position={[0, 0.1, dimensionsMm.z / 2 + 0.09]}>
+          <planeGeometry args={[dimensionsMm.x * 0.8, Math.min(1.7, dimensionsMm.y * 0.34)]} />
+          <meshBasicMaterial map={marking} transparent depthWrite={false} polygonOffset polygonOffsetFactor={-1} />
+        </mesh>
+      )}
+    </>
+  );
+}
+
 function AxialDiodeMesh({ component, board, selected, onSelect, onBeginDrag }: {
   component: Extract<PlacedComponent, { kind: 'diode-1n4148' }>;
   board: BreadboardDefinition;
@@ -662,20 +715,7 @@ function Tmp36Mesh({ component, board, selected, onSelect, onBeginDrag }: {
         />
       ))}
       <group position={bodyCenter} rotation={[0, rotationY, 0]}>
-        <mesh castShadow>
-          <cylinderGeometry args={[physicalPackage.dimensionsMm.x / 2, physicalPackage.dimensionsMm.x / 2, physicalPackage.dimensionsMm.y, 24, 1, false, 0, Math.PI]} />
-          <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.16} />
-        </mesh>
-        <mesh position={[0, 0, physicalPackage.dimensionsMm.z / 2 - 0.15]}>
-          <boxGeometry args={[physicalPackage.dimensionsMm.x, physicalPackage.dimensionsMm.y, 0.3]} />
-          <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} />
-        </mesh>
-        {marking && (
-          <mesh position={[0, 0.15, physicalPackage.dimensionsMm.z / 2 + 0.015]}>
-            <planeGeometry args={[3.7, 1.25]} />
-            <meshBasicMaterial map={marking} transparent depthWrite={false} />
-          </mesh>
-        )}
+        <To92Body dimensionsMm={physicalPackage.dimensionsMm} selected={selected} marking={marking} />
       </group>
     </group>
   );
@@ -705,15 +745,7 @@ function TransistorMesh({ component, board, selected, onSelect, onBeginDrag }: {
         <SmoothTube key={index} points={[pin, pin.clone().setY(bodyBottomY - 0.45), center.clone().lerp(pin, 0.74).setY(bodyBottomY + 0.45)]} radius={physicalPackage.leadDiameterMm / 2} color="#b9bec0" metalness={0.9} />
       ))}
       <group position={bodyCenter} rotation={[0, rotationY, 0]}>
-        <mesh castShadow>
-          <cylinderGeometry args={[physicalPackage.dimensionsMm.x / 2, physicalPackage.dimensionsMm.x / 2, physicalPackage.dimensionsMm.y, 28, 1, false, 0, Math.PI]} />
-          <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.16} />
-        </mesh>
-        <mesh position={[0, 0, physicalPackage.dimensionsMm.z / 2 - 0.15]} castShadow>
-          <boxGeometry args={[physicalPackage.dimensionsMm.x, physicalPackage.dimensionsMm.y, 0.3]} />
-          <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} />
-        </mesh>
-        {marking && <mesh position={[0, 0, physicalPackage.dimensionsMm.z / 2 + 0.015]}><planeGeometry args={[3.8, 1.7]} /><meshBasicMaterial map={marking} transparent depthWrite={false} /></mesh>}
+        <To92Body dimensionsMm={physicalPackage.dimensionsMm} selected={selected} marking={marking} />
       </group>
     </group>
   );
