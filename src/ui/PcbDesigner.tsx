@@ -10,6 +10,12 @@ import type { PcbProject } from '../domain/pcb/types';
 
 interface Props { pcb: PcbProject; onChange: (pcb: PcbProject) => void; onBack: () => void }
 
+function polarityMark(terminalId: string): '+' | '−' | undefined {
+  if (terminalId === 'positive' || terminalId === 'anode') return '+';
+  if (terminalId === 'negative' || terminalId === 'cathode') return '−';
+  return undefined;
+}
+
 export function PcbDesigner({ pcb, onChange, onBack }: Props) {
   const [side, setSide] = useState<'top' | 'bottom'>('top');
   const [selectedId, setSelectedId] = useState(pcb.components[0]?.id ?? '');
@@ -69,7 +75,7 @@ export function PcbDesigner({ pcb, onChange, onBack }: Props) {
       <label>Board width (mm)<input type="number" min="20" max="300" value={pcb.board.widthMm} onChange={(event) => onChange({ ...pcb, board: { ...pcb.board, widthMm: Number(event.target.value) } })} /></label>
       <label>Board height (mm)<input type="number" min="20" max="300" value={pcb.board.heightMm} onChange={(event) => onChange({ ...pcb, board: { ...pcb.board, heightMm: Number(event.target.value) } })} /></label>
       <label><input type="checkbox" checked={showFrontCopper} onChange={(event) => setShowFrontCopper(event.target.checked)} /> F.Cu</label><label><input type="checkbox" checked={showBottomCopper} onChange={(event) => setShowBottomCopper(event.target.checked)} /> B.Cu</label><label><input type="checkbox" checked={showVias} onChange={(event) => setShowVias(event.target.checked)} /> Vias</label><label><input type="checkbox" checked={showRatsnest} onChange={(event) => setShowRatsnest(event.target.checked)} /> Ratsnest</label>
-      <p className="pcb-help">Pads are plated through holes. Dashed ratsnest lines are missing connections, not copper.</p>
+      <p className="pcb-help">Assembly marks are printed on the component side: +/− show polarity, and the dot and notch identify pin 1. Pads are plated through holes. Dashed ratsnest lines are missing connections, not copper.</p>
     </aside>
     <section className="pcb-stage">
       <div className="stage-toolbar"><strong>{side === 'top' ? 'Component Side' : 'Solder Side'}</strong><button onClick={() => setSide(side === 'top' ? 'bottom' : 'top')}>Flip Board</button><span>Connections: {drc.routedConnections} / {drc.totalConnections} routed</span></div>
@@ -80,8 +86,9 @@ export function PcbDesigner({ pcb, onChange, onBack }: Props) {
           {pcb.traces.filter((trace) => trace.layer === 'F.Cu' ? showFrontCopper : showBottomCopper).flatMap((trace) => trace.pointsMm.slice(1).map((point, index) => { const a = flip(trace.pointsMm[index]); const b = flip(point); return <line key={`${trace.id}-${index}`} x1={a.xMm} y1={a.yMm} x2={b.xMm} y2={b.yMm} className={`copper-trace copper-${trace.layer === 'F.Cu' ? 'front' : 'bottom'}`} style={{ strokeWidth: trace.widthMm, opacity: side === (trace.layer === 'F.Cu' ? 'top' : 'bottom') ? 1 : .48 }} />; }))}
           {showVias && pcb.vias.map((via) => { const p = flip(via.positionMm); return <g key={via.id} className="pcb-via"><circle cx={p.xMm} cy={p.yMm} r={via.copperDiameterMm / 2} /><circle cx={p.xMm} cy={p.yMm} r={via.drillDiameterMm / 2} className="pcb-hole" /></g>; })}
           {pcb.components.map((component) => { const footprint = PCB_FOOTPRINTS[component.footprintId]; const p = flip(component.positionMm); return <g key={component.id} transform={`translate(${p.xMm} ${p.yMm}) rotate(${side === 'bottom' ? -component.rotationDegrees : component.rotationDegrees})`} onClick={() => setSelectedId(component.id)} className={selectedId === component.id ? 'pcb-component selected' : 'pcb-component'}>
-            {side === 'top' && <><rect x={-footprint.bodySizeMm.widthMm / 2} y={-footprint.bodySizeMm.heightMm / 2} width={footprint.bodySizeMm.widthMm} height={footprint.bodySizeMm.heightMm} rx=".6" className="component-body" /><text y={1}>{component.reference}</text></>}
+            {side === 'top' && <><rect x={-footprint.bodySizeMm.widthMm / 2} y={-footprint.bodySizeMm.heightMm / 2} width={footprint.bodySizeMm.widthMm} height={footprint.bodySizeMm.heightMm} rx=".6" className="component-body" /><text y={1}>{component.reference}</text>{footprint.pin1Marked && <><path className="pcb-orientation-notch" d={`M -1.3 ${-footprint.bodySizeMm.heightMm / 2} A 1.3 1.3 0 0 0 1.3 ${-footprint.bodySizeMm.heightMm / 2}`} /><circle className="pcb-pin-one-mark" cx={footprint.pads[0]?.positionMm.xMm} cy={footprint.pads[0]?.positionMm.yMm} r=".45" /></>}</>}
             {footprint.pads.map((pad) => <g key={pad.number} transform={`translate(${pad.positionMm.xMm} ${pad.positionMm.yMm})`}><circle r={pad.sizeMm.widthMm / 2} className="pcb-pad" /><circle r={pad.drillDiameterMm / 2} className="pcb-hole" /></g>)}
+            {side === 'top' && footprint.pads.map((pad) => { const mark = polarityMark(pad.terminalId); if (!mark) return null; const offsetMm = Math.max(pad.sizeMm.heightMm / 2 + .9, 1.7); return <text key={`polarity-${pad.number}`} className={`pcb-polarity-mark ${mark === '+' ? 'positive' : 'negative'}`} x={pad.positionMm.xMm} y={pad.positionMm.yMm - offsetMm}>{mark}</text>; })}
           </g>; })}
         </svg>
         <span className="pcb-scale">{pcb.board.widthMm} × {pcb.board.heightMm} mm · {pcb.board.layerMode === 'double' ? 'F.Cu + B.Cu' : 'B.Cu only'} · {scale} px/mm preview</span>

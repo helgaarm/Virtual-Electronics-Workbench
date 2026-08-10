@@ -25,6 +25,21 @@ describe('PCB designer repair state', () => {
     expect(output).toContain('Do not fabricate boards from these exports');
   });
 
+  it('prints polarity and orientation guidance on the component side', () => {
+    const output = renderPcb(true);
+    const orientedOutput = renderToStaticMarkup(createElement(PcbDesigner, {
+      pcb: convertBreadboardToPcb(createStarterProject('ne555-astable')).pcb!,
+      onBack: () => undefined,
+      onChange: () => undefined,
+    }));
+    expect(output).toContain('+/− show polarity');
+    expect(output).toContain('dot and notch identify pin 1');
+    expect(output).toContain('pcb-polarity-mark positive');
+    expect(output).toContain('pcb-polarity-mark negative');
+    expect(orientedOutput).toContain('pcb-pin-one-mark');
+    expect(orientedOutput).toContain('pcb-orientation-notch');
+  });
+
   it('offers an automatic repair beside an unrouted DRC error', () => {
     const output = renderPcb(false);
     expect(output).toContain('UNROUTED_CONNECTIONS');
