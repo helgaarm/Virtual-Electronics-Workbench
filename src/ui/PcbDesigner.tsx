@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PCB_FOOTPRINTS } from '../domain/pcb/footprints';
 import { padPosition, pointForViewedSide } from '../domain/pcb/geometry';
 import { runPcbDrc } from '../domain/pcb/drc';
-import { clearAutoRoutes, isNetFullyRouted } from '../domain/pcb/router';
-import { analyzePcb, autoRepairPcb } from '../domain/pcb/repair';
+import { clearAutoRoutes } from '../domain/pcb/router';
+import { repairCategoryForIssue } from '../domain/pcb/repair';
+import type { PcbRepairWorkerRequest, PcbRepairWorkerResponse } from '../domain/pcb/repairWorkerProtocol';
 import { downloadTextFile, exportBomCsv, exportKicadPcb, manufacturingSummary } from '../domain/pcb/exporters';
 import type { PcbProject } from '../domain/pcb/types';
 
@@ -17,22 +18,53 @@ export function PcbDesigner({ pcb, onChange, onBack }: Props) {
   const [showBottomCopper, setShowBottomCopper] = useState(true);
   const [showVias, setShowVias] = useState(true);
   const [repairMessage, setRepairMessage] = useState('');
+  const [repairing, setRepairing] = useState(false);
+  const repairWorkerRef = useRef<Worker | undefined>(undefined);
+  const repairInputRef = useRef<PcbProject | undefined>(undefined);
+  const repairRequestIdRef = useRef(0);
   const drc = useMemo(() => runPcbDrc(pcb), [pcb]);
   const scale = 10;
   const flip = (point: { xMm: number; yMm: number }) => pointForViewedSide(point, pcb.board.widthMm, side);
   const selected = pcb.components.find((component) => component.id === selectedId);
-  const routedNetIds = new Set(
-    pcb.nets.filter((net) => isNetFullyRouted(pcb, net)).map((net) => net.id),
-  );
-  const hasRepairableProblems = analyzePcb(pcb).some((problem) => problem.category !== 'NON_AUTOFIXABLE' && problem.category !== 'FOOTPRINT_INTRINSIC');
-  const fixAutomatically = () => { const result = autoRepairPcb(pcb); if (result.changed) onChange(result.pcb); setRepairMessage(result.appliedActions.map((action) => action.description).concat(result.diagnostics).join(' ')); };
+  const routedNetIds = new Set(drc.routedNetIds);
+  const hasRepairableProblems = drc.issues.some((issue) => {
+    const category = repairCategoryForIssue(issue);
+    return issue.severity === 'error' && category !== 'NON_AUTOFIXABLE' && category !== 'FOOTPRINT_INTRINSIC';
+  });
+  const finishWorker = useCallback(() => { repairWorkerRef.current?.terminate(); repairWorkerRef.current = undefined; repairInputRef.current = undefined; setRepairing(false); }, []);
+  const cancelRepair = useCallback((message = 'PCB repair cancelled.') => { finishWorker(); setRepairMessage(message); }, [finishWorker]);
+  const fixAutomatically = () => {
+    if (repairing) { cancelRepair(); return; }
+    const worker = new Worker(new URL('../domain/pcb/repair.worker.ts', import.meta.url), { type: 'module' });
+    const requestId = repairRequestIdRef.current + 1;
+    repairRequestIdRef.current = requestId;
+    repairWorkerRef.current = worker;
+    repairInputRef.current = pcb;
+    setRepairing(true);
+    setRepairMessage('Repairing PCB in the background. You can cancel or continue using the page.');
+    worker.onmessage = (event: MessageEvent<PcbRepairWorkerResponse>) => {
+      if (event.data.requestId !== repairRequestIdRef.current) return;
+      finishWorker();
+      if ('error' in event.data) { setRepairMessage(`PCB repair failed: ${event.data.error}`); return; }
+      const result = event.data.result;
+      if (result.changed) onChange(result.pcb);
+      setRepairMessage(result.appliedActions.map((action) => action.description).concat(result.diagnostics).join(' '));
+    };
+    worker.onerror = () => { if (repairWorkerRef.current === worker) { finishWorker(); setRepairMessage('PCB repair worker failed unexpectedly. No PCB changes were applied.'); } };
+    const request: PcbRepairWorkerRequest = { requestId, pcb };
+    worker.postMessage(request);
+  };
+  useEffect(() => () => repairWorkerRef.current?.terminate(), []);
+  useEffect(() => {
+    if (repairing && repairInputRef.current && repairInputRef.current !== pcb) cancelRepair('PCB changed; the previous repair was cancelled.');
+  }, [cancelRepair, pcb, repairing]);
   const changeLayerMode = (layerMode: 'single' | 'double') => { if (layerMode === 'single' && (pcb.traces.some((trace) => trace.layer === 'F.Cu') || pcb.vias.length)) { setRepairMessage(`This board contains ${pcb.traces.filter((trace) => trace.layer === 'F.Cu').length} F.Cu trace(s) and ${pcb.vias.length} via(s). Clear or reroute them before converting to single-sided.`); return; } onChange({ ...pcb, board: { ...pcb.board, layerMode } }); };
   const rotate = () => selected && onChange({ ...pcb, components: pcb.components.map((component) => component.id === selected.id ? { ...component, rotationDegrees: ((component.rotationDegrees + 90) % 360) as 0 | 90 | 180 | 270 } : component) });
-  return <main className="pcb-layout">
+  return <main className="pcb-layout" aria-busy={repairing}>
     <aside className="pcb-tools panel">
       <div className="panel-heading"><span className="eyebrow">Through-hole PCB</span><h2>PCB Designer</h2></div>
       <div className="pcb-testing-warning" role="note" aria-label="PCB testing warning"><strong>Testing only</strong><span>PCB functionality is not ready for manufacturing. Do not fabricate boards from these exports.</span></div>
-      <button onClick={onBack}>← Breadboard</button><button className="primary" onClick={fixAutomatically}>Repair PCB</button><button onClick={() => onChange(clearAutoRoutes(pcb))}>Clear auto-routes</button>
+      <button onClick={onBack}>← Breadboard</button><button className="primary" onClick={fixAutomatically}>{repairing ? 'Cancel repair' : 'Repair PCB'}</button><button onClick={() => onChange(clearAutoRoutes(pcb))}>Clear auto-routes</button>
       <fieldset><legend>Board type</legend><label><input type="radio" name="layer-mode" checked={pcb.board.layerMode === 'single'} onChange={() => changeLayerMode('single')} /> Single-sided · B.Cu only</label><label><input type="radio" name="layer-mode" checked={pcb.board.layerMode === 'double'} onChange={() => changeLayerMode('double')} /> 2-layer · F.Cu + B.Cu</label></fieldset>
       <label>Board width (mm)<input type="number" min="20" max="300" value={pcb.board.widthMm} onChange={(event) => onChange({ ...pcb, board: { ...pcb.board, widthMm: Number(event.target.value) } })} /></label>
       <label>Board height (mm)<input type="number" min="20" max="300" value={pcb.board.heightMm} onChange={(event) => onChange({ ...pcb, board: { ...pcb.board, heightMm: Number(event.target.value) } })} /></label>
@@ -59,7 +91,7 @@ export function PcbDesigner({ pcb, onChange, onBack }: Props) {
       <div className="panel-heading"><span className="eyebrow">Manufacturing</span><h2>{drc.status === 'manufacturing-checks-passed' ? 'Checks Passed' : 'Not Ready'}</h2></div>
       {selected && <section><strong>{selected.reference}</strong><small>{PCB_FOOTPRINTS[selected.footprintId]?.name}</small><button onClick={rotate}>Rotate 90°</button></section>}
       <h3>Design rule check</h3><ul className="drc-list">{drc.issues.length ? drc.issues.map((issue) => <li key={issue.id} className={issue.severity}><strong>{issue.code}</strong>{issue.message}</li>) : <li className="pass">No blocking geometry or routing errors.</li>}</ul>
-      {hasRepairableProblems && <button className="primary pcb-fix-button" onClick={fixAutomatically}>Fix automatically</button>}{repairMessage && <p className="pcb-repair-result" role="status">{repairMessage}</p>}
+      {hasRepairableProblems && <button className="primary pcb-fix-button" onClick={fixAutomatically}>{repairing ? 'Cancel repair' : 'Fix automatically'}</button>}{repairMessage && <p className="pcb-repair-result" role="status">{repairMessage}</p>}
       <div className="export-actions"><button onClick={() => downloadTextFile(exportKicadPcb(pcb), `${pcb.board.title}.kicad_pcb`, 'application/x-kicad-pcb')}>Export KiCad PCB</button><button onClick={() => downloadTextFile(exportBomCsv(pcb), `${pcb.board.title}-bom.csv`, 'text/csv')}>Export BOM</button><button onClick={() => downloadTextFile(manufacturingSummary(pcb), 'manufacturing-summary.txt')}>Summary</button><button disabled title="Requires a validated KiCad CLI fabrication adapter.">Manufacturing ZIP unavailable</button></div>
       <p className="pcb-safety">DRC checks board geometry and routing—not circuit safety, compliance, or function.</p>
     </aside>

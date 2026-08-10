@@ -20,6 +20,11 @@ a 0.5 mm orthogonal grid. Board-edge clearance, foreign-net pads, previously rou
 copper, track width, and copper clearance are obstacles. It never creates a top layer or hidden via,
 and reports a connection as unresolved instead of drawing colliding copper.
 
+Repair searches run in a dedicated Web Worker so A* routing and placement candidates cannot block
+the interface. The repair control becomes a cancel action while work is active, and editing the PCB
+cancels a stale in-flight result instead of allowing it to overwrite the newer board. A binary heap
+backs the A* open set, and a successful direct reroute bypasses the more expensive placement search.
+
 DRC derives connectivity from physical pad/trace contact. It blocks readiness for unresolved
 connections, cross-net trace crossings/overlaps/clearance, foreign-pad contact, pad clearance,
 overlapping courtyards, stale automatic endpoints, invalid boards, missing/unverified footprints,

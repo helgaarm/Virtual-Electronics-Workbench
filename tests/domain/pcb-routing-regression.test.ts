@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { convertBreadboardToPcb } from '../../src/domain/pcb/converter';
 import { runPcbDrc } from '../../src/domain/pcb/drc';
 import { exportKicadPcb } from '../../src/domain/pcb/exporters';
+import { autoRepairPcb } from '../../src/domain/pcb/repair';
 import { routeRemainingConnections } from '../../src/domain/pcb/router';
 import { DEFAULT_PCB_RULES, type PcbProject, type PcbTrace } from '../../src/domain/pcb/types';
 import { createStarterProject } from '../../src/domain/starterProjects';
@@ -66,5 +67,15 @@ describe('PCB physical netlist and copper regression coverage', () => {
     const result = routeRemainingConnections(impossible);
     expect(result.diagnostics.length).toBeGreaterThan(0);
     expect(runPcbDrc(result.pcb).status).toBe('not-ready');
+  });
+
+  it('repairs a cleared small PCB without entering the placement-search slow path', () => {
+    const initial = convertBreadboardToPcb(createStarterProject('voltage-divider')).pcb!;
+    const startedAt = performance.now();
+    const repaired = autoRepairPcb(initial);
+
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
+    expect(repaired.appliedActions.map((action) => action.code)).toEqual(['REROUTED_NET']);
+    expect(runPcbDrc(repaired.pcb).status).toBe('manufacturing-checks-passed');
   });
 });

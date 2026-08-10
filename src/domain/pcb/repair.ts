@@ -9,8 +9,8 @@ export interface RepairProblem { issue: PcbDrcIssue; category: PcbRepairCategory
 export interface RepairScore { shorts: number; blocking: number; unrouted: number; vias: number; traceLengthMm: number; movementMm: number; boardAreaMm2: number }
 export interface AutoRepairResult { pcb: PcbProject; appliedActions: RepairAction[]; remainingProblems: RepairProblem[]; diagnostics: string[]; changed: boolean }
 
-const categoryFor = (issue: PcbDrcIssue): PcbRepairCategory => issue.repairCategory ?? (issue.code.startsWith('TRACK_') || issue.code.startsWith('VIA_') ? 'ROUTING_REPAIRABLE' : 'NON_AUTOFIXABLE');
-export function analyzePcb(pcb: PcbProject): RepairProblem[] { return runPcbDrc(pcb).issues.filter((issue) => issue.severity === 'error').map((issue) => ({ issue, category: categoryFor(issue) })); }
+export const repairCategoryForIssue = (issue: PcbDrcIssue): PcbRepairCategory => issue.repairCategory ?? (issue.code.startsWith('TRACK_') || issue.code.startsWith('VIA_') ? 'ROUTING_REPAIRABLE' : 'NON_AUTOFIXABLE');
+export function analyzePcb(pcb: PcbProject): RepairProblem[] { return runPcbDrc(pcb).issues.filter((issue) => issue.severity === 'error').map((issue) => ({ issue, category: repairCategoryForIssue(issue) })); }
 
 export function scorePcb(pcb: PcbProject, original = pcb): RepairScore {
   const result = runPcbDrc(pcb); const issues = result.issues.filter((issue) => issue.severity === 'error');
@@ -36,11 +36,16 @@ export function autoRepairPcb(input: PcbProject): AutoRepairResult {
   const original = clone(input); if (runPcbDrc(original).status === 'manufacturing-checks-passed') return { pcb: original, appliedActions: [], remainingProblems: [], diagnostics: ['The PCB already passes DRC; no changes were made.'], changed: false };
   let working = original; let score = scorePcb(working, original); const actions: RepairAction[] = []; const diagnostics: string[] = [];
   for (let iteration = 0; iteration < 4; iteration += 1) {
-    const candidates: Array<{ pcb: PcbProject; action: RepairAction }> = [];
-    const routed = routeRemainingConnections(clone(working)); candidates.push({ pcb: routed.pcb, action: { code: 'REROUTED_NET', description: `Rerouted automatic copper${routed.pcb.vias.length > working.vias.length ? ` and added ${routed.pcb.vias.length - working.vias.length} via(s)` : ''}.`, relatedIds: routed.pcb.traces.filter((trace) => trace.ownership === 'auto').map((trace) => trace.netId) } }); diagnostics.push(...routed.diagnostics.map((item) => item.message));
+    const candidates: Array<{ pcb: PcbProject; action: RepairAction; score?: RepairScore }> = [];
+    const routed = routeRemainingConnections(clone(working));
+    const routedAction: RepairAction = { code: 'REROUTED_NET', description: `Rerouted automatic copper${routed.pcb.vias.length > working.vias.length ? ` and added ${routed.pcb.vias.length - working.vias.length} via(s)` : ''}.`, relatedIds: routed.pcb.traces.filter((trace) => trace.ownership === 'auto').map((trace) => trace.netId) };
+    const routedScore = scorePcb(routed.pcb, original);
+    diagnostics.push(...routed.diagnostics.map((item) => item.message));
+    if (routedScore.blocking === 0 && compareScore(routedScore, score) < 0) { working = routed.pcb; score = routedScore; actions.push(routedAction); break; }
+    candidates.push({ pcb: routed.pcb, action: routedAction, score: routedScore });
     placementCandidates(working).slice(0, 40).forEach((candidate) => candidates.push({ pcb: routeRemainingConnections(candidate).pcb, action: { code: 'MOVED_COMPONENT', description: 'Moved an unlocked component on the 2.5 mm placement grid and rerouted affected automatic copper.', relatedIds: [] } }));
     if (iteration < 2) { const expanded = clone(working); expanded.board.widthMm += 5; expanded.board.heightMm += 5; candidates.push({ pcb: routeRemainingConnections(expanded).pcb, action: { code: 'EXPANDED_BOARD', description: 'Expanded the board by 5 mm in each dimension.', relatedIds: [] } }); }
-    const evaluated = candidates.map((candidate) => ({ ...candidate, score: scorePcb(candidate.pcb, original) })).sort((a, b) => compareScore(a.score, b.score) || a.action.code.localeCompare(b.action.code)); const best = evaluated[0];
+    const evaluated = candidates.map((candidate) => ({ ...candidate, score: candidate.score ?? scorePcb(candidate.pcb, original) })).sort((a, b) => compareScore(a.score, b.score) || a.action.code.localeCompare(b.action.code)); const best = evaluated[0];
     if (!best || compareScore(best.score, score) >= 0) break; working = best.pcb; score = best.score; actions.push(best.action); if (runPcbDrc(working).status === 'manufacturing-checks-passed') break;
   }
   const remainingProblems = analyzePcb(working); for (const problem of remainingProblems.filter((item) => item.category === 'FOOTPRINT_INTRINSIC')) actions.push({ code: 'CANNOT_AUTOFIX_FOOTPRINT', description: problem.issue.message, relatedIds: problem.issue.relatedIds ?? [] });

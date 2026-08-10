@@ -1,13 +1,13 @@
 import { PCB_FOOTPRINTS } from './footprints';
 import { componentCourtyard, padPosition, pointToSegmentDistanceMm, polylineSegments, rectsOverlap, segmentToSegmentDistanceMm } from './geometry';
 import { resolvedPads } from './connectivity';
-import { routedConnectionsForNet } from './router';
+import { routedConnectionCounts } from './router';
 import type { PcbPointMm, PcbProject } from './types';
 
 export type PcbDrcSeverity = 'error' | 'warning' | 'information';
 export type PcbRepairCategory = 'ROUTING_REPAIRABLE' | 'PLACEMENT_REPAIRABLE' | 'ROTATION_REPAIRABLE' | 'BOARD_REPAIRABLE' | 'LAYER_REPAIRABLE' | 'FOOTPRINT_INTRINSIC' | 'POSSIBLY_REQUIRES_JUMPER' | 'NON_AUTOFIXABLE';
 export interface PcbDrcIssue { id: string; severity: PcbDrcSeverity; code: string; message: string; locationMm?: PcbPointMm; repairCategory?: PcbRepairCategory; relatedIds?: string[] }
-export interface PcbDrcResult { issues: PcbDrcIssue[]; routedConnections: number; totalConnections: number; status: 'not-ready' | 'electrically-complete' | 'manufacturing-checks-passed' }
+export interface PcbDrcResult { issues: PcbDrcIssue[]; routedConnections: number; routedNetIds: string[]; totalConnections: number; status: 'not-ready' | 'electrically-complete' | 'manufacturing-checks-passed' }
 
 export function runPcbDrc(pcb: PcbProject): PcbDrcResult {
   const issues: PcbDrcIssue[] = [];
@@ -68,11 +68,10 @@ export function runPcbDrc(pcb: PcbProject): PcbDrcResult {
   }
   const totalConnections = pcb.nets.reduce((sum, net) => sum + Math.max(0, net.pads.length - 1), 0);
   const connectivityPcb = staleTraceIds.size ? { ...pcb, traces: pcb.traces.filter((trace) => !staleTraceIds.has(trace.id)) } : pcb;
-  const routedConnections = pcb.nets.reduce(
-    (sum, net) => sum + routedConnectionsForNet(connectivityPcb, net),
-    0,
-  );
+  const routedCounts = routedConnectionCounts(connectivityPcb);
+  const routedConnections = [...routedCounts.values()].reduce((sum, count) => sum + count, 0);
+  const routedNetIds = pcb.nets.filter((net) => (routedCounts.get(net.id) ?? 0) >= Math.max(0, net.pads.length - 1)).map((net) => net.id);
   if (routedConnections < totalConnections) issues.push({ id: 'unrouted', severity: 'error', code: 'UNROUTED_CONNECTIONS', message: `${totalConnections - routedConnections} required connection(s) remain unrouted.`, repairCategory: pcb.board.layerMode === 'double' ? 'ROUTING_REPAIRABLE' : 'POSSIBLY_REQUIRES_JUMPER' });
   const blocking = issues.some((issue) => issue.severity === 'error');
-  return { issues, routedConnections, totalConnections, status: blocking ? 'not-ready' : routedConnections === totalConnections ? 'manufacturing-checks-passed' : 'electrically-complete' };
+  return { issues, routedConnections, routedNetIds, totalConnections, status: blocking ? 'not-ready' : routedConnections === totalConnections ? 'manufacturing-checks-passed' : 'electrically-complete' };
 }

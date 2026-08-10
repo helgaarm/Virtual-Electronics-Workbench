@@ -1,4 +1,4 @@
-import { connectedPadCount, copperConnectivity, resolvedPads } from './connectivity';
+import { connectedPadCount, connectedPadCountsByNet, copperConnectivity, resolvedPads } from './connectivity';
 import { pointToSegmentDistanceMm, polylineSegments } from './geometry';
 import type { PcbCopperLayer, PcbNet, PcbPointMm, PcbProject, PcbTrace, PcbVia } from './types';
 
@@ -7,6 +7,7 @@ export interface RouteResult { pcb: PcbProject; diagnostics: RouteDiagnostic[] }
 const GRID_MM = 0.5; const VIA_DRILL_MM = 0.6; const VIA_COPPER_MM = 1.2; const VIA_COST = 16; const BEND_COST = 0.25;
 
 export function routedConnectionsForNet(pcb: PcbProject, net: PcbNet): number { return connectedPadCount(pcb, net); }
+export function routedConnectionCounts(pcb: PcbProject): Map<string, number> { return connectedPadCountsByNet(pcb); }
 export function isNetFullyRouted(pcb: PcbProject, net: PcbNet): boolean { return connectedPadCount(pcb, net) >= Math.max(0, net.pads.length - 1); }
 
 function nearestDisconnectedPair(pcb: PcbProject, net: PcbNet): readonly [PcbPointMm, PcbPointMm] | undefined {
@@ -17,6 +18,46 @@ function nearestDisconnectedPair(pcb: PcbProject, net: PcbNet): readonly [PcbPoi
 
 type State = { x: number; y: number; layer: PcbCopperLayer; direction: number; g: number; f: number };
 type RoutedPath = Array<{ point: PcbPointMm; layer: PcbCopperLayer }>;
+
+class StateMinHeap {
+  private readonly items: State[] = [];
+
+  get length(): number { return this.items.length; }
+
+  push(state: State): void {
+    this.items.push(state);
+    let index = this.items.length - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (compareState(this.items[parent], state) <= 0) break;
+      this.items[index] = this.items[parent];
+      index = parent;
+    }
+    this.items[index] = state;
+  }
+
+  pop(): State | undefined {
+    const first = this.items[0];
+    const last = this.items.pop();
+    if (!first || !last || this.items.length === 0) return first;
+    let index = 0;
+    while (true) {
+      const left = index * 2 + 1; const right = left + 1;
+      if (left >= this.items.length) break;
+      const child = right < this.items.length && compareState(this.items[right], this.items[left]) < 0 ? right : left;
+      if (compareState(last, this.items[child]) <= 0) break;
+      this.items[index] = this.items[child];
+      index = child;
+    }
+    this.items[index] = last;
+    return first;
+  }
+}
+
+function compareState(a: State, b: State): number {
+  return a.f - b.f || a.g - b.g || a.layer.localeCompare(b.layer)
+    || a.y - b.y || a.x - b.x || a.direction - b.direction;
+}
 
 function findPath(pcb: PcbProject, netId: string, start: PcbPointMm, end: PcbPointMm, widthMm: number): RoutedPath | undefined {
   const pads = resolvedPads(pcb); const foreignPads = pads.filter((pad) => pad.netId !== netId);
@@ -33,12 +74,13 @@ function findPath(pcb: PcbProject, netId: string, start: PcbPointMm, end: PcbPoi
       || foreignVias.some((via) => Math.hypot(point.xMm - via.positionMm.xMm, point.yMm - via.positionMm.yMm) < via.copperDiameterMm / 2 + radius + pcb.rules.copperClearanceMm);
   };
   const layers: PcbCopperLayer[] = pcb.board.layerMode === 'double' ? ['B.Cu', 'F.Cu'] : ['B.Cu'];
-  const open: State[] = layers.map((layer) => ({ x: sx, y: sy, layer, direction: -1, g: 0, f: 0 })); const best = new Map<string, number>(); const previous = new Map<string, string>(); const states = new Map<string, State>();
-  open.forEach((state) => { const id = key(state.x, state.y, state.layer, state.direction); best.set(id, 0); states.set(id, state); });
+  const open = new StateMinHeap(); const best = new Map<string, number>(); const previous = new Map<string, string>(); const states = new Map<string, State>();
+  layers.forEach((layer) => { const state: State = { x: sx, y: sy, layer, direction: -1, g: 0, f: 0 }; const id = key(state.x, state.y, state.layer, state.direction); open.push(state); best.set(id, 0); states.set(id, state); });
   const dirs = [[1,0],[0,1],[-1,0],[0,-1]] as const; let visited = 0;
   while (open.length && visited < 150_000) {
-    open.sort((a, b) => a.f - b.f || a.g - b.g || a.layer.localeCompare(b.layer) || a.y - b.y || a.x - b.x || a.direction - b.direction); const current = open.shift()!; visited += 1;
-    const currentKey = key(current.x, current.y, current.layer, current.direction);
+    const current = open.pop()!; const currentKey = key(current.x, current.y, current.layer, current.direction);
+    if (current.g !== best.get(currentKey)) continue;
+    visited += 1;
     if (current.x === ex && current.y === ey) {
       const path: RoutedPath = []; let cursor: string | undefined = currentKey;
       while (cursor) { const state = states.get(cursor)!; path.push({ point: { xMm: state.x * GRID_MM, yMm: state.y * GRID_MM }, layer: state.layer }); cursor = previous.get(cursor); }

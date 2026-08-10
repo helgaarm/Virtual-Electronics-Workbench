@@ -44,6 +44,20 @@ export function copperConnectivity(pcb: PcbProject): { pads: ResolvedPad[]; padR
 }
 
 export function connectedPadCount(pcb: PcbProject, net: PcbNet): number {
-  const graph = copperConnectivity(pcb); const indices = graph.pads.map((pad, index) => ({ pad, index })).filter(({ pad }) => pad.netId === net.id).map(({ index }) => index);
-  return Math.max(0, indices.length - new Set(indices.map(graph.padRoot)).size);
+  return connectedPadCountsByNet(pcb).get(net.id) ?? 0;
+}
+
+/** Computes every net's connected-pad count from one copper graph. */
+export function connectedPadCountsByNet(pcb: PcbProject): Map<string, number> {
+  const graph = copperConnectivity(pcb);
+  const indicesByNet = new Map<string, number[]>();
+  graph.pads.forEach((pad, index) => {
+    const indices = indicesByNet.get(pad.netId) ?? [];
+    indices.push(index);
+    indicesByNet.set(pad.netId, indices);
+  });
+  return new Map(pcb.nets.map((net) => {
+    const indices = indicesByNet.get(net.id) ?? [];
+    return [net.id, Math.max(0, indices.length - new Set(indices.map(graph.padRoot)).size)];
+  }));
 }
