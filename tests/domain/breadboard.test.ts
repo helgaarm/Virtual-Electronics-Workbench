@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { connectedHoleIds, createBreadboardDefinition, railHoleId, terminalHoleId } from '../../src/domain/physical/breadboard';
-import { validateOccupancy } from '../../src/domain/physical/occupancy';
+import { validateOccupancy, validatePackageOverlaps } from '../../src/domain/physical/occupancy';
 import { PHYSICAL_PACKAGES } from '../../src/domain/physical/packages';
 import { createLedExampleProject } from '../../src/domain/project';
 import { createPlacedComponent, movePlacedComponent, rotatePlacedComponent } from '../../src/state/workbenchActions';
@@ -203,6 +203,25 @@ describe('breadboard physical model', () => {
     expect(validateOccupancy(board, [permutedPins])).toContainEqual(expect.objectContaining({
       code: 'INVALID_PACKAGE_PLACEMENT',
       componentId: timer.id,
+    }));
+  });
+
+  it('rejects placements whose physical package bodies overlap', () => {
+    const board = createBreadboardDefinition();
+    const timer = createPlacedComponent('ne555', board, []);
+    if (!timer) throw new Error('NE555 was not placed.');
+    const capacitor = {
+      id: 'C-overlap', kind: 'capacitor' as const, label: 'C1', rotation: 0 as const,
+      capacitanceFarads: 100e-6, ratedVoltageV: 16,
+      terminalHoleIds: {
+        positive: terminalHoleId(board.id, 'E', 5),
+        negative: terminalHoleId(board.id, 'E', 6),
+      },
+    };
+
+    expect(validateOccupancy(board, [timer, capacitor])).toEqual([]);
+    expect(validatePackageOverlaps(board, [timer, capacitor])).toContainEqual(expect.objectContaining({
+      code: 'PACKAGE_OVERLAP', componentId: capacitor.id,
     }));
   });
 });

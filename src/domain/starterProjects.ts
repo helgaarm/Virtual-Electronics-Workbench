@@ -243,7 +243,7 @@ function ne555AstableProject(): WorkbenchProject {
     {
       id: 'C2', kind: 'capacitor', label: 'C2 10nF', rotation: 0,
       capacitanceFarads: 10e-9, ratedVoltageV: 50,
-      terminalHoleIds: { positive: terminalHoleId(boardId, 'J', 13), negative: terminalHoleId(boardId, 'J', 14) },
+      terminalHoleIds: { positive: terminalHoleId(boardId, 'D', 13), negative: terminalHoleId(boardId, 'D', 14) },
     },
     ...([
       ['W-GND', 'black', terminalHoleId(boardId, 'A', 10), railHoleId(boardId, 'top', 'negative', 5)],

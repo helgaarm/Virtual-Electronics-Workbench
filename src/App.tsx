@@ -3,7 +3,7 @@ import type { ComponentKind, PlacedComponent } from './domain/components/types';
 import { isComponentAnchored, terminalEntries } from './domain/components/types';
 import { signalSourceVoltageAtTime } from './domain/circuit/types';
 import { connectedHoleIds, createBreadboardDefinition } from './domain/physical/breadboard';
-import { buildOccupancy, validateOccupancy } from './domain/physical/occupancy';
+import { buildOccupancy, validateOccupancy, validatePackageOverlaps } from './domain/physical/occupancy';
 import {
   createEmptyProject,
   SIMULATION_SPEEDS,
@@ -255,6 +255,12 @@ export default function App() {
       setNotice('No compatible free holes were found for that part.');
       return;
     }
+    const overlap = validatePackageOverlaps(board, [...project.components, component])
+      .find((issue) => issue.componentId === component.id);
+    if (overlap) {
+      setNotice(overlap.message);
+      return;
+    }
     applyProject((current) => ({
       ...current,
       components: [...current.components, component],
@@ -293,7 +299,7 @@ export default function App() {
 
   const updateComponent = (updated: PlacedComponent) => {
     const nextComponents = project.components.map((component) => component.id === updated.id ? updated : component);
-    const issue = validateOccupancy(board, nextComponents)
+    const issue = [...validateOccupancy(board, nextComponents), ...validatePackageOverlaps(board, nextComponents)]
       .find((candidate) => candidate.componentId === updated.id);
     if (issue?.code === 'HOLE_OCCUPIED') {
       setNotice(`${issue.holeId.split(':').at(-1)} is already occupied.`);

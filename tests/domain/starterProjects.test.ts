@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBreadboardDefinition } from '../../src/domain/physical/breadboard';
-import { validateOccupancy } from '../../src/domain/physical/occupancy';
+import { validateOccupancy, validatePackageOverlaps } from '../../src/domain/physical/occupancy';
 import {
   createStarterProject,
   STARTER_PROJECTS,
@@ -79,6 +79,9 @@ describe('classic starter projects', () => {
       expect.objectContaining({ id: 'C2', kind: 'capacitor', capacitanceFarads: 10e-9 }),
       expect.objectContaining({ id: 'LED1', kind: 'led', label: '5 mm LED', color: 'red' }),
     ]));
+    const board = createBreadboardDefinition(project.board.id, project.board.columns);
+    expect(validatePackageOverlaps(board, project.components)
+      .filter((issue) => issue.componentId === 'C2')).toEqual([]);
   });
 
   it('includes the complete thermometer component inventory and TMP36 probe', () => {
