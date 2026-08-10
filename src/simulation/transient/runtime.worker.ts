@@ -1,7 +1,6 @@
 /// <reference lib="webworker" />
 import type { Circuit } from '../../domain/circuit/types';
-import type { RuntimeState } from '../../state/useTransientRuntime';
-import { runTransientRuntimeSteps } from '../../state/useTransientRuntime';
+import { runTransientRuntimeSteps, type RuntimeState } from './runtime';
 
 export interface TransientWorkerRequest {
   id: number;

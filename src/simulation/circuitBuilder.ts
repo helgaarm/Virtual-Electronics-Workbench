@@ -6,7 +6,7 @@ export { SIGNAL_GENERATOR_COMPONENT_ID } from '../domain/instruments/types';
 import type { WorkbenchProject } from '../domain/project';
 import { createBreadboardDefinition } from '../domain/physical/breadboard';
 import { validateOccupancy } from '../domain/physical/occupancy';
-import { UnionFind } from './unionFind';
+import { UnionFind } from '../domain/graph/unionFind';
 import { createNe555Subcircuit } from './models/ne555';
 import { tmp36Output } from './models/tmp36';
 import { potentiometerResistances } from './models/potentiometer';

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import type { Circuit } from '../../src/domain/circuit/types';
-import { createNe555Subcircuit } from '../../src/simulation/models/ne555';
-import { subcircuitScopedId } from '../../src/simulation/subcircuits';
+import type { Circuit } from '../../../src/domain/circuit/types';
+import { createNe555Subcircuit } from '../../../src/simulation/models/ne555';
+import { subcircuitScopedId } from '../../../src/simulation/subcircuits';
 import {
   createTransientRuntimeState,
   hardResetCapacitorRuntimeState,
   reconcileTransientRuntimeState,
   runTransientRuntimeSteps,
   stepTransientRuntimeState,
-} from '../../src/state/useTransientRuntime';
+} from '../../../src/simulation/transient/runtime';
 
 function rcCircuit(sourceVoltageV = 5): Circuit {
   return {

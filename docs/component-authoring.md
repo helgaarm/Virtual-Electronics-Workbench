@@ -25,6 +25,20 @@ Use this workflow when adding devices such as 1N4148, BC547, LM358N, or CD4017.
 
 The visible package, device metadata, and simulation model remain separate; pins map to real holes; numerical failures are explicit; old projects still load; tests and documentation cover the new behavior; third-party obligations are recorded; and the normal UI exposes only learner-relevant controls and telemetry.
 
+## Validation matrix
+
+| Change | Required validation |
+| --- | --- |
+| Electrical model or solver stamp | Domain/extraction tests, reference solver cases with tolerances, invalid-circuit structured errors, and DC/transient cases as applicable |
+| Package dimensions or placement | Package and pin-order tests, hole occupancy, allowed orientations, collision/lead geometry, and datasheet traceability |
+| Renderer or interaction | Programmatic tests plus WebGL browser smoke tests at desktop and narrow widths for placement, selection, anchoring, leads, and measurement attachment |
+| Persisted project shape | Schema increment, forward migration, validation, round trip, SQLite compatibility, and recovery against a copy of an older database |
+| Instrument behavior | Measurement-layer tests over solver output, disconnected/error states, shared-clock behavior, bounded capture, and no display-only signal generation |
+| Starter or lesson | Expected topology and solver results, measurement points, save/reload, stated learning goal, and documented model limitations |
+
+PCB footprint/export work is additional to—not a substitute for—the package, extraction, simulation,
+measurement, and lesson validation needed for an educational breadboard component.
+
 ## Standard component-pack patterns
 
 The standard pack keeps package, device, and model definitions separate:

@@ -13,7 +13,7 @@ Security vulnerabilities follow the private process in [SECURITY.md](SECURITY.md
 
 ## Local setup
 
-```powershell
+```console
 git clone https://github.com/helgaarm/Virtual-Electronics-Workbench.git
 cd Virtual-Electronics-Workbench
 npm ci
@@ -34,7 +34,7 @@ Useful commands:
 
 1. Fork the repository and create a descriptive branch from current `main`.
 2. Keep the change focused; avoid unrelated formatting or generated-file churn.
-3. Follow [AGENTS.md](AGENTS.md) and the architecture documentation under `docs/`.
+3. Follow [AGENTS.md](AGENTS.md) and use the [documentation index](docs/README.md) to find the relevant architecture and model references.
 4. Add or update tests for changed behavior.
 5. Run `npm run check` before pushing.
 6. Complete the pull-request template honestly and respond to review feedback.

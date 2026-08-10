@@ -20,3 +20,17 @@ The capacitor has named positive and negative terminals, configurable capacitanc
 The reusable DIP-8 definition uses a 2.54 mm pin pitch, 7.62 mm row spacing, and a 9.81 × 6.35 × 3.9 mm maximum body envelope from the TI P-package drawing. Its procedural renderer supplies the moulded body, leads, notch, pin-1 dot, and configurable top marking. NE555 placement must occupy four consecutive E-row holes and the corresponding four F-row holes, so the package straddles the centre channel. Only 0° and 180° orientations are valid; rotating preserves rigid pin spacing and physical numbering.
 
 The standard timer pin order is GND, TRIGGER, OUTPUT, RESET, CONTROL, THRESHOLD, DISCHARGE, VCC. The inspector shows both the semantic name and actual breadboard hole for every pin. See [ne555.md](ne555.md) for the simulation model, traceability, and limitations.
+
+## Standard package families
+
+The extended teaching catalogue reuses packages independently of device behavior. DO-35 provides an
+axial diode envelope; TO-92 provides anonymous numbered lead positions that device definitions map
+to transistor or sensor pins; DIP-14 and DIP-16 extend the same clockwise numbering and centre-channel
+placement rules as DIP-8. Potentiometers, sensors, displays, shift registers, and microcontrollers
+retain distinct device metadata and simulation models even when they share a physical family.
+
+Display brightness derives from simulated LED-junction current and bounded renderer persistence; it
+is not a stored numeric display value. Digital device runtimes classify simulated pin voltages and
+produce finite drive intent, but application-level scheduling is only claimed where the complete
+electrical chain is integrated and tested. Datasheet sources, nominal model values, and current
+mixed-signal limitations are in [standard-component-pack.md](standard-component-pack.md).

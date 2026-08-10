@@ -1,5 +1,9 @@
 # PCB implementation assessment
 
+> **Point-in-time assessment:** Current user-facing guarantees and limitations live in
+> [pcb-designer.md](pcb-designer.md). Recheck the implementation and DRC/export tests before relying
+> on findings here. PCB design remains secondary to breadboard learning, simulation, and testing.
+
 The original PCB converter reused simulation extraction. That extractor unions breadboard strips,
 permanent jumper wires, explicit grounds, and a switch's terminals whenever the switch is closed.
 Consequently, changing runtime switch state could collapse two physical switch pads into one PCB

@@ -2,7 +2,7 @@ import type { PlacedComponent } from '../components/types';
 import { terminalEntries } from '../components/types';
 import type { WorkbenchProject } from '../project';
 import { createBreadboardDefinition } from '../physical/breadboard';
-import { UnionFind } from '../../simulation/unionFind';
+import { UnionFind } from '../graph/unionFind';
 import { footprintForKind } from './footprints';
 import { DEFAULT_PCB_RULES, type PcbComponent, type PcbNet, type PcbProject } from './types';
 
