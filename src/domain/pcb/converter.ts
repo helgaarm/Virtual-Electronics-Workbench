@@ -94,5 +94,5 @@ export function convertBreadboardToPcb(project: WorkbenchProject): PcbConversion
   const nets = [...netMap.values()].sort((a, b) => a.id.localeCompare(b.id));
   const groundHoles = new Set(project.components.filter((component) => component.kind === 'ground').map((component) => component.terminalHoleIds.ground));
   for (const net of nets) if (net.pads.some((pad) => groundHoles.has(pad.sourceHoleId))) net.name = 'GND';
-  return { missing: [], pcb: { version: 1, sourceCircuitFingerprint: circuitFingerprint(project), board: { widthMm: placement.widthMm, heightMm: placement.heightMm, title: project.name }, components, nets, traces: [], jumpers: [], mountingHoles: [], rules: DEFAULT_PCB_RULES } };
+  return { missing: [], pcb: { version: 2, sourceCircuitFingerprint: circuitFingerprint(project), board: { widthMm: placement.widthMm, heightMm: placement.heightMm, title: project.name, layerMode: 'single' }, components, nets, traces: [], vias: [], jumpers: [], mountingHoles: [], rules: DEFAULT_PCB_RULES } };
 }

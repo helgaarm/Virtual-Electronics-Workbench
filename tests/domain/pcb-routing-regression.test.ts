@@ -8,7 +8,7 @@ import { createStarterProject } from '../../src/domain/starterProjects';
 
 function synthetic(traces: PcbTrace[]): PcbProject {
   return {
-    version: 1, sourceCircuitFingerprint: 'test', board: { widthMm: 30, heightMm: 30, title: 'Geometry test' },
+    version: 2, sourceCircuitFingerprint: 'test', board: { widthMm: 30, heightMm: 30, title: 'Geometry test', layerMode: 'single' },
     components: [
       { id: 'a', sourceComponentId: 'a', reference: 'A', value: 'R', footprintId: 'Axial-10mm', positionMm: { xMm: 8, yMm: 8 }, rotationDegrees: 90, locked: false },
       { id: 'b', sourceComponentId: 'b', reference: 'B', value: 'R', footprintId: 'Axial-10mm', positionMm: { xMm: 22, yMm: 22 }, rotationDegrees: 90, locked: false },
@@ -16,7 +16,7 @@ function synthetic(traces: PcbTrace[]): PcbProject {
     nets: [
       { id: 'n1', name: 'N1', pads: [{ componentId: 'a', padNumber: '1', terminalId: 'a', sourceHoleId: 'h1' }, { componentId: 'a', padNumber: '2', terminalId: 'b', sourceHoleId: 'h2' }] },
       { id: 'n2', name: 'N2', pads: [{ componentId: 'b', padNumber: '1', terminalId: 'a', sourceHoleId: 'h3' }, { componentId: 'b', padNumber: '2', terminalId: 'b', sourceHoleId: 'h4' }] },
-    ], traces, jumpers: [], mountingHoles: [], rules: DEFAULT_PCB_RULES,
+    ], traces, vias: [], jumpers: [], mountingHoles: [], rules: DEFAULT_PCB_RULES,
   };
 }
 

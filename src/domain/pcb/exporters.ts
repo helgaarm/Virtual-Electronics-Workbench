@@ -22,7 +22,8 @@ export function exportKicadPcb(pcb: PcbProject): string {
     }
     lines.push('  )');
   }
-  for (const trace of pcb.traces) for (let index = 1; index < trace.pointsMm.length; index += 1) { const a = trace.pointsMm[index - 1]; const b = trace.pointsMm[index]; lines.push(`  (segment (start ${a.xMm} ${a.yMm}) (end ${b.xMm} ${b.yMm}) (width ${trace.widthMm}) (layer "B.Cu") (net ${netNumbers.get(trace.netId) ?? 0}))`); }
+  for (const trace of pcb.traces) for (let index = 1; index < trace.pointsMm.length; index += 1) { const a = trace.pointsMm[index - 1]; const b = trace.pointsMm[index]; lines.push(`  (segment (start ${a.xMm} ${a.yMm}) (end ${b.xMm} ${b.yMm}) (width ${trace.widthMm}) (layer "${trace.layer}") (net ${netNumbers.get(trace.netId) ?? 0}))`); }
+  for (const via of pcb.vias) lines.push(`  (via (at ${via.positionMm.xMm} ${via.positionMm.yMm}) (size ${via.copperDiameterMm}) (drill ${via.drillDiameterMm}) (layers "F.Cu" "B.Cu") (net ${netNumbers.get(via.netId) ?? 0}))`);
   const w = pcb.board.widthMm; const h = pcb.board.heightMm;
   lines.push(`  (gr_rect (start 0 0) (end ${w} ${h}) (stroke (width 0.05) (type default)) (fill none) (layer "Edge.Cuts"))`, ')');
   return `${lines.join('\n')}\n`;
@@ -34,8 +35,8 @@ export function exportBomCsv(pcb: PcbProject): string {
 }
 
 export function manufacturingSummary(pcb: PcbProject): string {
-  const drc = runPcbDrc(pcb); const holes = pcb.components.reduce((sum, component) => sum + (PCB_FOOTPRINTS[component.footprintId]?.pads.length ?? 0), 0) + pcb.mountingHoles.length + pcb.jumpers.length * 2;
-  return [`Board: ${pcb.board.widthMm} × ${pcb.board.heightMm} mm`, 'Layers: 1 copper layer', 'Copper: Bottom', `Components: ${pcb.components.length}`, `Through holes: ${holes}`, `Minimum trace: ${pcb.rules.minimumTrackWidthMm.toFixed(2)} mm`, `Minimum clearance: ${pcb.rules.copperClearanceMm.toFixed(2)} mm`, `Jumpers: ${pcb.jumpers.length}`, `DRC: ${drc.status === 'manufacturing-checks-passed' ? 'Passed' : 'Not passed'}`].join('\n');
+  const drc = runPcbDrc(pcb); const holes = pcb.components.reduce((sum, component) => sum + (PCB_FOOTPRINTS[component.footprintId]?.pads.length ?? 0), 0) + pcb.mountingHoles.length + pcb.jumpers.length * 2 + pcb.vias.length;
+  return [`Board: ${pcb.board.widthMm} × ${pcb.board.heightMm} mm`, `Layers: ${pcb.board.layerMode === 'double' ? '2 copper layers' : '1 copper layer'}`, `Copper: ${pcb.board.layerMode === 'double' ? 'Front + Bottom' : 'Bottom'}`, `Components: ${pcb.components.length}`, `Through holes: ${holes}`, `Routing vias: ${pcb.vias.length}`, `Minimum trace: ${pcb.rules.minimumTrackWidthMm.toFixed(2)} mm`, `Minimum clearance: ${pcb.rules.copperClearanceMm.toFixed(2)} mm`, `Jumpers: ${pcb.jumpers.length}`, `DRC: ${drc.status === 'manufacturing-checks-passed' ? 'Passed' : 'Not passed'}`].join('\n');
 }
 
 export function downloadTextFile(contents: string, filename: string, mime = 'text/plain'): void {

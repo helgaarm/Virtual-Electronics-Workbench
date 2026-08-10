@@ -39,9 +39,12 @@ export class ProjectValidationError extends Error {
 
 function parsePcb(value: unknown): PcbProject {
   const source = record(value, 'pcb');
-  if (source.version !== 1) throw new ProjectValidationError('pcb.version', 'must be 1');
-  const cloned = structuredClone(source);
-  return cloned as unknown as PcbProject;
+  if (source.version !== 1 && source.version !== 2) throw new ProjectValidationError('pcb.version', 'must be 1 or 2');
+  const cloned = structuredClone(source) as Record<string, unknown>;
+  const board = record(cloned.board, 'pcb.board');
+  const traces = Array.isArray(cloned.traces) ? cloned.traces.map((trace, index) => ({ ...record(trace, `pcb.traces[${index}]`), layer: record(trace, `pcb.traces[${index}]`).layer ?? 'B.Cu' })) : [];
+  const jumpers = Array.isArray(cloned.jumpers) ? cloned.jumpers.map((jumper, index) => ({ copperDiameterMm: 1.8, ownership: 'manual', ...record(jumper, `pcb.jumpers[${index}]`) })) : [];
+  return { ...cloned, version: 2, board: { ...board, layerMode: board.layerMode === 'double' ? 'double' : 'single' }, traces, vias: Array.isArray(cloned.vias) ? cloned.vias : [], jumpers } as unknown as PcbProject;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
