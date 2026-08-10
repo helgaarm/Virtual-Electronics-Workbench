@@ -10,7 +10,7 @@ import { routeJumperWires } from '../../domain/physical/wireRouting';
 import type { Point3Mm } from '../../domain/physical/geometry';
 import { CylinderBetween, SmoothTube } from '../scene/geometry';
 import { createJumperCurve } from '../scene/wireGeometry';
-import { DIP_8_PACKAGE } from '../../domain/physical/dipPackages';
+import { DIP_8_PACKAGE, DIP_16_PACKAGE, type DipPackageDefinition } from '../../domain/physical/dipPackages';
 
 interface Props {
   board: BreadboardDefinition;
@@ -81,6 +81,79 @@ function AxialResistor({
             <meshStandardMaterial color={RESISTOR_BAND_HEX[band]} roughness={0.62} />
           </mesh>
         ))}
+      </group>
+    </group>
+  );
+}
+
+function useComponentMarkingTexture(lines: readonly string[]): THREE.CanvasTexture | undefined {
+  const signature = lines.join('\n');
+  const texture = useMemo(() => {
+    if (typeof document === 'undefined') return undefined;
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 192;
+    const context = canvas.getContext('2d');
+    if (!context) return undefined;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#f2eee3';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.font = '700 72px ui-monospace, monospace';
+    signature.split('\n').forEach((line, index) => context.fillText(line, canvas.width / 2, 58 + index * 78));
+    const created = new THREE.CanvasTexture(canvas);
+    created.colorSpace = THREE.SRGBColorSpace;
+    created.needsUpdate = true;
+    return created;
+  }, [signature]);
+  useEffect(() => () => texture?.dispose(), [texture]);
+  return texture;
+}
+
+function AxialDiodeMesh({ component, board, selected, onSelect, onBeginDrag }: {
+  component: Extract<PlacedComponent, { kind: 'diode-1n4148' }>;
+  board: BreadboardDefinition;
+  selected: boolean;
+  onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
+}) {
+  const physicalPackage = PHYSICAL_PACKAGES['diode-1n4148'];
+  const anode = point(board, component.terminalHoleIds.anode, 0.3);
+  const cathode = point(board, component.terminalHoleIds.cathode, 0.3);
+  const horizontal = cathode.clone().sub(anode).setY(0).normalize();
+  const center = anode.clone().add(cathode).multiplyScalar(0.5)
+    .add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const bodyLengthMm = physicalPackage.dimensionsMm.x;
+  const bodyRadiusMm = physicalPackage.dimensionsMm.y / 2;
+  const bodyAnode = center.clone().addScaledVector(horizontal, -bodyLengthMm / 2);
+  const bodyCathode = center.clone().addScaledVector(horizontal, bodyLengthMm / 2);
+  const anodeBend = anode.clone().setY(center.y);
+  const cathodeBend = cathode.clone().setY(center.y);
+  const bodyQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), horizontal);
+  const marking = useComponentMarkingTexture(['1N4148']);
+
+  return (
+    <group
+      onClick={(event) => { event.stopPropagation(); onSelect(); }}
+      onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
+    >
+      <SmoothTube points={[anode, anodeBend, bodyAnode]} radius={physicalPackage.leadDiameterMm / 2} color="#b8b9b5" metalness={0.9} />
+      <SmoothTube points={[cathode, cathodeBend, bodyCathode]} radius={physicalPackage.leadDiameterMm / 2} color="#b8b9b5" metalness={0.9} />
+      <group position={center} quaternion={bodyQuaternion}>
+        <mesh castShadow>
+          <capsuleGeometry args={[bodyRadiusMm, bodyLengthMm - bodyRadiusMm * 2, 8, 32]} />
+          <meshPhysicalMaterial color="#c86f39" transparent opacity={0.76} transmission={0.18} roughness={0.18} clearcoat={0.9} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={selected ? 0.22 : 0} />
+        </mesh>
+        <mesh position={[0, bodyLengthMm / 2 - 0.62, 0]}>
+          <cylinderGeometry args={[bodyRadiusMm + 0.025, bodyRadiusMm + 0.025, 0.42, 32]} />
+          <meshStandardMaterial color="#24201d" roughness={0.5} />
+        </mesh>
+        {marking && (
+          <mesh position={[0, -0.2, bodyRadiusMm + 0.018]} rotation={[0, 0, Math.PI / 2]}>
+            <planeGeometry args={[2.55, 0.72]} />
+            <meshBasicMaterial map={marking} transparent depthWrite={false} />
+          </mesh>
+        )}
       </group>
     </group>
   );
@@ -573,6 +646,7 @@ function Tmp36Mesh({ component, board, selected, onSelect, onBeginDrag }: {
   const rotationY = -Math.atan2(axis.z, axis.x);
   const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
   const bodyBottomY = bodyCenter.y - physicalPackage.dimensionsMm.y / 2;
+  const marking = useComponentMarkingTexture(['TMP36']);
   return (
     <group
       onClick={(event) => { event.stopPropagation(); onSelect(); }}
@@ -596,19 +670,155 @@ function Tmp36Mesh({ component, board, selected, onSelect, onBeginDrag }: {
           <boxGeometry args={[physicalPackage.dimensionsMm.x, physicalPackage.dimensionsMm.y, 0.3]} />
           <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} />
         </mesh>
+        {marking && (
+          <mesh position={[0, 0.15, physicalPackage.dimensionsMm.z / 2 + 0.015]}>
+            <planeGeometry args={[3.7, 1.25]} />
+            <meshBasicMaterial map={marking} transparent depthWrite={false} />
+          </mesh>
+        )}
       </group>
     </group>
   );
 }
 
-function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: {
-  component: Exclude<PlacedComponent, { kind: 'resistor' | 'led' | 'capacitor' | 'jumper-wire' | 'switch' | 'ne555' | 'tmp36' }>;
+type To92Component = Extract<PlacedComponent, { kind: 'bc547' | 'bc557' | '2n3904' | '2n3906' }>;
+type SimpleRenderableComponent = Extract<PlacedComponent, { kind: 'voltage-source' | 'ground' }>;
+
+function TransistorMesh({ component, board, selected, onSelect, onBeginDrag }: {
+  component: To92Component;
   board: BreadboardDefinition;
   selected: boolean;
   onSelect: () => void;
   onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
   const physicalPackage = PHYSICAL_PACKAGES[component.kind];
+  const pins = Object.values(component.terminalHoleIds).map((holeId) => point(board, holeId, 0.25));
+  const center = pins.reduce((sum, pin) => sum.add(pin), new THREE.Vector3()).multiplyScalar(1 / pins.length);
+  const axis = pins[2].clone().sub(pins[0]);
+  const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const bodyBottomY = bodyCenter.y - physicalPackage.dimensionsMm.y / 2;
+  const rotationY = -Math.atan2(axis.z, axis.x);
+  const marking = useComponentMarkingTexture([component.deviceId.toUpperCase(), component.polarity.toUpperCase()]);
+  return (
+    <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
+      {pins.map((pin, index) => (
+        <SmoothTube key={index} points={[pin, pin.clone().setY(bodyBottomY - 0.45), center.clone().lerp(pin, 0.74).setY(bodyBottomY + 0.45)]} radius={physicalPackage.leadDiameterMm / 2} color="#b9bec0" metalness={0.9} />
+      ))}
+      <group position={bodyCenter} rotation={[0, rotationY, 0]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[physicalPackage.dimensionsMm.x / 2, physicalPackage.dimensionsMm.x / 2, physicalPackage.dimensionsMm.y, 28, 1, false, 0, Math.PI]} />
+          <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.16} />
+        </mesh>
+        <mesh position={[0, 0, physicalPackage.dimensionsMm.z / 2 - 0.15]} castShadow>
+          <boxGeometry args={[physicalPackage.dimensionsMm.x, physicalPackage.dimensionsMm.y, 0.3]} />
+          <meshStandardMaterial color={selected ? '#314b5e' : '#202426'} roughness={0.62} />
+        </mesh>
+        {marking && <mesh position={[0, 0, physicalPackage.dimensionsMm.z / 2 + 0.015]}><planeGeometry args={[3.8, 1.7]} /><meshBasicMaterial map={marking} transparent depthWrite={false} /></mesh>}
+      </group>
+    </group>
+  );
+}
+
+function GenericDipMesh({ component, board, selected, onSelect, onBeginDrag }: {
+  component: Extract<PlacedComponent, { kind: '74hc595' | 'attiny85' }>;
+  board: BreadboardDefinition;
+  selected: boolean;
+  onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
+}) {
+  const definition: DipPackageDefinition = component.kind === '74hc595' ? DIP_16_PACKAGE : DIP_8_PACKAGE;
+  const physicalPackage = PHYSICAL_PACKAGES[component.kind];
+  const pins = Object.values(component.terminalHoleIds).map((holeId) => point(board, holeId, 0.25));
+  const center = pins.reduce((sum, pin) => sum.add(pin), new THREE.Vector3()).multiplyScalar(1 / pins.length);
+  const packageAxis = pins[definition.pinCount / 2 - 1].clone().sub(pins[0]);
+  const rotationY = -Math.atan2(packageAxis.z, packageAxis.x);
+  const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const bodyBottomY = bodyCenter.y - definition.bodyDimensionsMm.y / 2;
+  const marking = useComponentMarkingTexture(component.kind === '74hc595' ? ['74HC595N', 'SHIFT REG'] : ['ATTINY85', '20PU']);
+  return (
+    <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
+      {pins.map((pin, index) => {
+        const inward = center.clone().sub(pin).setY(0).normalize();
+        const embedded = pin.clone().addScaledVector(inward, 1.15).setY(bodyBottomY + 0.55);
+        return <SmoothTube key={index} points={[pin, pin.clone().setY(bodyBottomY - 0.7), embedded]} radius={definition.leadWidthMm / 2} color="#b9bec0" roughness={0.3} metalness={0.92} />;
+      })}
+      <group position={bodyCenter} rotation={[0, rotationY, 0]}>
+        <RoundedBox args={[definition.bodyDimensionsMm.x, definition.bodyDimensionsMm.y, definition.bodyDimensionsMm.z]} radius={0.42} smoothness={7} bevelSegments={5} castShadow>
+          <meshStandardMaterial color={selected ? '#263643' : '#15191b'} roughness={0.58} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.15} />
+        </RoundedBox>
+        <mesh position={[-definition.bodyDimensionsMm.x / 2 + 0.28, definition.bodyDimensionsMm.y / 2 + 0.02, 0]}><cylinderGeometry args={[0.82, 0.82, 0.1, 32, 1, false, 0, Math.PI]} /><meshStandardMaterial color="#080a0b" /></mesh>
+        <mesh position={[-definition.bodyDimensionsMm.x / 2 + 1.15, definition.bodyDimensionsMm.y / 2 + 0.065, -2.05]}><cylinderGeometry args={[0.3, 0.3, 0.11, 24]} /><meshStandardMaterial color="#747978" /></mesh>
+        {marking && <mesh position={[0.6, definition.bodyDimensionsMm.y / 2 + 0.07, 0]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[definition.bodyDimensionsMm.x * 0.68, 2.15]} /><meshBasicMaterial map={marking} transparent depthWrite={false} /></mesh>}
+      </group>
+    </group>
+  );
+}
+
+function PotentiometerMesh({ component, board, selected, onSelect, onBeginDrag }: {
+  component: Extract<PlacedComponent, { kind: 'potentiometer' }>;
+  board: BreadboardDefinition; selected: boolean; onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
+}) {
+  const physicalPackage = PHYSICAL_PACKAGES.potentiometer;
+  const pins = Object.values(component.terminalHoleIds).map((holeId) => point(board, holeId, 0.25));
+  const center = pins.reduce((sum, pin) => sum.add(pin), new THREE.Vector3()).multiplyScalar(1 / pins.length);
+  const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const bodyBottomY = bodyCenter.y - physicalPackage.dimensionsMm.y / 2;
+  const marking = useComponentMarkingTexture(['10K']);
+  return <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
+    {pins.map((pin, index) => <SmoothTube key={index} points={[pin, pin.clone().setY(bodyBottomY + 0.4)]} radius={physicalPackage.leadDiameterMm / 2} color="#b9bec0" metalness={0.9} />)}
+    <group position={bodyCenter}>
+      <RoundedBox args={[9.5, 4.8, 5.2]} radius={0.55} smoothness={6} castShadow><meshStandardMaterial color={selected ? '#287bb4' : '#17679e'} roughness={0.48} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.15} /></RoundedBox>
+      <mesh position={[0, 2.5, 0]} castShadow><cylinderGeometry args={[2.15, 2.15, 0.8, 32]} /><meshStandardMaterial color="#d0d2ce" metalness={0.72} roughness={0.3} /></mesh>
+      <mesh position={[0, 2.92, 0]}><boxGeometry args={[0.45, 0.1, 3.15]} /><meshStandardMaterial color="#555b5b" /></mesh>
+      {marking && <mesh position={[0, 0, 2.62]}><planeGeometry args={[3.7, 1.5]} /><meshBasicMaterial map={marking} transparent depthWrite={false} /></mesh>}
+    </group>
+  </group>;
+}
+
+function SegmentDisplayMesh({ component, board, selected, onSelect, onBeginDrag }: {
+  component: Extract<PlacedComponent, { kind: 'seven-segment' | 'four-digit-seven-segment' }>;
+  board: BreadboardDefinition; selected: boolean; onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
+}) {
+  const physicalPackage = PHYSICAL_PACKAGES[component.kind];
+  const pins = Object.values(component.terminalHoleIds).map((holeId) => point(board, holeId, 0.25));
+  const center = pins.reduce((sum, pin) => sum.add(pin), new THREE.Vector3()).multiplyScalar(1 / pins.length);
+  const perRow = pins.length / 2;
+  const axis = pins[perRow - 1].clone().sub(pins[0]).setY(0).normalize();
+  const rotationY = -Math.atan2(axis.z, axis.x);
+  const width = physicalPackage.dimensionsMm.x;
+  const height = physicalPackage.dimensionsMm.z;
+  const depth = physicalPackage.dimensionsMm.y;
+  const bodyCenter = center.clone().add(new THREE.Vector3(0, height / 2 + 1.2, 0));
+  const digits = component.kind === 'seven-segment' ? 1 : 4;
+  const digitSpacing = width / digits;
+  const segmentColor = '#6e171b';
+  return <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
+    {pins.map((pin, index) => <SmoothTube key={index} points={[pin, pin.clone().setY(bodyCenter.y - height / 2 + 0.5)]} radius={physicalPackage.leadDiameterMm / 2} color="#b9bec0" metalness={0.9} />)}
+    <group position={bodyCenter} rotation={[0, rotationY, 0]}>
+      <RoundedBox args={[width, height, depth]} radius={0.65} smoothness={6} castShadow><meshStandardMaterial color={selected ? '#352d31' : '#17191a'} roughness={0.48} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.14} /></RoundedBox>
+      <mesh position={[0, 0, depth / 2 + 0.03]}><planeGeometry args={[width - 1.2, height - 1.5]} /><meshStandardMaterial color="#301114" roughness={0.34} /></mesh>
+      {Array.from({ length: digits }, (_, digit) => {
+        const x = -width / 2 + digitSpacing * (digit + 0.5);
+        const sx = digitSpacing * 0.54;
+        const sy = height * 0.24;
+        const z = depth / 2 + 0.075;
+        return <group key={digit}>{[-sy, 0, sy].map((y) => <mesh key={`h${y}`} position={[x, y, z]}><boxGeometry args={[sx, 0.55, 0.08]} /><meshBasicMaterial color={segmentColor} /></mesh>)}{[-1, 1].flatMap((side) => [-1, 1].map((vertical) => <mesh key={`${side}-${vertical}`} position={[x + side * sx / 2, vertical * sy / 2, z]}><boxGeometry args={[0.55, sy * 0.76, 0.08]} /><meshBasicMaterial color={segmentColor} /></mesh>))}<mesh position={[x + sx * 0.72, -sy * 1.35, z]}><circleGeometry args={[0.34, 18]} /><meshBasicMaterial color={segmentColor} /></mesh></group>;
+      })}
+    </group>
+  </group>;
+}
+
+function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: {
+  component: SimpleRenderableComponent;
+  board: BreadboardDefinition;
+  selected: boolean;
+  onSelect: () => void;
+  onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
+}) {
+  const physicalPackage = PHYSICAL_PACKAGES[component.kind];
+  const marking = useComponentMarkingTexture([component.label]);
   const entries = Object.values(component.terminalHoleIds);
   const terminalPoints = entries.map((holeId) => point(board, holeId, 0.3));
   const start = terminalPoints[0];
@@ -661,6 +871,15 @@ function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: 
       >
         <meshStandardMaterial color={selected ? '#7fa9d4' : isPower ? '#5d7187' : '#32383b'} roughness={0.55} />
       </RoundedBox>
+      {marking && (
+        <mesh
+          position={[midpoint.x, midpoint.y + height + physicalPackage.dimensionsMm.y / 2 + 0.015, midpoint.z]}
+          rotation={[-Math.PI / 2, 0, rotationY]}
+        >
+          <planeGeometry args={[physicalPackage.dimensionsMm.x * 0.72, Math.min(2.2, physicalPackage.dimensionsMm.z * 0.45)]} />
+          <meshBasicMaterial map={marking} transparent depthWrite={false} />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -692,7 +911,12 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         if (component.kind === 'switch') return <TactileSwitchMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'ne555') return <Dip8Mesh key={component.id} component={component} {...common} />;
         if (component.kind === 'tmp36') return <Tmp36Mesh key={component.id} component={component} {...common} />;
-        return <SimpleComponent key={component.id} component={component} {...common} />;
+        if (component.kind === 'diode-1n4148') return <AxialDiodeMesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'bc547' || component.kind === 'bc557' || component.kind === '2n3904' || component.kind === '2n3906') return <TransistorMesh key={component.id} component={component as To92Component} {...common} />;
+        if (component.kind === 'potentiometer') return <PotentiometerMesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'seven-segment' || component.kind === 'four-digit-seven-segment') return <SegmentDisplayMesh key={component.id} component={component} {...common} />;
+        if (component.kind === '74hc595' || component.kind === 'attiny85') return <GenericDipMesh key={component.id} component={component} {...common} />;
+        return <SimpleComponent key={component.id} component={component as SimpleRenderableComponent} {...common} />;
       })}
     </>
   );
