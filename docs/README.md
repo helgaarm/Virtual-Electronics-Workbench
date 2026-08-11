@@ -35,3 +35,4 @@ measured a working breadboard circuit. Its exports are not fabrication-ready.
 - [Dependency review](dependency-review.md) — dated review; rerun checks for current status
 - [Public-repository hardening](public-repository-hardening.md) — setup record and owner checklist
 - [Documentation review](documentation-review.md) — review record and improvement tracking
+- [SMART on FHIR 2.2 and Norwegian/Helsenorge compliance](smart-on-fhir-2.2-compliance.md) — current gap assessment
