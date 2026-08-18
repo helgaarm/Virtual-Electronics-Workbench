@@ -1,0 +1,169 @@
+name: Dependabot generated-file repair
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-repair-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  repair-license-inventory:
+    name: Repair stale license inventory
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/npm_and_yarn/') &&
+      github.event.workflow_run.pull_requests[0].number != null
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Confirm the failure and pull request are allowlisted
+        id: scope
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          EXPECTED_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          EXPECTED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          echo "eligible=false" >> "$GITHUB_OUTPUT"
+
+          failed_log="$RUNNER_TEMP/failed.log"
+          gh run view "$RUN_ID" --log-failed > "$failed_log"
+          if ! grep -Fq \
+            "THIRD_PARTY_LICENSES.md is stale. Run npm run licenses:generate." \
+            "$failed_log"; then
+            echo "The failed CI run does not contain the allowlisted license-inventory error."
+            exit 0
+          fi
+
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          base_sha="$(jq -r '.base.sha' <<< "$pr_json")"
+          if [[ "$(jq -r '.user.login' <<< "$pr_json")" != "dependabot[bot]" ]] ||
+             [[ "$(jq -r '.state' <<< "$pr_json")" != "open" ]] ||
+             [[ "$(jq -r '.base.ref' <<< "$pr_json")" != "main" ]] ||
+             [[ "$(jq -r '.head.repo.full_name' <<< "$pr_json")" != "$GITHUB_REPOSITORY" ]] ||
+             [[ "$(jq -r '.head.ref' <<< "$pr_json")" != "$EXPECTED_HEAD_BRANCH" ]] ||
+             [[ "$(jq -r '.head.sha' <<< "$pr_json")" != "$EXPECTED_HEAD_SHA" ]]; then
+            echo "The pull request no longer matches the trusted Dependabot run."
+            exit 0
+          fi
+
+          mapfile -t changed_files < <(
+            gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" \
+              --jq '.[].filename'
+          )
+          if [[ "${#changed_files[@]}" -eq 0 ]]; then
+            echo "The pull request has no changed files."
+            exit 0
+          fi
+
+          lockfile_changed=false
+          for changed_file in "${changed_files[@]}"; do
+            case "$changed_file" in
+              package.json|package-lock.json|THIRD_PARTY_LICENSES.md)
+                ;;
+              *)
+                echo "Refusing repair because the pull request changes $changed_file."
+                exit 0
+                ;;
+            esac
+            if [[ "$changed_file" == "package-lock.json" ]]; then
+              lockfile_changed=true
+            fi
+          done
+          if [[ "$lockfile_changed" != "true" ]]; then
+            echo "Refusing repair because the pull request does not change package-lock.json."
+            exit 0
+          fi
+
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the exact failed commit
+        if: steps.scope.outputs.eligible == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        if: steps.scope.outputs.eligible == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install locked dependencies without lifecycle scripts
+        if: steps.scope.outputs.eligible == 'true'
+        run: npm ci --ignore-scripts
+
+      - name: Regenerate and constrain the repair
+        id: repair
+        if: steps.scope.outputs.eligible == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/generate-third-party-licenses.mjs
+
+          mapfile -t modified_files < <(git diff --name-only)
+          if [[ "${#modified_files[@]}" -eq 0 ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "${#modified_files[@]}" -ne 1 ]] ||
+             [[ "${modified_files[0]}" != "THIRD_PARTY_LICENSES.md" ]]; then
+            echo "The generator changed files outside the allowlist."
+            printf 'Changed file: %s\n' "${modified_files[@]}"
+            exit 1
+          fi
+
+          git diff --check
+          node scripts/generate-third-party-licenses.mjs --check
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit the generated inventory
+        if: steps.repair.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- THIRD_PARTY_LICENSES.md
+          git commit -m "chore: refresh third-party licenses"
+
+      - name: Push the repair and dispatch checks
+        if: steps.repair.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          BASE_SHA: ${{ steps.scope.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          new_sha="$(git rev-parse HEAD)"
+          authorization="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$authorization"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $authorization" \
+            push origin "HEAD:refs/heads/$HEAD_BRANCH"
+
+          gh workflow run ci.yml --ref "$HEAD_BRANCH"
+          gh workflow run dependency-review.yml \
+            --ref "$HEAD_BRANCH" \
+            -f base_ref="$BASE_SHA" \
+            -f head_ref="$new_sha"

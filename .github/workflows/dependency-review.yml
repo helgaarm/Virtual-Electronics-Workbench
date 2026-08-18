@@ -3,6 +3,16 @@ name: Dependency review
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Base commit to compare
+        required: true
+        type: string
+      head_ref:
+        description: Head commit to compare
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,4 +31,6 @@ jobs:
       - name: Review dependency changes
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
+          base-ref: ${{ inputs.base_ref || github.event.pull_request.base.sha }}
+          head-ref: ${{ inputs.head_ref || github.event.pull_request.head.sha }}
           fail-on-severity: moderate

@@ -22,6 +22,12 @@ const requireMatch = (content, pattern, message) => {
 }
 
 const workflowDirectory = path.join(root, '.github', 'workflows')
+const workflowWriteAllowlist = new Map([
+  [
+    '.github/workflows/dependabot-auto-repair.yml',
+    new Set(['actions', 'contents']),
+  ],
+])
 let workflowNames = []
 
 try {
@@ -45,8 +51,29 @@ for (const workflowName of workflowNames) {
   if (/\bpull_request_target\b/u.test(workflow)) {
     failures.push(`${relativePath} must not use pull_request_target.`)
   }
-  if (/permissions:\s*write-all|:\s*write\s*$/mu.test(workflow)) {
-    failures.push(`${relativePath} must not grant write permissions.`)
+  if (/permissions:\s*write-all/u.test(workflow)) {
+    failures.push(`${relativePath} must not grant write-all permissions.`)
+  }
+
+  const allowedWritePermissions = workflowWriteAllowlist.get(relativePath) ?? new Set()
+  const writePermissionCounts = new Map()
+  for (const match of workflow.matchAll(/^(\s*)([a-z-]+):\s*write\s*$/gmu)) {
+    const indentation = match[1].length
+    const permission = match[2]
+    if (!allowedWritePermissions.has(permission) || indentation !== 6) {
+      failures.push(
+        `${relativePath} must not grant ${permission}: write at indentation ${indentation}.`,
+      )
+      continue
+    }
+    writePermissionCounts.set(permission, (writePermissionCounts.get(permission) ?? 0) + 1)
+  }
+  for (const permission of allowedWritePermissions) {
+    if (writePermissionCounts.get(permission) !== 1) {
+      failures.push(
+        `${relativePath} must grant exactly one job-level ${permission}: write permission.`,
+      )
+    }
   }
   if (/\bsecrets\s*\./u.test(workflow)) {
     failures.push(`${relativePath} must not expose repository secrets.`)
@@ -106,6 +133,7 @@ requireMatch(
   'CI must fail on moderate-or-higher vulnerabilities in the locked graph.',
 )
 requireMatch(ci, /npm run check/u, 'CI must run the complete repository check.')
+requireMatch(ci, /workflow_dispatch:/u, 'CI must support trusted repair dispatches.')
 
 const dependencyReview = await requireFile('.github/workflows/dependency-review.yml')
 requireMatch(
@@ -113,6 +141,45 @@ requireMatch(
   /fail-on-severity:\s*moderate/u,
   'Dependency review must fail at moderate severity or higher.',
 )
+requireMatch(
+  dependencyReview,
+  /workflow_dispatch:[\s\S]*base_ref:[\s\S]*head_ref:/u,
+  'Dependency review must accept explicit refs for trusted repair dispatches.',
+)
+requireMatch(
+  dependencyReview,
+  /base-ref:\s*\$\{\{ inputs\.base_ref \|\| github\.event\.pull_request\.base\.sha \}\}/u,
+  'Dependency review must compare the explicitly dispatched base ref.',
+)
+requireMatch(
+  dependencyReview,
+  /head-ref:\s*\$\{\{ inputs\.head_ref \|\| github\.event\.pull_request\.head\.sha \}\}/u,
+  'Dependency review must compare the explicitly dispatched head ref.',
+)
+
+const dependabotRepair = await requireFile('.github/workflows/dependabot-auto-repair.yml')
+for (const [pattern, message] of [
+  [/workflow_run:[\s\S]*workflows:\s*\[CI\][\s\S]*types:\s*\[completed\]/u, 'must run only after CI completes'],
+  [/workflow_run\.conclusion == 'failure'/u, 'must require a failed CI conclusion'],
+  [/workflow_run\.event == 'pull_request'/u, 'must require a pull-request CI run'],
+  [/workflow_run\.actor\.login == 'dependabot\[bot\]'/u, 'must require the Dependabot actor'],
+  [/workflow_run\.head_repository\.full_name == github\.repository/u, 'must require a same-repository branch'],
+  [/startsWith\(github\.event\.workflow_run\.head_branch, 'dependabot\/npm_and_yarn\/'\)/u, 'must restrict the branch prefix'],
+  [/THIRD_PARTY_LICENSES\.md is stale\. Run npm run licenses:generate\./u, 'must match the allowlisted failure'],
+  [/package\.json\|package-lock\.json\|THIRD_PARTY_LICENSES\.md/u, 'must restrict pull-request files'],
+  [/npm ci --ignore-scripts/u, 'must disable dependency lifecycle scripts'],
+  [/node scripts\/generate-third-party-licenses\.mjs/u, 'must invoke the fixed generator directly'],
+  [/git diff --name-only/u, 'must constrain generated changes'],
+  [/git diff --check/u, 'must validate the generated patch'],
+  [/push origin "HEAD:refs\/heads\/\$HEAD_BRANCH"/u, 'must push without a force option'],
+  [/gh workflow run ci\.yml/u, 'must dispatch CI for the repaired commit'],
+  [/gh workflow run dependency-review\.yml/u, 'must dispatch dependency review for the repaired commit'],
+]) {
+  requireMatch(dependabotRepair, pattern, `Dependabot repair ${message}.`)
+}
+if (/git\s+push[^\n]*(?:--force|-f\b)/u.test(dependabotRepair)) {
+  failures.push('Dependabot repair must never force-push.')
+}
 
 const codeowners = await requireFile('.github/CODEOWNERS')
 for (const expectedOwner of [

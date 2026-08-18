@@ -33,5 +33,6 @@ measured a working breadboard circuit. Its exports are not fabrication-ready.
 
 - [Security policy](../SECURITY.md)
 - [Dependency review](dependency-review.md) — dated review; rerun checks for current status
+- [Dependabot automatic repair](dependabot-auto-repair.md) — allowlisted, credential-free generated-file repair
 - [Public-repository hardening](public-repository-hardening.md) — setup record and owner checklist
 - [Documentation review](documentation-review.md) — review record and improvement tracking
