@@ -95,6 +95,16 @@ describe('classic starter projects', () => {
     expect(project.probes[0].label).toBe('TMP36 output');
   });
 
+  it('gives thermometer packages room without powering an unwired circuit', () => {
+    const project = createStarterProject('digital-thermometer');
+    const board = createBreadboardDefinition(project.board.id, project.board.columns);
+    expect(validatePackageOverlaps(board, project.components)).toEqual([]);
+    expect(validateOccupancy(board, project.components)).toEqual([]);
+    expect(project.powerOn).toBe(false);
+    expect(STARTER_PROJECTS.find((starter) => starter.id === 'digital-thermometer')?.description)
+      .toContain('Unwired');
+  });
+
   it('produces the expected 2.5 V divider midpoint', () => {
     const project = createStarterProject('voltage-divider');
     const simulation = simulateProject(project);

@@ -33,7 +33,7 @@ Seven-segment visual persistence is an exponential 40 ms integration of instanta
 
 ## Built-in thermometer project
 
-The **Digital Breadboard Thermometer** starter places a TMP36, an ATtiny85, two cascaded-package 74HC595 devices, a four-digit common-cathode display, eight 330 Ω segment resistors, four TO-92 NPN digit drivers, local decoupling capacitors, and a reset pull-up on a 50-column breadboard. Its saved multimeter probe targets the TMP36 output. The standard parts drawer also exposes the 1N4148, four transistor variants, 10 kΩ trimmer, both display sizes, shift register, and microcontroller instead of leaving their models accessible only to tests.
+The **Digital Breadboard Thermometer** starter places a TMP36, an ATtiny85, two cascaded-package 74HC595 devices, a four-digit common-cathode display, eight 330 Ω segment resistors, four TO-92 NPN digit drivers, local decoupling capacitors, and a reset pull-up on a 50-column breadboard. The starter is an unwired assembly layout and opens with power off; it is not a working thermometer demonstration. Packages are spaced without body overlaps, and the display faces upward at its defined physical size. Its saved multimeter probe targets the TMP36 output, but that measurement needs sensor power and ground wiring. The standard parts drawer also exposes the 1N4148, four transistor variants, 10 kΩ trimmer, both display sizes, shift register, and microcontroller instead of leaving their models accessible only to tests.
 
 ## Current milestone limitations
 

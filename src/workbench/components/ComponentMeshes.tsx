@@ -823,8 +823,8 @@ function SegmentDisplayMesh({ component, board, selected, onSelect, onBeginDrag 
   const width = physicalPackage.dimensionsMm.x;
   const height = physicalPackage.dimensionsMm.z;
   const depth = physicalPackage.dimensionsMm.y;
-  const bodyCenter = center.clone().add(new THREE.Vector3(0, height / 2 + 1.2, 0));
-  const bodyBottomY = bodyCenter.y - height / 2;
+  const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
+  const bodyBottomY = bodyCenter.y - depth / 2;
   const digits = component.kind === 'seven-segment' ? 1 : 4;
   const digitSpacing = width / digits;
   const segmentColor = '#6e171b';
@@ -836,15 +836,17 @@ function SegmentDisplayMesh({ component, board, selected, onSelect, onBeginDrag 
       return <SmoothTube key={index} points={[pin, bend, embedded]} radius={physicalPackage.leadDiameterMm / 2} color="#b9bec0" metalness={0.9} />;
     })}
     <group position={bodyCenter} rotation={[0, rotationY, 0]}>
-      <RoundedBox args={[width, height, depth]} radius={0.65} smoothness={6} castShadow><meshStandardMaterial color={selected ? '#352d31' : '#17191a'} roughness={0.48} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.14} /></RoundedBox>
-      <mesh position={[0, 0, depth / 2 + 0.03]}><planeGeometry args={[width - 1.2, height - 1.5]} /><meshStandardMaterial color="#301114" roughness={0.34} /></mesh>
-      {Array.from({ length: digits }, (_, digit) => {
-        const x = -width / 2 + digitSpacing * (digit + 0.5);
-        const sx = digitSpacing * 0.54;
-        const sy = height * 0.24;
-        const z = depth / 2 + 0.075;
-        return <group key={digit}>{[-sy, 0, sy].map((y) => <mesh key={`h${y}`} position={[x, y, z]}><boxGeometry args={[sx, 0.55, 0.08]} /><meshBasicMaterial color={segmentColor} /></mesh>)}{[-1, 1].flatMap((side) => [-1, 1].map((vertical) => <mesh key={`${side}-${vertical}`} position={[x + side * sx / 2, vertical * sy / 2, z]}><boxGeometry args={[0.55, sy * 0.76, 0.08]} /><meshBasicMaterial color={segmentColor} /></mesh>))}<mesh position={[x + sx * 0.72, -sy * 1.35, z]}><circleGeometry args={[0.34, 18]} /><meshBasicMaterial color={segmentColor} /></mesh></group>;
-      })}
+      <group rotation={[-Math.PI / 2, 0, 0]}>
+        <RoundedBox args={[width, height, depth]} radius={0.65} smoothness={6} castShadow><meshStandardMaterial color={selected ? '#352d31' : '#17191a'} roughness={0.48} emissive={selected ? '#3478c7' : '#000'} emissiveIntensity={0.14} /></RoundedBox>
+        <mesh position={[0, 0, depth / 2 + 0.03]}><planeGeometry args={[width - 1.2, height - 1.5]} /><meshStandardMaterial color="#301114" roughness={0.34} /></mesh>
+        {Array.from({ length: digits }, (_, digit) => {
+          const x = -width / 2 + digitSpacing * (digit + 0.5);
+          const sx = digitSpacing * 0.54;
+          const sy = height * 0.24;
+          const z = depth / 2 + 0.075;
+          return <group key={digit}>{[-sy, 0, sy].map((y) => <mesh key={`h${y}`} position={[x, y, z]}><boxGeometry args={[sx, 0.55, 0.08]} /><meshBasicMaterial color={segmentColor} /></mesh>)}{[-1, 1].flatMap((side) => [-1, 1].map((vertical) => <mesh key={`${side}-${vertical}`} position={[x + side * sx / 2, vertical * sy / 2, z]}><boxGeometry args={[0.55, sy * 0.76, 0.08]} /><meshBasicMaterial color={segmentColor} /></mesh>))}<mesh position={[x + sx * 0.72, -sy * 1.35, z]}><circleGeometry args={[0.34, 18]} /><meshBasicMaterial color={segmentColor} /></mesh></group>;
+        })}
+      </group>
     </group>
   </group>;
 }

@@ -36,7 +36,7 @@ export const STARTER_PROJECTS = [
   {
     id: 'digital-thermometer',
     name: 'Digital Breadboard Thermometer',
-    description: 'Measure temperature with a TMP36, convert it in ATtiny85 firmware, and multiplex a four-digit display through two 74HC595 shift registers and transistor drivers.',
+    description: 'Unwired parts layout for a TMP36 thermometer. Wiring and integrated firmware simulation are not yet available.',
   },
 ] as const;
 
@@ -469,21 +469,21 @@ function digitalThermometerProject(): WorkbenchProject {
   };
   const components: PlacedComponent[] = [
     { id: 'V1', kind: 'voltage-source', label: '5V', rotation: 0, voltageV: 5, terminalHoleIds: { positive: railHoleId(b, 'top', 'positive', 1), negative: railHoleId(b, 'top', 'negative', 1) } },
-    { id: 'GND1', kind: 'ground', label: 'GND', rotation: 0, terminalHoleIds: { ground: railHoleId(b, 'top', 'negative', 2) } },
+    { id: 'GND1', kind: 'ground', label: 'GND', rotation: 0, terminalHoleIds: { ground: railHoleId(b, 'top', 'negative', 4) } },
     { id: 'TMP1', kind: 'tmp36', label: 'TMP36', rotation: 0, deviceId: 'tmp36', packageId: 'TO-92-inline', simulationModel: 'temperature-controlled-source', temperatureC: 23.4, terminalHoleIds: { vs: terminalHoleId(b, 'E', 2), vout: terminalHoleId(b, 'E', 3), gnd: terminalHoleId(b, 'E', 4) } },
     { id: 'MCU1', kind: 'attiny85', label: 'ATtiny85', rotation: 0, deviceId: 'attiny85', packageId: 'DIP-8', firmwareId: 'thermometer-v1', clockHz: 1_000_000, terminalHoleIds: dip(7, 8) },
     { id: 'SR1', kind: '74hc595', label: '74HC595 A', rotation: 0, deviceId: '74hc595', packageId: 'DIP-16', firmwareState: 'electrical-pins', terminalHoleIds: dip(14, 16) },
     { id: 'SR2', kind: '74hc595', label: '74HC595 B', rotation: 0, deviceId: '74hc595', packageId: 'DIP-16', firmwareState: 'electrical-pins', terminalHoleIds: dip(24, 16) },
-    { id: 'DISPLAY1', kind: 'four-digit-seven-segment', label: '23.4 display', rotation: 0, packageId: '12-pin-multiplexed', commonType: 'common-cathode', terminalHoleIds: { digit1: terminalHoleId(b, 'E', 35), a: terminalHoleId(b, 'E', 36), f: terminalHoleId(b, 'E', 37), digit2: terminalHoleId(b, 'E', 38), digit3: terminalHoleId(b, 'E', 39), b: terminalHoleId(b, 'E', 40), digit4: terminalHoleId(b, 'F', 40), g: terminalHoleId(b, 'F', 39), c: terminalHoleId(b, 'F', 38), dp: terminalHoleId(b, 'F', 37), d: terminalHoleId(b, 'F', 36), e: terminalHoleId(b, 'F', 35) } },
+    { id: 'DISPLAY1', kind: 'four-digit-seven-segment', label: 'Four-digit display', rotation: 0, packageId: '12-pin-multiplexed', commonType: 'common-cathode', terminalHoleIds: { digit1: terminalHoleId(b, 'E', 40), a: terminalHoleId(b, 'E', 41), f: terminalHoleId(b, 'E', 42), digit2: terminalHoleId(b, 'E', 43), digit3: terminalHoleId(b, 'E', 44), b: terminalHoleId(b, 'E', 45), digit4: terminalHoleId(b, 'F', 45), g: terminalHoleId(b, 'F', 44), c: terminalHoleId(b, 'F', 43), dp: terminalHoleId(b, 'F', 42), d: terminalHoleId(b, 'F', 41), e: terminalHoleId(b, 'F', 40) } },
     ...(['bc547','2n3904','bc547','2n3904'] as const).map((kind, i): PlacedComponent => {
-      const row = i < 2 ? 'J' : 'I'; const column = 42 + (i % 2) * 3;
+      const row = 'J'; const column = 34 + i * 4;
       return { id: `Q${i + 1}`, kind, label: `Q${i + 1}`, rotation: 0, deviceId: kind, packageId: 'TO-92-inline', polarity: 'npn', terminalHoleIds: kind === 'bc547' ? { collector: terminalHoleId(b, row, column), base: terminalHoleId(b, row, column + 1), emitter: terminalHoleId(b, row, column + 2) } : { emitter: terminalHoleId(b, row, column), base: terminalHoleId(b, row, column + 1), collector: terminalHoleId(b, row, column + 2) } };
     }),
-    ...Array.from({ length: 8 }, (_, i): PlacedComponent => ({ id: `RSEG${i + 1}`, kind: 'resistor', label: `R${i + 1}`, rotation: 0, resistanceOhms: 330, tolerancePercent: 5, terminalHoleIds: { a: terminalHoleId(b, 'A', 35 + i), b: terminalHoleId(b, 'B', 42 + i) } })),
-    ...[6, 13, 23].map((column, i): PlacedComponent => ({ id: `CDECOUPLE${i + 1}`, kind: 'capacitor', label: `C${i + 1}`, rotation: 0, capacitanceFarads: 100e-9, ratedVoltageV: 50, terminalHoleIds: { positive: terminalHoleId(b, 'A', column), negative: terminalHoleId(b, 'A', column + 1) } })),
-    { id: 'RRESET', kind: 'resistor', label: 'R reset', rotation: 0, resistanceOhms: 10_000, tolerancePercent: 5, terminalHoleIds: { a: terminalHoleId(b, 'J', 7), b: terminalHoleId(b, 'J', 12) } },
+    ...Array.from({ length: 8 }, (_, i): PlacedComponent => ({ id: `RSEG${i + 1}`, kind: 'resistor', label: `R${i + 1}`, rotation: 0, resistanceOhms: 330, tolerancePercent: 5, terminalHoleIds: { a: terminalHoleId(b, 'A', 9 + i * 5), b: terminalHoleId(b, 'A', 12 + i * 5) } })),
+    ...[7, 17, 27].map((column, i): PlacedComponent => ({ id: `CDECOUPLE${i + 1}`, kind: 'capacitor', label: `C${i + 1}`, rotation: 0, capacitanceFarads: 100e-9, ratedVoltageV: 50, terminalHoleIds: { positive: terminalHoleId(b, 'J', column), negative: terminalHoleId(b, 'J', column + 1) } })),
+    { id: 'RRESET', kind: 'resistor', label: 'R reset', rotation: 0, resistanceOhms: 10_000, tolerancePercent: 5, terminalHoleIds: { a: terminalHoleId(b, 'A', 2), b: terminalHoleId(b, 'A', 5) } },
   ];
-  return { ...project, powerOn: true, components, probes: [{ id: 'probe-tmp36', label: 'TMP36 output', instrumentId: 'multimeter', positiveHoleId: terminalHoleId(b, 'C', 3), referenceHoleId: railHoleId(b, 'top', 'negative', 3) }], analysis: { ...project.analysis, selectedProbeId: 'probe-tmp36' }, simulation: { timeStepSeconds: 0.0001, speed: 1 }, view: { ...project.view, cameraPreset: 'top' } };
+  return { ...project, powerOn: false, components, probes: [{ id: 'probe-tmp36', label: 'TMP36 output', instrumentId: 'multimeter', positiveHoleId: terminalHoleId(b, 'C', 3), referenceHoleId: railHoleId(b, 'top', 'negative', 3) }], analysis: { ...project.analysis, selectedProbeId: 'probe-tmp36' }, simulation: { timeStepSeconds: 0.0001, speed: 1 }, view: { ...project.view, cameraPreset: 'top' } };
 }
 
 const STARTER_FACTORIES: Record<StarterProjectId, () => WorkbenchProject> = {
