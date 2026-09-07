@@ -87,7 +87,7 @@ function WorkSurface() {
   if (!texture) return null;
 
   return (
-    <mesh position={[0, -3.48, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow raycast={() => null}>
+    <mesh position={[0, -3.67, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow raycast={() => null}>
       <planeGeometry args={[360, 260]} />
       <meshStandardMaterial map={texture} color="#d8d1c4" roughness={0.88} metalness={0} />
     </mesh>
@@ -232,7 +232,7 @@ function WorkbenchCanvasView(props: Props) {
             onCancel={props.onCancelDrag ?? props.onClearSelection}
           />
         )}
-        <ContactShadows position={[0, -3.43, 0]} opacity={0.38} scale={150} blur={2.5} far={18} frames={1} resolution={1024} color="#51483d" />
+        <ContactShadows position={[0, -3.66, 0]} opacity={0.38} scale={150} blur={2.5} far={18} frames={1} resolution={1024} color="#51483d" />
       </Suspense>
       <OrbitControls makeDefault enabled={!props.draggingComponentId} enableDamping dampingFactor={0.08} minDistance={45} maxDistance={190} maxPolarAngle={Math.PI / 2.05} />
       <CameraRig preset={props.cameraPreset} board={props.board} />
