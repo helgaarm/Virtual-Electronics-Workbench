@@ -92,6 +92,7 @@ export function BreadboardMesh({
   onHoleClick,
 }: BreadboardMeshProps) {
   const instanceRef = useRef<THREE.InstancedMesh>(null);
+  const contactRef = useRef<THREE.InstancedMesh>(null);
   const color = useMemo(() => new THREE.Color(), []);
   const guide = useMemo(
     () => connectionGuideSegment(board, connectionGuideHoleIds),
@@ -100,11 +101,19 @@ export function BreadboardMesh({
 
   useEffect(() => {
     const mesh = instanceRef.current;
-    if (!mesh) return;
-    const matrix = new THREE.Matrix4();
+    const contacts = contactRef.current;
+    if (!mesh || !contacts) return;
+    const openingMatrix = new THREE.Matrix4();
+    const contactMatrix = new THREE.Matrix4();
     board.holes.forEach((hole, index) => {
-      matrix.makeTranslation(hole.positionMm.x, hole.positionMm.y + 0.05, hole.positionMm.z);
-      mesh.setMatrixAt(index, matrix);
+      // Keep the opening and spring contact below the molded top instead of rendering
+      // them as plugs sitting on its surface. Occupied holes hide the contact insert.
+      openingMatrix.makeTranslation(hole.positionMm.x, hole.positionMm.y - 0.075, hole.positionMm.z);
+      const contactScale = occupiedHoleIds.has(hole.id) ? 0 : 1;
+      contactMatrix.makeScale(contactScale, contactScale, contactScale);
+      contactMatrix.setPosition(hole.positionMm.x, hole.positionMm.y - 0.14, hole.positionMm.z);
+      mesh.setMatrixAt(index, openingMatrix);
+      contacts.setMatrixAt(index, contactMatrix);
       const value =
         hole.id === selectedHoleId
           ? '#2e76d0'
@@ -116,6 +125,7 @@ export function BreadboardMesh({
       mesh.setColorAt(index, color.set(value));
     });
     mesh.instanceMatrix.needsUpdate = true;
+    contacts.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }, [board, color, highlightedHoleIds, occupiedHoleIds, selectedHoleId]);
 
@@ -134,8 +144,27 @@ export function BreadboardMesh({
         receiveShadow
         castShadow
       >
-        <meshStandardMaterial color="#f2f0e8" roughness={0.72} />
+        <meshPhysicalMaterial color="#eeeade" roughness={0.58} clearcoat={0.18} clearcoatRoughness={0.7} />
       </RoundedBox>
+      <RoundedBox
+        args={[board.widthMm - 1.1, 0.7, board.depthMm - 1.1]}
+        radius={1.35}
+        smoothness={6}
+        position={[0, -2.98, 0]}
+        receiveShadow
+      >
+        <meshStandardMaterial color="#d5d0c4" roughness={0.78} />
+      </RoundedBox>
+      {[-1, 1].flatMap((xSide) => [-1, 1].map((zSide) => (
+        <mesh
+          key={`${xSide}-${zSide}`}
+          position={[xSide * (board.widthMm / 2 - 6), -3.42, zSide * (board.depthMm / 2 - 6)]}
+          receiveShadow
+        >
+          <cylinderGeometry args={[2.3, 2.5, 0.5, 24]} />
+          <meshStandardMaterial color="#55524c" roughness={0.92} />
+        </mesh>
+      )))}
       <RoundedBox
         args={[board.widthMm - 4, 0.32, 3]}
         radius={0.16}
@@ -174,10 +203,13 @@ export function BreadboardMesh({
         ref={instanceRef}
         args={[undefined, undefined, board.holes.length]}
         onClick={handleClick}
-        castShadow
       >
-        <cylinderGeometry args={[0.38, 0.68, 0.18, 24]} />
-        <meshStandardMaterial vertexColors roughness={0.5} metalness={0.08} />
+        <cylinderGeometry args={[0.4, 0.66, 0.22, 16]} />
+        <meshStandardMaterial vertexColors roughness={0.72} metalness={0.04} />
+      </instancedMesh>
+      <instancedMesh ref={contactRef} args={[undefined, undefined, board.holes.length]} raycast={() => null}>
+        <boxGeometry args={[0.12, 0.235, 0.5]} />
+        <meshStandardMaterial color="#a7a39a" roughness={0.3} metalness={0.82} />
       </instancedMesh>
       {Array.from({ length: Math.ceil(board.columns / 5) }, (_, index) => {
         const column = Math.min(board.columns, (index + 1) * 5);

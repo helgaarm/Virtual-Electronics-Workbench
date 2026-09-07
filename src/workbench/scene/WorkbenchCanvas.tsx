@@ -1,4 +1,4 @@
-import { memo, Suspense, useEffect, useState } from 'react';
+import { memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -50,6 +50,48 @@ function CameraRig({ preset, board }: { preset: '3d' | 'top'; board: BreadboardD
     invalidate();
   }, [board.depthMm, board.widthMm, camera, controls, invalidate, preset]);
   return null;
+}
+
+/** A subtle, procedural bench surface keeps the scene grounded without an image asset. */
+function WorkSurface() {
+  const texture = useMemo(() => {
+    if (typeof document === 'undefined') return undefined;
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const context = canvas.getContext('2d');
+    if (!context) return undefined;
+
+    context.fillStyle = '#c9c2b4';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    for (let y = 0; y < canvas.height; y += 2) {
+      const warmth = 183 + Math.round(7 * Math.sin(y * 0.11) + 3 * Math.sin(y * 0.037));
+      context.fillStyle = `rgba(${warmth + 12}, ${warmth + 7}, ${warmth}, 0.12)`;
+      context.fillRect(0, y, canvas.width, 1);
+    }
+    // Fixed values make the material deterministic while breaking up the synthetic flat colour.
+    for (let index = 0; index < 180; index += 1) {
+      const x = (index * 73) % canvas.width;
+      const y = (index * 151) % canvas.height;
+      context.fillStyle = index % 3 === 0 ? 'rgba(255,255,255,.055)' : 'rgba(70,59,43,.035)';
+      context.fillRect(x, y, 1 + index % 5, 1);
+    }
+    const result = new THREE.CanvasTexture(canvas);
+    result.colorSpace = THREE.SRGBColorSpace;
+    result.wrapS = THREE.RepeatWrapping;
+    result.wrapT = THREE.RepeatWrapping;
+    result.repeat.set(3, 3);
+    return result;
+  }, []);
+  useEffect(() => () => texture?.dispose(), [texture]);
+  if (!texture) return null;
+
+  return (
+    <mesh position={[0, -3.67, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow raycast={() => null}>
+      <planeGeometry args={[360, 260]} />
+      <meshStandardMaterial map={texture} color="#d8d1c4" roughness={0.88} metalness={0} />
+    </mesh>
+  );
 }
 
 function PlacementPlane({ board, onCandidate, onDrop, dragOrigin, anchorOffset, activePointerId, onCancel }: {
@@ -123,13 +165,31 @@ function WorkbenchCanvasView(props: Props) {
       shadows
       dpr={[1, 1.35]}
       gl={{ antialias: true, alpha: false }}
+      onCreated={({ gl }) => {
+        gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMappingExposure = 1.05;
+      }}
       onPointerMissed={props.draggingComponentId ? props.onCancelDrag : props.onClearSelection}
     >
-      <color attach="background" args={['#e8e5de']} />
-      <fog attach="fog" args={['#e8e5de', 145, 260]} />
-      <ambientLight intensity={1.8} />
-      <directionalLight position={[40, 80, 35]} intensity={2.6} castShadow shadow-mapSize={[1024, 1024]} />
+      <color attach="background" args={['#d8d2c7']} />
+      <fog attach="fog" args={['#d8d2c7', 155, 285]} />
+      <hemisphereLight args={['#f8f4ea', '#6f6556', 1.15]} />
+      <directionalLight
+        position={[-42, 78, 34]}
+        intensity={2.25}
+        color="#fff4df"
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-left={-80}
+        shadow-camera-right={80}
+        shadow-camera-top={65}
+        shadow-camera-bottom={-65}
+        shadow-bias={-0.00015}
+      />
+      <directionalLight position={[55, 32, -45]} intensity={0.55} color="#c9dcf1" />
       <Suspense fallback={null}>
+        <WorkSurface />
         <BreadboardMesh
           board={props.board}
           selectedHoleId={props.selectedHoleId}
@@ -172,7 +232,7 @@ function WorkbenchCanvasView(props: Props) {
             onCancel={props.onCancelDrag ?? props.onClearSelection}
           />
         )}
-        <ContactShadows position={[0, -3.25, 0]} opacity={0.28} scale={150} blur={2.2} far={16} frames={1} resolution={512} />
+        <ContactShadows position={[0, -3.66, 0]} opacity={0.38} scale={150} blur={2.5} far={18} frames={1} resolution={1024} color="#51483d" />
       </Suspense>
       <OrbitControls makeDefault enabled={!props.draggingComponentId} enableDamping dampingFactor={0.08} minDistance={45} maxDistance={190} maxPolarAngle={Math.PI / 2.05} />
       <CameraRig preset={props.cameraPreset} board={props.board} />
