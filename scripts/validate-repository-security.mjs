@@ -57,7 +57,7 @@ for (const workflowName of workflowNames) {
 
   const allowedWritePermissions = workflowWriteAllowlist.get(relativePath) ?? new Set()
   const writePermissionCounts = new Map()
-  for (const match of workflow.matchAll(/^(\s*)([a-z-]+):\s*write\s*$/gmu)) {
+  for (const match of workflow.matchAll(/^([ \t]*)([a-z-]+):[ \t]*write[ \t]*\r?$/gmu)) {
     const indentation = match[1].length
     const permission = match[2]
     if (!allowedWritePermissions.has(permission) || indentation !== 6) {
