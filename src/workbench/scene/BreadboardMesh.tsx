@@ -103,11 +103,17 @@ export function BreadboardMesh({
     const mesh = instanceRef.current;
     const contacts = contactRef.current;
     if (!mesh || !contacts) return;
-    const matrix = new THREE.Matrix4();
+    const openingMatrix = new THREE.Matrix4();
+    const contactMatrix = new THREE.Matrix4();
     board.holes.forEach((hole, index) => {
-      matrix.makeTranslation(hole.positionMm.x, hole.positionMm.y + 0.05, hole.positionMm.z);
-      mesh.setMatrixAt(index, matrix);
-      contacts.setMatrixAt(index, matrix);
+      // Keep the opening and spring contact below the molded top instead of rendering
+      // them as plugs sitting on its surface. Occupied holes hide the contact insert.
+      openingMatrix.makeTranslation(hole.positionMm.x, hole.positionMm.y - 0.075, hole.positionMm.z);
+      const contactScale = occupiedHoleIds.has(hole.id) ? 0 : 1;
+      contactMatrix.makeScale(contactScale, contactScale, contactScale);
+      contactMatrix.setPosition(hole.positionMm.x, hole.positionMm.y - 0.085, hole.positionMm.z);
+      mesh.setMatrixAt(index, openingMatrix);
+      contacts.setMatrixAt(index, contactMatrix);
       const value =
         hole.id === selectedHoleId
           ? '#2e76d0'

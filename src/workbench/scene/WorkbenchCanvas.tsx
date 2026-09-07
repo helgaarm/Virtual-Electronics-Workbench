@@ -55,6 +55,7 @@ function CameraRig({ preset, board }: { preset: '3d' | 'top'; board: BreadboardD
 /** A subtle, procedural bench surface keeps the scene grounded without an image asset. */
 function WorkSurface() {
   const texture = useMemo(() => {
+    if (typeof document === 'undefined') return undefined;
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
