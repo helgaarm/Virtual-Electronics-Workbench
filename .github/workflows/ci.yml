@@ -35,7 +35,9 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Audit locked dependencies
-        run: npm audit --audit-level=moderate --ignore-scripts
+        # Audit the committed graph directly instead of reconciling the runner's
+        # platform-specific installation. Development dependencies remain included.
+        run: npm audit --audit-level=moderate --ignore-scripts --package-lock-only
 
       - name: Run repository checks
         run: npm run check

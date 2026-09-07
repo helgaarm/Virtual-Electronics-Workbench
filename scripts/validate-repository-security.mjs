@@ -129,8 +129,8 @@ requireMatch(ci, /name:\s*Required validation/u, 'CI must expose the Required va
 requireMatch(ci, /npm ci --ignore-scripts/u, 'CI must install from the lockfile without lifecycle scripts.')
 requireMatch(
   ci,
-  /npm audit --audit-level=moderate --ignore-scripts/u,
-  'CI must fail on moderate-or-higher vulnerabilities in the locked graph.',
+  /npm audit --audit-level=moderate --ignore-scripts --package-lock-only/u,
+  'CI must audit the lockfile and fail on moderate-or-higher vulnerabilities in the complete locked graph.',
 )
 requireMatch(ci, /npm run check/u, 'CI must run the complete repository check.')
 requireMatch(ci, /workflow_dispatch:/u, 'CI must support trusted repair dispatches.')
