@@ -1,8 +1,14 @@
 import type { PlacedComponent } from './components/types';
 import { railHoleId, terminalHoleId } from './physical/breadboard';
 import { createEmptyProject, createLedExampleProject, type WorkbenchProject } from './project';
+import { firstPressWinsProject } from './starters/firstPressWins';
 
 export const STARTER_PROJECTS = [
+  {
+    id: 'first-press-wins',
+    name: 'First to Press Wins',
+    description: 'Two-player transistor latch game. Close a player switch to claim its LED, then open it. The winner locks out the other player. Open both player switches, close Reset for a moment, then open Reset for the next round.',
+  },
   {
     id: 'switched-led',
     name: 'Switched LED',
@@ -487,6 +493,7 @@ function digitalThermometerProject(): WorkbenchProject {
 }
 
 const STARTER_FACTORIES: Record<StarterProjectId, () => WorkbenchProject> = {
+  'first-press-wins': firstPressWinsProject,
   'switched-led': createLedExampleProject,
   'voltage-divider': voltageDividerProject,
   'series-leds': seriesLedsProject,

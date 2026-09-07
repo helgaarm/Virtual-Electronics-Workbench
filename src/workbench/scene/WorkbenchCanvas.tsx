@@ -1,5 +1,5 @@
 import { memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { applyProps, Canvas, useThree } from '@react-three/fiber';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type { BreadboardDefinition } from '../../domain/physical/breadboard';
@@ -11,6 +11,7 @@ import { ComponentMeshes } from '../components/ComponentMeshes';
 import { ProbeMeshes } from '../components/ProbeMeshes';
 import { BreadboardMesh } from './BreadboardMesh';
 import { dragCandidateHoleId } from './dragPlacement';
+import { topViewDistanceMm } from './boardFraming';
 
 interface Props {
   board: BreadboardDefinition;
@@ -35,20 +36,24 @@ interface Props {
 }
 
 function CameraRig({ preset, board }: { preset: '3d' | 'top'; board: BreadboardDefinition }) {
-  const { camera, controls, invalidate } = useThree();
+  const { camera, controls, invalidate, size } = useThree();
   useEffect(() => {
+    const framingDistanceMm = topViewDistanceMm(board.widthMm, board.depthMm,
+      camera instanceof THREE.PerspectiveCamera ? camera.fov : 38, size.width / Math.max(size.height, 1));
     const position = preset === 'top'
-      ? new THREE.Vector3(0, 125, 0.01)
+      ? new THREE.Vector3(0, framingDistanceMm, 0.01)
       : new THREE.Vector3(board.widthMm * 0.68, 70, board.depthMm * 0.9);
     camera.position.copy(position);
     camera.lookAt(0, 0, 0);
+    applyProps(camera, { far: Math.max(600, framingDistanceMm * 4) });
     camera.updateProjectionMatrix();
+    if (controls && 'maxDistance' in controls) applyProps(controls, { maxDistance: Math.max(190, framingDistanceMm * 2) });
     if (controls && 'target' in controls) {
       (controls.target as THREE.Vector3).set(0, 0, 0);
       (controls as unknown as { update: () => void }).update();
     }
     invalidate();
-  }, [board.depthMm, board.widthMm, camera, controls, invalidate, preset]);
+  }, [board.depthMm, board.widthMm, camera, controls, invalidate, preset, size.width, size.height]);
   return null;
 }
 
