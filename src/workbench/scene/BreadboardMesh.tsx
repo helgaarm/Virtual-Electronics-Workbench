@@ -111,7 +111,7 @@ export function BreadboardMesh({
       openingMatrix.makeTranslation(hole.positionMm.x, hole.positionMm.y - 0.075, hole.positionMm.z);
       const contactScale = occupiedHoleIds.has(hole.id) ? 0 : 1;
       contactMatrix.makeScale(contactScale, contactScale, contactScale);
-      contactMatrix.setPosition(hole.positionMm.x, hole.positionMm.y - 0.085, hole.positionMm.z);
+      contactMatrix.setPosition(hole.positionMm.x, hole.positionMm.y - 0.14, hole.positionMm.z);
       mesh.setMatrixAt(index, openingMatrix);
       contacts.setMatrixAt(index, contactMatrix);
       const value =
