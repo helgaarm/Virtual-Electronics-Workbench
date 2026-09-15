@@ -17,6 +17,7 @@ import {
 } from '../mna';
 import { nonlinearTerminalCurrents, solveNonlinearCircuit } from '../nonlinear';
 import { flattenCircuit } from '../subcircuits';
+import { createDigitalState, stepDigitalCircuit } from './digitalRuntime';
 
 const MAX_LED_ITERATIONS = 12;
 const MAX_RUN_STEPS = 1_000_000;
@@ -42,6 +43,8 @@ export function createTransientState(
       ]),
     ),
     ...(previous?.nodeVoltages ? { nodeVoltages: { ...previous.nodeVoltages } } : {}),
+    ...(circuit.digitalDevices?.length ? { digital: createDigitalState(circuit.digitalDevices, previous?.digital) } : {}),
+    ...(previous?.displayCurrentsA ? { displayCurrentsA: { ...previous.displayCurrentsA } } : {}),
   };
 }
 
@@ -228,6 +231,8 @@ export function stepTransient(
   state: TransientState,
   timeStepSeconds: number,
 ): TransientFrame {
+  if (circuit.digitalDevices?.length) return stepDigitalCircuit(circuit, state, timeStepSeconds,
+    (analog, previous, dt) => stepTransientAttempt(analog, previous, dt, MAX_NONLINEAR_STEP_RETRIES));
   return stepTransientAttempt(circuit, state, timeStepSeconds, MAX_NONLINEAR_STEP_RETRIES);
 }
 

@@ -8,7 +8,7 @@ import { createBreadboardDefinition } from '../domain/physical/breadboard';
 import { validateOccupancy } from '../domain/physical/occupancy';
 import { UnionFind } from '../domain/graph/unionFind';
 import { createNe555Subcircuit } from './models/ne555';
-import { tmp36Output } from './models/tmp36';
+import { createTmp36Subcircuit } from './models/tmp36';
 import { potentiometerResistances } from './models/potentiometer';
 import { create74hc00Subcircuit, createLm358Subcircuit } from './models/expansionPack';
 
@@ -157,19 +157,8 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
         }));
         break;
       case 'tmp36': {
-        const output = tmp36Output(project.environment.temperatureC, project.powerOn ? 5 : 0);
-        electricalComponents.push({
-          id: component.id,
-          kind: 'voltage-source',
-          positiveNodeId: holeToNodeId[component.terminalHoleIds.vout],
-          negativeNodeId: holeToNodeId[component.terminalHoleIds.gnd],
-          voltageV: output.outputVoltageV,
-        });
-        if (!output.validSupply) warnings.push({
-          code: 'TMP36_SUPPLY_RANGE',
-          message: `${component.label} requires a 2.7–5.5 V supply; its output is disabled while workbench power is off.`,
-          componentId: component.id,
-        });
+        electricalComponents.push(createTmp36Subcircuit(component.id,
+          componentTerminalNodes[component.id], project.environment.temperatureC));
         break;
       }
       case 'diode-1n4148':
@@ -256,6 +245,10 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
       nodes: roots.map((root) => ({ id: nodeIdByRoot.get(root)! })),
       groundNodeId,
       components: electricalComponents,
+      digitalDevices: project.components.flatMap((component) => component.kind === 'attiny85' || component.kind === '74hc595'
+        ? [{ id: component.id, kind: component.kind, pins: componentTerminalNodes[component.id],
+          ...(component.kind === 'attiny85' ? { firmwareId: component.firmwareId, clockHz: component.clockHz } : {}) }]
+        : []),
     },
     holeToNodeId,
     componentTerminalNodes,

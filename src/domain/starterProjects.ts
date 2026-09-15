@@ -1,3 +1,4 @@
+import { wireThermometer } from './starters/thermometerWiring';
 import type { PlacedComponent } from './components/types';
 import { railHoleId, terminalHoleId } from './physical/breadboard';
 import { createEmptyProject, createLedExampleProject, type WorkbenchProject } from './project';
@@ -42,7 +43,7 @@ export const STARTER_PROJECTS = [
   {
     id: 'digital-thermometer',
     name: 'Digital Breadboard Thermometer',
-    description: 'Unwired parts layout for a TMP36 thermometer. Wiring and integrated firmware simulation are not yet available.',
+    description: 'Working TMP36 thermometer: change Environment temperature and watch the AVR-driven display. About 0.5 °C ADC resolution.',
   },
 ] as const;
 
@@ -500,7 +501,7 @@ const STARTER_FACTORIES: Record<StarterProjectId, () => WorkbenchProject> = {
   'parallel-indicators': parallelIndicatorsProject,
   'rc-charge-discharge': rcChargeDischargeProject,
   'ne555-astable': ne555AstableProject,
-  'digital-thermometer': digitalThermometerProject,
+  'digital-thermometer': () => wireThermometer(digitalThermometerProject()),
 };
 
 export function createStarterProject(id: StarterProjectId): WorkbenchProject {

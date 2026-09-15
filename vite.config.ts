@@ -13,6 +13,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Bound CPU contention between nonlinear and firmware reference circuits.
+    maxWorkers: 2,
     include: ['tests/**/*.test.ts'],
     coverage: {
       reporter: ['text', 'html'],

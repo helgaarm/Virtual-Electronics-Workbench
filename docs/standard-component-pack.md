@@ -29,14 +29,24 @@ The 74HC595 model shifts on rising SRCLK, transfers on rising RCLK, clears the s
 
 The ATtiny85 adapter loads checksum-validated Intel HEX and executes a deliberately small genuine AVR opcode subset. Its GPIO bridge reports finite electrical drive intent and its ADC helper quantises actual pin voltage against a reference. CPU cycles are advanced by an explicit budget, never animation frames.
 
-Seven-segment visual persistence is an exponential 40 ms integration of instantaneous segment current. It is renderer-only derived state; with no current it decays and is not persisted.
+Seven-segment visual persistence is an exponential 40 ms integration of instantaneous segment current. The transient worker integrates this display-only history so multiplex pulses are not lost between UI updates. It is separate from electrical readings, decays without current, and is never persisted in projects.
 
 ## Built-in thermometer project
 
-The **Digital Breadboard Thermometer** starter places a TMP36, an ATtiny85, two cascaded-package 74HC595 devices, a four-digit common-cathode display, eight 330 Ω segment resistors, four TO-92 NPN digit drivers, local decoupling capacitors, and a reset pull-up on a 50-column breadboard. The starter is an unwired assembly layout and opens with power off; it is not a working thermometer demonstration. Packages are spaced without body overlaps, and the display faces upward at its defined physical size. Its saved multimeter probe targets the TMP36 output, but that measurement needs sensor power and ground wiring. The standard parts drawer also exposes the 1N4148, four transistor variants, 10 kΩ trimmer, both display sizes, shift register, and microcontroller instead of leaving their models accessible only to tests.
+The **Digital Breadboard Thermometer** starter is a fully wired, powered circuit on a 64-column
+breadboard. It connects a TMP36, ATtiny85, two cascaded 74HC595s, a four-digit common-cathode display,
+eight segment resistors, four NPN digit drivers with base limit/bias resistors, three decoupling
+capacitors, and a reset pull-up. Its saved multimeter probe measures sensor output. Packages retain
+their physical sizes and have no body overlaps. See the [thermometer guide](thermometer.md).
 
 ## Current milestone limitations
 
-The analogue devices, potentiometer and display LED junctions now have circuit-extraction stamps. The behavioural 74HC595 and incremental AVR core remain validated as independent deterministic models; the application transient worker does not yet schedule their pin events together. The bundled `thermometer-v1` association is therefore a stable firmware identifier rather than a compiled full thermometer image, and the complete live sensor → ADC → firmware → cascaded registers → LED acceptance chain is **not yet claimed as validated**. The starter deliberately contains no direct temperature-to-display binding.
+The transient worker now schedules the sensor → ADC → AVR firmware → cascaded registers → LED
+chain, including finite-drive outputs and simultaneous pre-edge register sampling. `thermometer-v1`
+selects an original AVR image with a flash conversion table for the starter's regulated 5 V supply.
+The ADC resolves approximately 0.49 °C. This remains an educational instruction/peripheral subset,
+not a complete MCU emulator; unsupported firmware execution returns structured errors. The starter
+has no direct temperature-to-display binding. Saved unwired layouts are preserved; load the starter
+again to obtain the completed circuit.
 
 No runtime dependency or third-party asset was added; licensing remains MIT-only for new source.

@@ -27,6 +27,12 @@ describe('mixed signal bridge', () => {
 });
 
 describe('74HC595', () => {
+  it('latches pre-edge data when both clocks rise together', () => {
+    const initial = create74hc595State();
+    const next = step74hc595(initial, { data: 'high', shiftClock: 'high', latchClock: 'high', clear: 'high', outputEnable: 'low' });
+    expect(next.shiftBits[0]).toBe(true);
+    expect(next.outputBits[0]).toBe(false);
+  });
   it('shifts on rising SRCLK, latches on rising RCLK, and tri-states on OE high', () => {
     let state = create74hc595State();
     const low = { data: 'high', shiftClock: 'low', latchClock: 'low', clear: 'high', outputEnable: 'low' } as const;

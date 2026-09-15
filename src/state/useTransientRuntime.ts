@@ -135,7 +135,10 @@ export function useTransientRuntime(
       previousTime = now;
       setRuntime((current) => {
         if (workerBusyRef.current) return current;
-        const advance = advanceSimulationClock(elapsedSeconds, current.clock, 4_000);
+        // GPIO edges each require electrical settling; keep worker batches responsive.
+        const maximumSteps = circuitRef.current.digitalDevices?.length
+          ? Math.max(1, Math.min(8, Math.floor(0.008 / current.clock.timeStepSeconds))) : 4_000;
+        const advance = advanceSimulationClock(elapsedSeconds, current.clock, maximumSteps);
         if (advance.stepCount === 0) return { ...current, clock: advance.clock };
         if (workerRef.current) {
           workerBusyRef.current = true;

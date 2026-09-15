@@ -24,6 +24,7 @@ export function containsCapacitor(circuit: Circuit): boolean {
 }
 
 export function containsTransientDevice(circuit: Circuit): boolean {
+  if (circuit.digitalDevices?.length) return true;
   const containsStatefulSubcircuit = (component: Circuit['components'][number]): boolean => (
     component.kind === 'subcircuit'
       && (component.definition.stateful === true

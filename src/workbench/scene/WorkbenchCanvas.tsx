@@ -12,6 +12,7 @@ import { ProbeMeshes } from '../components/ProbeMeshes';
 import { BreadboardMesh } from './BreadboardMesh';
 import { dragCandidateHoleId } from './dragPlacement';
 import { topViewDistanceMm } from './boardFraming';
+import { sameVisibleComponentCurrents } from './visibleCurrents';
 
 interface Props {
   board: BreadboardDefinition;
@@ -36,7 +37,7 @@ interface Props {
 }
 
 function CameraRig({ preset, board }: { preset: '3d' | 'top'; board: BreadboardDefinition }) {
-  const { camera, controls, invalidate, size } = useThree();
+  const { camera, controls, invalidate, size, scene } = useThree();
   useEffect(() => {
     const framingDistanceMm = topViewDistanceMm(board.widthMm, board.depthMm,
       camera instanceof THREE.PerspectiveCamera ? camera.fov : 38, size.width / Math.max(size.height, 1));
@@ -47,13 +48,18 @@ function CameraRig({ preset, board }: { preset: '3d' | 'top'; board: BreadboardD
     camera.lookAt(0, 0, 0);
     applyProps(camera, { far: Math.max(600, framingDistanceMm * 4) });
     camera.updateProjectionMatrix();
+    // A wider breadboard needs a farther camera; keep the circuit in front of the fog.
+    if (scene.fog instanceof THREE.Fog) {
+      const near = Math.max(155, position.length() + board.widthMm);
+      applyProps(scene.fog, { near, far: near + Math.max(130, board.widthMm * 2) });
+    }
     if (controls && 'maxDistance' in controls) applyProps(controls, { maxDistance: Math.max(190, framingDistanceMm * 2) });
     if (controls && 'target' in controls) {
       (controls.target as THREE.Vector3).set(0, 0, 0);
       (controls as unknown as { update: () => void }).update();
     }
     invalidate();
-  }, [board.depthMm, board.widthMm, camera, controls, invalidate, preset, size.width, size.height]);
+  }, [board.depthMm, board.widthMm, camera, controls, invalidate, preset, scene, size.width, size.height]);
   return null;
 }
 
@@ -247,10 +253,7 @@ function WorkbenchCanvasView(props: Props) {
 
 /** Keeps the expensive scene reconciler behind a stable component boundary. */
 function sameVisibleCurrents(previous: Props, next: Props): boolean {
-  return next.components.every((component) => component.kind !== 'led' || (
-    Math.round((previous.result.componentCurrents[component.id] ?? 0) * 4_000)
-      === Math.round((next.result.componentCurrents[component.id] ?? 0) * 4_000)
-  ));
+  return sameVisibleComponentCurrents(next.components, previous.result, next.result);
 }
 
 export const WorkbenchCanvas = memo(WorkbenchCanvasView, (previous, next) => (

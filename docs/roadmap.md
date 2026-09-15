@@ -12,14 +12,16 @@ optional follow-on and must not displace breadboard, simulation, measurement, or
 - Introductory circuits, RC timing, nonlinear semiconductors, NE555, reusable packages, sensors,
   displays, shift-register, and microcontroller foundations with explicitly documented limitations.
 - Versioned local SQLite persistence with migration validation and optimistic revision protection.
+- A wired [digital thermometer](thermometer.md) with shared-clock AVR firmware, ADC, shift-register
+  events, and current-driven display, including broken-connection regression tests.
 - A secondary experimental PCB exercise with conversion, routing, DRC, and limited exports.
 
 ## Next: deepen learning and testing
 
 1. Add lesson-oriented experiments with learning goals, predicted behavior, guided measurement points,
    tolerances, and explanations that connect observations to circuit theory.
-2. Complete and validate shared scheduling for the sensor → ADC → firmware → shift-register → display
-   chain before presenting the digital thermometer as a live end-to-end demonstration.
+2. Extend the validated thermometer's MCU instruction/peripheral subset and mixed-signal performance
+   with additional firmware lessons and measured reference circuits.
 3. Add reference circuits and measurement exercises for the standard diode, transistor,
    potentiometer, sensor, and display parts already present in the catalogue.
 4. Add NE555 monostable and comparison experiments, then evaluate optional faster behavioural and

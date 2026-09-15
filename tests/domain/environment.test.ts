@@ -4,6 +4,7 @@ import { createBreadboardDefinition } from '../../src/domain/physical/breadboard
 import { migrateProjectDocument, ProjectValidationError } from '../../src/persistence/migrations';
 import { createPlacedComponent } from '../../src/state/workbenchActions';
 import { extractCircuit } from '../../src/simulation/circuitBuilder';
+import { flattenCircuit, subcircuitScopedId } from '../../src/simulation/subcircuits';
 
 describe('external environment', () => {
   it('migrates older projects to calm default conditions', () => {
@@ -29,7 +30,7 @@ describe('external environment', () => {
     project.components = [sensor];
     project.powerOn = true;
     project.environment.temperatureC = 40;
-    const source = extractCircuit(project).circuit.components.find((component) => component.id === sensor.id);
+    const source = flattenCircuit(extractCircuit(project).circuit).components.find((component) => component.id === subcircuitScopedId(sensor.id, 'transfer'));
     expect(source).toMatchObject({ kind: 'voltage-source', voltageV: 0.9 });
   });
 });

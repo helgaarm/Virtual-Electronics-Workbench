@@ -16,7 +16,9 @@ describe('ATtiny85 runtime adapter', () => {
       drivePin: (pin: number, level: 'low' | 'high' | 'high-impedance') => { driven.set(pin, level); },
       supplyVoltageV: () => 5,
     };
-    const result = runAttiny85Cycles(createAttiny85Runtime(PROGRAM_HEX), bridge, 8);
+    const initial = createAttiny85Runtime(PROGRAM_HEX);
+    initial.sram[0x17] = 0x3f; // DDRB: explicitly configure outputs.
+    const result = runAttiny85Cycles(initial, bridge, 8);
     expect(result.halted).toBe(false);
     expect(result.cycles).toBeGreaterThanOrEqual(8);
     expect(driven.get(0)).toBe('high');
@@ -26,5 +28,16 @@ describe('ATtiny85 runtime adapter', () => {
   it('quantizes actual input voltage to the 10-bit ADC range', () => {
     expect(quantizeAdc(0.734, 5)).toBe(150);
     expect(quantizeAdc(5, 5)).toBe(1023);
+  });
+
+  it('leaves GPIO high impedance until DDRB enables output and preserves the input state', () => {
+    const levels: string[] = [];
+    const initial = createAttiny85Runtime(PROGRAM_HEX);
+    const next = runAttiny85Cycles(initial, { readPinVoltageV: () => 0, supplyVoltageV: () => 5,
+      drivePin: (_pin, level) => { levels.push(level); } }, 8);
+    expect(levels.length).toBeGreaterThan(0);
+    expect(levels.every((level) => level === 'high-impedance')).toBe(true);
+    expect(initial.sram[0x18]).toBe(0);
+    expect(next.sram[0x18]).toBe(0x81);
   });
 });

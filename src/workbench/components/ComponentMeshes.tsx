@@ -809,9 +809,9 @@ function PotentiometerMesh({ component, board, selected, onSelect, onBeginDrag }
   </group>;
 }
 
-function SegmentDisplayMesh({ component, board, selected, onSelect, onBeginDrag }: {
+function SegmentDisplayMesh({ component, board, result, selected, onSelect, onBeginDrag }: {
   component: Extract<PlacedComponent, { kind: 'seven-segment' | 'four-digit-seven-segment' }>;
-  board: BreadboardDefinition; selected: boolean; onSelect: () => void;
+  board: BreadboardDefinition; result: SimulationResult; selected: boolean; onSelect: () => void;
   onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
   const physicalPackage = PHYSICAL_PACKAGES[component.kind];
@@ -827,7 +827,12 @@ function SegmentDisplayMesh({ component, board, selected, onSelect, onBeginDrag 
   const bodyBottomY = bodyCenter.y - depth / 2;
   const digits = component.kind === 'seven-segment' ? 1 : 4;
   const digitSpacing = width / digits;
-  const segmentColor = '#6e171b';
+  const segmentColor = (digit: number, segment: string) => {
+    const id = component.kind === 'seven-segment' ? `${component.id}:${segment}` : `${component.id}:digit${digit + 1}:${segment}`;
+    const currentA = result.status === 'error' ? 0 : (result.displayCurrentsA?.[id] ?? result.componentCurrents[id] ?? 0);
+    const brightness = Math.min(1, Math.max(0, currentA / (digits === 4 ? 0.0015 : 0.006)));
+    return new THREE.Color('#451014').lerp(new THREE.Color('#ff3730'), brightness);
+  };
   return <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
     {pins.map((pin, index) => {
       const inward = center.clone().sub(pin).setY(0).normalize();
@@ -844,7 +849,11 @@ function SegmentDisplayMesh({ component, board, selected, onSelect, onBeginDrag 
           const sx = digitSpacing * 0.54;
           const sy = height * 0.24;
           const z = depth / 2 + 0.075;
-          return <group key={digit}>{[-sy, 0, sy].map((y) => <mesh key={`h${y}`} position={[x, y, z]}><boxGeometry args={[sx, 0.55, 0.08]} /><meshBasicMaterial color={segmentColor} /></mesh>)}{[-1, 1].flatMap((side) => [-1, 1].map((vertical) => <mesh key={`${side}-${vertical}`} position={[x + side * sx / 2, vertical * sy / 2, z]}><boxGeometry args={[0.55, sy * 0.76, 0.08]} /><meshBasicMaterial color={segmentColor} /></mesh>))}<mesh position={[x + sx * 0.72, -sy * 1.35, z]}><circleGeometry args={[0.34, 18]} /><meshBasicMaterial color={segmentColor} /></mesh></group>;
+          return <group key={digit}>
+            {([['d', -sy], ['g', 0], ['a', sy]] as const).map(([name, y]) => <mesh key={name} position={[x, y, z]}><boxGeometry args={[sx, 0.55, 0.08]} /><meshBasicMaterial color={segmentColor(digit, name)} /></mesh>)}
+            {([['e', -1, -1], ['f', -1, 1], ['c', 1, -1], ['b', 1, 1]] as const).map(([name, side, vertical]) => <mesh key={name} position={[x + side * sx / 2, vertical * sy / 2, z]}><boxGeometry args={[0.55, sy * 0.76, 0.08]} /><meshBasicMaterial color={segmentColor(digit, name)} /></mesh>)}
+            <mesh position={[x + sx * 0.72, -sy * 1.35, z]}><circleGeometry args={[0.34, 18]} /><meshBasicMaterial color={segmentColor(digit, 'dp')} /></mesh>
+          </group>;
         })}
       </group>
     </group>
@@ -956,7 +965,7 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         if (component.kind === 'zener-1n4733a') return <AxialDiodeMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'bc547' || component.kind === 'bc557' || component.kind === '2n3904' || component.kind === '2n3906' || component.kind === '2n7000') return <TransistorMesh key={component.id} component={component as To92Component} {...common} />;
         if (component.kind === 'potentiometer') return <PotentiometerMesh key={component.id} component={component} {...common} />;
-        if (component.kind === 'seven-segment' || component.kind === 'four-digit-seven-segment') return <SegmentDisplayMesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'seven-segment' || component.kind === 'four-digit-seven-segment') return <SegmentDisplayMesh key={component.id} component={component} result={result} {...common} />;
         if (component.kind === '74hc595' || component.kind === 'attiny85' || component.kind === 'lm358' || component.kind === '74hc00') return <GenericDipMesh key={component.id} component={component} {...common} />;
         return <SimpleComponent key={component.id} component={component as SimpleRenderableComponent} {...common} />;
       })}

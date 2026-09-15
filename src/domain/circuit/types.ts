@@ -1,3 +1,5 @@
+import type { DigitalDevice, DigitalState } from './digital';
+
 export interface ElectricalNode {
   id: string;
 }
@@ -130,6 +132,7 @@ export interface Circuit {
   nodes: ElectricalNode[];
   groundNodeId: string;
   components: ElectricalComponent[];
+  digitalDevices?: DigitalDevice[];
 }
 
 export interface SimulationMessage {
@@ -146,6 +149,8 @@ export interface SimulationResult {
   warnings: SimulationMessage[];
   errors: SimulationMessage[];
   iterations: number;
+  /** Current history for visual persistence only; not an electrical reading. */
+  displayCurrentsA?: Record<string, number>;
   diagnostics?: {
     nonlinearIterations: number;
     maximumVoltageDeltaV: number;
@@ -162,6 +167,8 @@ export interface TransientState {
   capacitorVoltages: Record<string, number>;
   /** Last converged solution, used only as a Newton initial estimate. */
   nodeVoltages?: Record<string, number>;
+  digital?: DigitalState;
+  displayCurrentsA?: Record<string, number>;
 }
 
 export interface TransientFrame {

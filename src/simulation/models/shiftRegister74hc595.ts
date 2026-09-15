@@ -31,7 +31,7 @@ export function step74hc595(state: ShiftRegisterState, inputs: ShiftRegisterInpu
   else if (state.previousShiftClock !== 'high' && inputs.shiftClock === 'high') {
     shiftBits = [inputs.data === 'high', ...shiftBits.slice(0, 7)];
   }
-  if (state.previousLatchClock !== 'high' && inputs.latchClock === 'high') outputBits = [...shiftBits];
+  if (state.previousLatchClock !== 'high' && inputs.latchClock === 'high') outputBits = [...state.shiftBits];
   return { shiftBits, outputBits, previousShiftClock: inputs.shiftClock, previousLatchClock: inputs.latchClock };
 }
 

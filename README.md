@@ -35,11 +35,11 @@ wires are the source of connectivity; the 3D view only presents that project sta
   thresholds, and timing on one shared simulation clock.
 - Receive structured errors for invalid or non-convergent circuits instead of invented measurements.
 
-The models are intentionally educational rather than SPICE-complete. The behavioural 74HC595 and
-incremental AVR runtime are independently tested foundations, but the application does not yet run a
-validated end-to-end sensor → firmware → shift register → display chain. See the
-[standard component-pack status](docs/standard-component-pack.md) before designing a mixed-signal
-lesson around those parts.
+The models are intentionally educational rather than SPICE-complete. The **Digital Breadboard
+Thermometer** starter wires the TMP36, ATtiny85 firmware, cascaded 74HC595s, digit drivers, and display
+into a tested circuit. Change **Environment → Temperature** to observe the reading; its 5 V,
+10-bit ADC resolves approximately 0.49 °C. See the [thermometer guide](docs/thermometer.md) for
+connections and model limits.
 
 ### Test and measure
 

@@ -45,7 +45,7 @@ The standard pack keeps package, device, and model definitions separate:
 
 - **Parameterised analogue device:** 1N4148 metadata selects the existing nonlinear Shockley diode; a visible DO-35 package must not introduce another diode equation.
 - **Package-reused transistor:** BC547 combines TO-92 geometry with its documented C-B-E mapping and the existing NPN BJT model. 2N3904 uses the same geometry but its documented E-B-C mapping.
-- **Sensor:** TMP36 combines TO-92 geometry, an editable component temperature, and a temperature-controlled electrical output. Consumers must read the output node, never the property.
+- **Sensor:** TMP36 combines TO-92 geometry, shared environment temperature, and a supply-qualified temperature-controlled electrical output. Consumers must read the output node, never the temperature property.
 - **Digital IC:** 74HC595 combines DIP-16 with an edge-triggered behavioural model. Logic inputs are classified from supply-relative node voltages and outputs use finite drive resistance or high impedance.
 - **Programmable MCU:** ATtiny85 combines DIP-8, an Intel HEX firmware association, an AVR runtime adapter, and mixed-signal GPIO/ADC bridges. Application algorithms belong in firmware artifacts.
 - **Display:** a four-digit common-cathode display combines package pins, LED junction currents, multiplex commons, and a bounded visual persistence integrator. It has no numeric-value property.
