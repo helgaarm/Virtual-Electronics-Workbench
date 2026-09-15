@@ -11,6 +11,7 @@ Start with the learning workflow before the optional, experimental PCB material.
 - [Multimeter, oscilloscope, generator, counter, and logic analyser](instruments.md)
 - [Component model](component-model.md)
 - [Standard component pack](standard-component-pack.md)
+- [Prioritized component expansion proposal](component-expansion-proposal.md)
 - [NE555 model and teaching limitations](ne555.md)
 - [First to Press Wins: play and measure the transistor latch game](first-press-wins.md)
 
