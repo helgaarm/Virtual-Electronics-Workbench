@@ -10,6 +10,7 @@ import { UnionFind } from '../domain/graph/unionFind';
 import { createNe555Subcircuit } from './models/ne555';
 import { tmp36Output } from './models/tmp36';
 import { potentiometerResistances } from './models/potentiometer';
+import { create74hc00Subcircuit, createLm358Subcircuit } from './models/expansionPack';
 
 export interface CircuitExtraction {
   circuit: Circuit;
@@ -156,7 +157,7 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
         }));
         break;
       case 'tmp36': {
-        const output = tmp36Output(component.temperatureC, project.powerOn ? 5 : 0);
+        const output = tmp36Output(project.environment.temperatureC, project.powerOn ? 5 : 0);
         electricalComponents.push({
           id: component.id,
           kind: 'voltage-source',
@@ -173,6 +174,24 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
       }
       case 'diode-1n4148':
         electricalComponents.push({ id: component.id, kind: 'diode', positiveNodeId: holeToNodeId[component.terminalHoleIds.anode], negativeNodeId: holeToNodeId[component.terminalHoleIds.cathode], model: { saturationCurrentA: 4e-9, emissionCoefficient: 1.9, temperatureK: 298.15 } });
+        break;
+      case 'zener-1n4733a':
+        electricalComponents.push(
+          { id: `${component.id}:forward`, kind: 'diode', positiveNodeId: holeToNodeId[component.terminalHoleIds.anode], negativeNodeId: holeToNodeId[component.terminalHoleIds.cathode], model: { saturationCurrentA: 1e-9, emissionCoefficient: 1.8, temperatureK: 298.15 } },
+          { id: `${component.id}:breakdown`, kind: 'led', positiveNodeId: holeToNodeId[component.terminalHoleIds.cathode], negativeNodeId: holeToNodeId[component.terminalHoleIds.anode], forwardVoltageV: component.zenerVoltageV, onResistanceOhms: 10 },
+        );
+        break;
+      case '2n7000':
+        electricalComponents.push(
+          { id: `${component.id}:channel`, kind: 'smooth-switch', positiveNodeId: holeToNodeId[component.terminalHoleIds.drain], negativeNodeId: holeToNodeId[component.terminalHoleIds.source], controlPositiveNodeId: holeToNodeId[component.terminalHoleIds.gate], controlNegativeNodeId: holeToNodeId[component.terminalHoleIds.source], onResistanceOhms: 5, transitionVoltageV: 0.35 },
+          { id: `${component.id}:body-diode`, kind: 'diode', positiveNodeId: holeToNodeId[component.terminalHoleIds.source], negativeNodeId: holeToNodeId[component.terminalHoleIds.drain], model: { saturationCurrentA: 1e-12, emissionCoefficient: 1.5, temperatureK: 298.15 } },
+        );
+        break;
+      case 'lm358':
+        electricalComponents.push(createLm358Subcircuit(component.id, Object.fromEntries(Object.entries(component.terminalHoleIds).map(([pin, hole]) => [pin, holeToNodeId[hole]])) as Record<`pin${number}`, string>));
+        break;
+      case '74hc00':
+        electricalComponents.push(create74hc00Subcircuit(component.id, Object.fromEntries(Object.entries(component.terminalHoleIds).map(([pin, hole]) => [pin, holeToNodeId[hole]])) as Record<`pin${number}`, string>));
         break;
       case 'bc547': case 'bc557': case '2n3904': case '2n3906':
         electricalComponents.push({ id: component.id, kind: 'bjt', polarity: component.polarity, collectorNodeId: holeToNodeId[component.terminalHoleIds.collector], baseNodeId: holeToNodeId[component.terminalHoleIds.base], emitterNodeId: holeToNodeId[component.terminalHoleIds.emitter], model: { saturationCurrentA: 1e-14, emissionCoefficient: 1, temperatureK: 298.15, forwardBeta: component.kind.startsWith('bc') ? 200 : 100, reverseBeta: 1 } });

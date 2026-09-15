@@ -217,13 +217,8 @@ export function Inspector({
       {component.kind === 'tmp36' && (
         <section className="inspector-section">
           <div className="section-label">TMP36 temperature sensor · TO-92</div>
-          <label htmlFor="tmp36-temperature">Sensed temperature</label>
-          <div className="input-with-unit">
-            <input id="tmp36-temperature" type="number" min="-40" max="125" step="0.1" value={component.temperatureC}
-              onChange={(event) => onUpdate({ ...component, temperatureC: Math.min(125, Math.max(-40, Number(event.target.value))) })} />
-            <span>°C</span>
-          </div>
-          <small>Nominal output: {(0.5 + component.temperatureC * 0.01).toFixed(3)} V · supply 2.7–5.5 V</small>
+          <div className="section-label">Temperature comes from the shared Environment controls.</div>
+          <small>Nominal transfer: 500 mV offset plus 10 mV/°C · supply 2.7–5.5 V</small>
         </section>
       )}
 

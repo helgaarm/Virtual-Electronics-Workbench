@@ -29,9 +29,9 @@ optional follow-on and must not displace breadboard, simulation, measurement, or
 
 ## Later
 
-- Implement the staged [component expansion proposal](component-expansion-proposal.md), beginning
-  with an op-amp, MOSFET, NAND logic, and Zener diode only after their solver and lesson acceptance
-  criteria are met.
+- Continue the staged [component expansion proposal](component-expansion-proposal.md) with its
+  time/sensing and electromechanical waves after validating the shipped Wave 1 op-amp, MOSFET, NAND,
+  and Zener models in lesson circuits.
 - Additional digital logic and IC packages, inductive components, firmware lessons,
   component tolerances/faults, protocol decoding, and hardware-in-the-loop where each feature has an
   honest simulation and measurement boundary.

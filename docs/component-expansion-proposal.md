@@ -4,8 +4,9 @@
 
 The current catalogue is strong enough for introductory DC, timing, transistor, display, and small
 mixed-signal exercises. The next components should broaden the *kinds of circuits learners can
-build*, rather than add near-duplicates of parts already present. This proposal is a planning input,
-not a claim that the listed parts or models are implemented.
+build*, rather than add near-duplicates of parts already present. This proposal is also the delivery
+tracker. Wave 1 is now available in the parts drawer; Waves 2 and 3 remain proposed and are not
+represented as working components.
 
 Candidates are ranked by:
 
@@ -24,6 +25,9 @@ physical dimensions, extraction, persistence, tests, and a measured example.
 ## Recommended sequence
 
 ### Wave 1 — high-value analogue and logic building blocks
+
+**Implemented:** the four Wave 1 devices can be placed, saved, rendered, extracted, and simulated
+with the deliberately bounded models described below.
 
 | Priority | Component | What it unlocks | Smallest honest model | Key prerequisite or risk |
 | --- | --- | --- | --- | --- |

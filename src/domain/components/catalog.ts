@@ -103,6 +103,22 @@ export const STANDARD_DEVICE_CATALOG = {
     supportedSupplyRangeV: { minimum: 2.7, maximum: 5.5 }, simulationModels: [{ id: 'avr-runtime', level: 'behavioural', description: 'Deterministic AVR instruction adapter with mixed-signal GPIO and ADC.' }],
     limitations: ['The incremental AVR core currently implements only the documented starter-firmware opcode subset.'], sourceDocumentIds: ['microchip-attiny25-45-85-rev-2586q'], datasheetUrls: ['https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-2586-AVR-8-bit-Microcontroller-ATtiny25-ATtiny45-ATtiny85_Datasheet.pdf'], testedExamples: ['Digital Breadboard Thermometer'],
   }),
+  lm358b: device({
+    id: 'lm358b', name: 'LM358B', category: 'Integrated Circuits', subcategory: 'Operational Amplifiers', packageId: 'DIP-8', manufacturerReference: 'Texas Instruments LM358B', description: 'Dual general-purpose operational amplifier.',
+    pins: ['OUT1','IN1−','IN1+','V−','IN2+','IN2−','OUT2','V+'].map((name, index) => ({ number: index + 1, id: `pin${index + 1}`, name })), supportedSupplyRangeV: { minimum: 3, maximum: 36 },
+    simulationModels: [{ id: 'bounded-behavioural-op-amp', level: 'behavioural', description: 'Finite-gain, finite-drive educational amplifier referenced to its supply pins.' }], limitations: ['Frequency response, input offset, common-mode limits, and bias currents are omitted.'], sourceDocumentIds: ['ti-lm358b'], datasheetUrls: ['https://www.ti.com/lit/ds/symlink/lm358b.pdf'], testedExamples: [],
+  }),
+  '2n7000': device({
+    id: '2n7000', name: '2N7000', category: 'Semiconductors', subcategory: 'MOSFETs', packageId: 'TO-92-inline', manufacturerReference: 'onsemi 2N7000', description: 'N-channel enhancement MOSFET.',
+    pins: ['Source','Gate','Drain'].map((name, index) => ({ number: index + 1, id: `pin${index + 1}`, name })), simulationModels: [{ id: 'smooth-mosfet-switch', level: 'behavioural', description: 'Smooth gate-controlled channel with body diode.' }], limitations: ['Channel modulation, capacitances, breakdown, and self-heating are omitted.'], sourceDocumentIds: ['onsemi-2n7000'], datasheetUrls: ['https://www.onsemi.com/pdf/datasheet/2n7000-d.pdf'], testedExamples: [],
+  }),
+  '74hc00': device({
+    id: '74hc00', name: '74HC00', category: 'Integrated Circuits', subcategory: 'Logic', packageId: 'DIP-14', manufacturerReference: 'Texas Instruments SN74HC00N', description: 'Quad two-input NAND gate.',
+    pins: ['1A','1B','1Y','2A','2B','2Y','GND','3Y','3A','3B','4Y','4A','4B','VCC'].map((name, index) => ({ number: index + 1, id: `pin${index + 1}`, name })), supportedSupplyRangeV: { minimum: 2, maximum: 6 }, simulationModels: [{ id: 'finite-drive-nand', level: 'behavioural', description: 'Four supply-powered NAND stages with finite output resistance.' }], limitations: ['Propagation delay and input leakage are omitted.'], sourceDocumentIds: ['ti-sn74hc00'], datasheetUrls: ['https://www.ti.com/lit/ds/symlink/sn74hc00.pdf'], testedExamples: [],
+  }),
+  '1n4733a': device({
+    id: '1n4733a', name: '1N4733A', category: 'Semiconductors', subcategory: 'Zener Diodes', packageId: 'DO-41', manufacturerReference: 'onsemi 1N4733A', description: '5.1 V axial Zener diode.', pins: [{ number: 1, id: 'anode', name: 'Anode' }, { number: 2, id: 'cathode', name: 'Cathode' }], simulationModels: [{ id: 'piecewise-zener', level: 'behavioural', description: 'Forward junction and finite-slope reverse breakdown.' }], limitations: ['Temperature coefficient, tolerance, and power-dependent heating are omitted.'], sourceDocumentIds: ['onsemi-1n4733a'], datasheetUrls: ['https://www.onsemi.com/pdf/datasheet/1n4736a-d.pdf'], testedExamples: [],
+  }),
 } as const;
 
 export const ELECTRONIC_DEVICE_CATALOG = { ne555n: NE555N_METADATA, ...STANDARD_DEVICE_CATALOG } as const;

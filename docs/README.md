@@ -7,6 +7,7 @@ Start with the learning workflow before the optional, experimental PCB material.
 
 - [Project overview and setup](../README.md)
 - [Physical breadboard model](physical-model.md)
+- [External temperature, humidity, wind, and light](environment.md)
 - [Simulation models and numerical limits](simulation.md)
 - [Multimeter, oscilloscope, generator, counter, and logic analyser](instruments.md)
 - [Component model](component-model.md)

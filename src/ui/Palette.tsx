@@ -22,6 +22,10 @@ const KINDS: Array<{ kind: ComponentKind; icon: string }> = [
   { kind: 'four-digit-seven-segment', icon: '88.8' },
   { kind: '74hc595', icon: '595' },
   { kind: 'attiny85', icon: 'AVR' },
+  { kind: 'lm358', icon: 'OP' },
+  { kind: '2n7000', icon: 'M' },
+  { kind: '74hc00', icon: 'NAND' },
+  { kind: 'zener-1n4733a', icon: 'Z' },
 ];
 
 export function Palette({ onAdd }: { onAdd: (kind: ComponentKind) => void }) {

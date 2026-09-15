@@ -1,7 +1,8 @@
 import type { ComponentKind } from '../components/types';
 import type { QuarterTurn } from './geometry';
-import { DIP_8_PACKAGE } from './dipPackages';
+import { DIP_8_PACKAGE, type DipPackageDefinition } from './dipPackages';
 import { DIP_16_PACKAGE } from './dipPackages';
+import { DIP_14_PACKAGE } from './dipPackages';
 import { TO_92_PACKAGE } from './to92Package';
 
 export interface PhysicalPackageDefinition {
@@ -95,7 +96,15 @@ export const PHYSICAL_PACKAGES: Record<ComponentKind, PhysicalPackageDefinition>
   'four-digit-seven-segment': { packageType: '12-PIN-4-DIGIT-DISPLAY', dimensionsMm: { x: 40, y: 8, z: 19 }, leadDiameterMm: 0.5, mountingHeightMm: 6, allowedOrientations: [0, 180] },
   '74hc595': { packageType: DIP_16_PACKAGE.id, dimensionsMm: DIP_16_PACKAGE.bodyDimensionsMm, leadDiameterMm: DIP_16_PACKAGE.leadWidthMm, mountingHeightMm: 5.2, allowedOrientations: [0, 180] },
   attiny85: { packageType: DIP_8_PACKAGE.id, dimensionsMm: DIP_8_PACKAGE.bodyDimensionsMm, leadDiameterMm: DIP_8_PACKAGE.leadWidthMm, mountingHeightMm: 5.2, allowedOrientations: [0, 180] },
+  lm358: dipPhysical(DIP_8_PACKAGE),
+  '74hc00': dipPhysical(DIP_14_PACKAGE),
+  '2n7000': to92Physical(),
+  'zener-1n4733a': { packageType: 'DO-41', dimensionsMm: { x: 5.2, y: 2.7, z: 2.7 }, leadDiameterMm: 0.86, leadSpanMm: { minimum: 7.62, maximum: 20.32 }, mountingHeightMm: 2.6, allowedOrientations: QUARTER_TURNS },
 };
+
+function dipPhysical(definition: DipPackageDefinition): PhysicalPackageDefinition {
+  return { packageType: definition.id, dimensionsMm: definition.bodyDimensionsMm, leadDiameterMm: definition.leadWidthMm, mountingHeightMm: 5.2, allowedOrientations: [0, 180] };
+}
 
 function to92Physical(): PhysicalPackageDefinition {
   return { packageType: TO_92_PACKAGE.id, dimensionsMm: { x: TO_92_PACKAGE.bodyDimensionsMm.width, y: TO_92_PACKAGE.bodyDimensionsMm.height, z: TO_92_PACKAGE.bodyDimensionsMm.depth }, leadDiameterMm: TO_92_PACKAGE.leadDiameterMm, mountingHeightMm: 5.4, allowedOrientations: [0, 180] };
