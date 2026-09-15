@@ -12,8 +12,9 @@ import {
 } from './instruments/types';
 import { railHoleId, terminalHoleId } from './physical/breadboard';
 import type { PcbProject } from './pcb/types';
+import { DEFAULT_EXTERNAL_ENVIRONMENT, type ExternalEnvironment } from './environment';
 
-export const PROJECT_SCHEMA_VERSION = 10 as const;
+export const PROJECT_SCHEMA_VERSION = 12 as const;
 export const MAX_PROJECT_PROBES = 16;
 export const SIMULATION_TIME_STEPS_SECONDS = [
   0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05,
@@ -59,6 +60,7 @@ export interface WorkbenchProject {
   probes: MeasurementProbe[];
   analysis: AnalysisSettings;
   simulation: SimulationSettings;
+  environment: ExternalEnvironment;
   oscilloscope: OscilloscopeSettings;
   signalGenerator: SignalGeneratorSettings;
   frequencyCounter: FrequencyCounterSettings;
@@ -99,6 +101,7 @@ export function createEmptyProject(name = 'Untitled workbench'): WorkbenchProjec
       timeStepSeconds: 0.005,
       speed: 1,
     },
+    environment: { ...DEFAULT_EXTERNAL_ENVIRONMENT },
     oscilloscope: createDefaultOscilloscopeSettings(),
     signalGenerator: createDefaultSignalGeneratorSettings(),
     frequencyCounter: createDefaultFrequencyCounterSettings(),

@@ -25,6 +25,7 @@ import {
 import { createBreadboardDefinition } from '../domain/physical/breadboard';
 import { validateOccupancy } from '../domain/physical/occupancy';
 import type { PcbProject } from '../domain/pcb/types';
+import { DEFAULT_EXTERNAL_ENVIRONMENT, LIGHT_TYPES } from '../domain/environment';
 
 export class UnsupportedProjectVersionError extends Error {}
 
@@ -218,6 +219,7 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
     'voltage-source', 'ground', 'resistor', 'led', 'capacitor', 'switch', 'jumper-wire', 'ne555', 'tmp36',
     'diode-1n4148', 'bc547', 'bc557', '2n3904', '2n3906', 'potentiometer',
     'seven-segment', 'four-digit-seven-segment', '74hc595', 'attiny85',
+    'lm358', '2n7000', '74hc00', 'zener-1n4733a',
   ] as const);
   const base = {
     id: identifier(source.id, `${path}.id`),
@@ -334,6 +336,14 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
       return { ...base, kind, deviceId: '74hc595', packageId: 'DIP-16', firmwareState: 'electrical-pins', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 16 }, (_, i) => `pin${i + 1}`)) };
     case 'attiny85':
       return { ...base, kind, deviceId: 'attiny85', packageId: 'DIP-8', firmwareId: stringValue(source.firmwareId, `${path}.firmwareId`, 80), clockHz: finiteNumber(source.clockHz, `${path}.clockHz`, 1, 20_000_000), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 8 }, (_, i) => `pin${i + 1}`)) };
+    case 'lm358':
+      return { ...base, kind, deviceId: 'lm358b', packageId: 'DIP-8', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 8 }, (_, i) => `pin${i + 1}`)) };
+    case '74hc00':
+      return { ...base, kind, deviceId: '74hc00', packageId: 'DIP-14', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 14 }, (_, i) => `pin${i + 1}`)) };
+    case '2n7000':
+      return { ...base, kind, deviceId: '2n7000', packageId: 'TO-92-inline', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['source', 'gate', 'drain']) };
+    case 'zener-1n4733a':
+      return { ...base, kind, deviceId: '1n4733a', packageId: 'DO-41', zenerVoltageV: finiteNumber(source.zenerVoltageV, `${path}.zenerVoltageV`, 1, 100), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['anode', 'cathode']) };
   }
 }
 
@@ -668,6 +678,19 @@ export function migrateProjectDocument(value: unknown): WorkbenchProject {
     probes,
     analysis,
     simulation,
+    environment: sourceVersion < 12
+      ? { ...DEFAULT_EXTERNAL_ENVIRONMENT }
+      : (() => {
+          const environment = record(source.environment, 'environment');
+          return {
+            temperatureC: finiteNumber(environment.temperatureC, 'environment.temperatureC', -80, 100),
+            relativeHumidityPercent: finiteNumber(environment.relativeHumidityPercent, 'environment.relativeHumidityPercent', 0, 100),
+            windSpeedMps: finiteNumber(environment.windSpeedMps, 'environment.windSpeedMps', 0, 100),
+            illuminanceLux: finiteNumber(environment.illuminanceLux, 'environment.illuminanceLux', 0, 200_000),
+            lightType: enumValue(environment.lightType, 'environment.lightType', LIGHT_TYPES),
+            wavelengthNm: finiteNumber(environment.wavelengthNm, 'environment.wavelengthNm', 100, 2_000),
+          };
+        })(),
     oscilloscope,
     signalGenerator,
     frequencyCounter,

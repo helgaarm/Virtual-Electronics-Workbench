@@ -125,6 +125,24 @@ export interface Attiny85Component extends ComponentBase {
   clockHz: number; terminalHoleIds: Record<`pin${number}`, string>;
 }
 
+export interface Lm358Component extends ComponentBase {
+  kind: 'lm358'; deviceId: 'lm358b'; packageId: 'DIP-8';
+  terminalHoleIds: Record<`pin${number}`, string>;
+}
+export interface Mosfet2n7000Component extends ComponentBase {
+  kind: '2n7000'; deviceId: '2n7000'; packageId: 'TO-92-inline';
+  terminalHoleIds: { source: string; gate: string; drain: string };
+}
+export interface Nand74hc00Component extends ComponentBase {
+  kind: '74hc00'; deviceId: '74hc00'; packageId: 'DIP-14';
+  terminalHoleIds: Record<`pin${number}`, string>;
+}
+export interface Zener1n4733aComponent extends ComponentBase {
+  kind: 'zener-1n4733a'; deviceId: '1n4733a'; packageId: 'DO-41';
+  zenerVoltageV: number;
+  terminalHoleIds: { anode: string; cathode: string };
+}
+
 export type PlacedComponent =
   | VoltageSourceComponent
   | GroundComponent
@@ -136,7 +154,8 @@ export type PlacedComponent =
   | Ne555Component
   | Tmp36Component
   | SmallSignalDiodeComponent | TransistorComponent | PotentiometerComponent
-  | SevenSegmentComponent | FourDigitSevenSegmentComponent | ShiftRegisterComponent | Attiny85Component;
+  | SevenSegmentComponent | FourDigitSevenSegmentComponent | ShiftRegisterComponent | Attiny85Component
+  | Lm358Component | Mosfet2n7000Component | Nand74hc00Component | Zener1n4733aComponent;
 
 export type ComponentKind = PlacedComponent['kind'];
 
@@ -178,5 +197,9 @@ export function componentDisplayName(kind: ComponentKind): string {
     case 'four-digit-seven-segment': return '4-digit 7-segment display';
     case '74hc595': return '74HC595 shift register';
     case 'attiny85': return 'ATtiny85 microcontroller';
+    case 'lm358': return 'LM358B dual op-amp';
+    case '2n7000': return '2N7000 N-channel MOSFET';
+    case '74hc00': return '74HC00 quad NAND';
+    case 'zener-1n4733a': return '1N4733A 5.1 V Zener diode';
   }
 }

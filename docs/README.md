@@ -7,10 +7,12 @@ Start with the learning workflow before the optional, experimental PCB material.
 
 - [Project overview and setup](../README.md)
 - [Physical breadboard model](physical-model.md)
+- [External temperature, humidity, wind, and light](environment.md)
 - [Simulation models and numerical limits](simulation.md)
 - [Multimeter, oscilloscope, generator, counter, and logic analyser](instruments.md)
 - [Component model](component-model.md)
 - [Standard component pack](standard-component-pack.md)
+- [Prioritized component expansion proposal](component-expansion-proposal.md)
 - [NE555 model and teaching limitations](ne555.md)
 - [First to Press Wins: play and measure the transistor latch game](first-press-wins.md)
 

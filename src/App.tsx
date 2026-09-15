@@ -36,6 +36,7 @@ import {
 import { AnalysisWorkspace } from './ui/AnalysisWorkspace';
 import { Inspector } from './ui/Inspector';
 import { Palette } from './ui/Palette';
+import { EnvironmentPanel } from './ui/EnvironmentPanel';
 import { PcbDesigner } from './ui/PcbDesigner';
 import { convertBreadboardToPcb, circuitFingerprint } from './domain/pcb/converter';
 import { routeRemainingConnections } from './domain/pcb/router';
@@ -79,8 +80,9 @@ export default function App() {
       powerOn: project.powerOn,
       components: project.components,
       signalGenerator: project.signalGenerator,
+      environment: project.environment,
     }),
-    [project.board, project.components, project.powerOn, project.signalGenerator],
+    [project.board, project.components, project.environment, project.powerOn, project.signalGenerator],
   );
   const sampleNodeIds = useMemo(
     () => instrumentSampleNodeIds(project, dcSimulation.extraction.holeToNodeId),
@@ -550,6 +552,7 @@ export default function App() {
               <div className="view-buttons"><button className={project.view.cameraPreset === 'top' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: 'top' } }))}>Top</button><button className={project.view.cameraPreset === '3d' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: '3d' } }))}>3D</button><button onClick={() => { applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: '3d' } })); setCameraResetKey((key) => key + 1); }}>Fit</button><button onClick={() => setCameraResetKey((key) => key + 1)}>Reset view</button></div>
               <label className="learning-toggle" title="Highlights every hole joined by the breadboard's internal metal strip."><input type="checkbox" checked={project.view.showConnections} onChange={(event) => toggleConnectionLearning(event.target.checked)} /> Highlight connected holes</label>
             </div>
+            <EnvironmentPanel environment={project.environment} onChange={(environment) => applyProject((current) => ({ ...current, environment }))} />
             <div className="canvas-wrap" data-reset-key={cameraResetKey}>
               <WorkbenchCanvas
                 key={cameraResetKey}

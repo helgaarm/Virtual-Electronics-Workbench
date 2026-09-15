@@ -38,6 +38,7 @@ function nextLabel(kind: ComponentKind, components: PlacedComponent[]): string {
     'diode-1n4148': 'D', bc547: 'Q', bc557: 'Q', '2n3904': 'Q', '2n3906': 'Q',
     potentiometer: 'RV', 'seven-segment': 'DS', 'four-digit-seven-segment': 'DS',
     '74hc595': 'U', attiny85: 'U',
+    lm358: 'U', '74hc00': 'U', '2n7000': 'Q', 'zener-1n4733a': 'D',
   };
   let index = 1;
   const labels = new Set(components.map((component) => component.label));
@@ -148,7 +149,8 @@ export function createPlacedComponent(
     return undefined;
   }
 
-  const dipPins = kind === '74hc595' ? 16 : kind === 'attiny85' ? 8
+  const dipPins = kind === '74hc595' ? 16 : kind === 'attiny85' || kind === 'lm358' ? 8
+    : kind === '74hc00' ? 14
     : kind === 'seven-segment' ? 10 : kind === 'four-digit-seven-segment' ? 12 : 0;
   if (dipPins) {
     const occupied = buildOccupancy(components);
@@ -160,6 +162,8 @@ export function createPlacedComponent(
       const clockwise = [...near, ...far.slice().reverse()];
       if (kind === '74hc595') return { ...base, kind, deviceId: '74hc595', packageId: 'DIP-16', firmwareState: 'electrical-pins', terminalHoleIds: Object.fromEntries(clockwise.map((id, i) => [`pin${i + 1}`, id])) };
       if (kind === 'attiny85') return { ...base, kind, deviceId: 'attiny85', packageId: 'DIP-8', firmwareId: 'thermometer-v1', clockHz: 1_000_000, terminalHoleIds: Object.fromEntries(clockwise.map((id, i) => [`pin${i + 1}`, id])) };
+      if (kind === 'lm358') return { ...base, kind, deviceId: 'lm358b', packageId: 'DIP-8', terminalHoleIds: Object.fromEntries(clockwise.map((id, i) => [`pin${i + 1}`, id])) };
+      if (kind === '74hc00') return { ...base, kind, deviceId: '74hc00', packageId: 'DIP-14', terminalHoleIds: Object.fromEntries(clockwise.map((id, i) => [`pin${i + 1}`, id])) };
       const names = kind === 'seven-segment'
         ? ['e', 'd', 'common1', 'c', 'dp', 'b', 'a', 'common2', 'f', 'g']
         : ['digit1', 'a', 'f', 'digit2', 'digit3', 'b', 'digit4', 'g', 'c', 'dp', 'd', 'e'];
@@ -168,12 +172,13 @@ export function createPlacedComponent(
     return undefined;
   }
 
-  if (kind === 'bc547' || kind === 'bc557' || kind === '2n3904' || kind === '2n3906' || kind === 'potentiometer') {
+  if (kind === 'bc547' || kind === 'bc557' || kind === '2n3904' || kind === '2n3906' || kind === '2n7000' || kind === 'potentiometer') {
     const occupied = buildOccupancy(components);
     for (let column = 1; column <= board.columns - 2; column += 1) {
       const holes = Array.from({ length: 3 }, (_, i) => terminalHoleId(board.id, 'E', column + i));
       if (holes.some((id) => occupied.has(id))) continue;
       if (kind === 'potentiometer') return { ...base, kind, totalResistanceOhms: 10_000, wiperPosition: 0.5, terminalHoleIds: { a: holes[0], wiper: holes[1], b: holes[2] } };
+      if (kind === '2n7000') return { ...base, kind, deviceId: '2n7000', packageId: 'TO-92-inline', terminalHoleIds: { source: holes[0], gate: holes[1], drain: holes[2] } };
       const european = kind === 'bc547' || kind === 'bc557';
       return { ...base, kind, deviceId: kind, packageId: 'TO-92-inline', polarity: kind === 'bc547' || kind === '2n3904' ? 'npn' : 'pnp', terminalHoleIds: european ? { collector: holes[0], base: holes[1], emitter: holes[2] } : { emitter: holes[0], base: holes[1], collector: holes[2] } };
     }
@@ -226,6 +231,8 @@ export function createPlacedComponent(
       return { ...base, kind, color: 'blue', terminalHoleIds: { a: first, b: second } };
     case 'diode-1n4148':
       return { ...base, kind, deviceId: '1n4148', packageId: 'DO-35', terminalHoleIds: { anode: first, cathode: second } };
+    case 'zener-1n4733a':
+      return { ...base, kind, deviceId: '1n4733a', packageId: 'DO-41', zenerVoltageV: 5.1, terminalHoleIds: { anode: first, cathode: second } };
   }
 }
 
@@ -370,5 +377,9 @@ export function paletteDescription(kind: ComponentKind): string {
   if (kind === 'four-digit-seven-segment') return 'Display · multiplexed · 4 digits';
   if (kind === '74hc595') return 'Logic · serial-in / parallel-out · DIP-16';
   if (kind === 'attiny85') return 'Microcontroller · AVR · DIP-8';
+  if (kind === 'lm358') return 'Analogue · dual op-amp · DIP-8';
+  if (kind === '2n7000') return 'N-channel MOSFET · TO-92';
+  if (kind === '74hc00') return 'Logic · four NAND gates · DIP-14';
+  if (kind === 'zener-1n4733a') return 'Voltage reference · 5.1 V · DO-41';
   return componentDisplayName(kind);
 }

@@ -10,7 +10,7 @@ import { routeJumperWires } from '../../domain/physical/wireRouting';
 import type { Point3Mm } from '../../domain/physical/geometry';
 import { CylinderBetween, SmoothTube } from '../scene/geometry';
 import { createJumperCurve } from '../scene/wireGeometry';
-import { DIP_8_PACKAGE, DIP_16_PACKAGE, type DipPackageDefinition } from '../../domain/physical/dipPackages';
+import { DIP_8_PACKAGE, DIP_14_PACKAGE, DIP_16_PACKAGE, type DipPackageDefinition } from '../../domain/physical/dipPackages';
 
 interface Props {
   board: BreadboardDefinition;
@@ -164,13 +164,13 @@ function To92Body({
 }
 
 function AxialDiodeMesh({ component, board, selected, onSelect, onBeginDrag }: {
-  component: Extract<PlacedComponent, { kind: 'diode-1n4148' }>;
+  component: Extract<PlacedComponent, { kind: 'diode-1n4148' | 'zener-1n4733a' }>;
   board: BreadboardDefinition;
   selected: boolean;
   onSelect: () => void;
   onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
-  const physicalPackage = PHYSICAL_PACKAGES['diode-1n4148'];
+  const physicalPackage = PHYSICAL_PACKAGES[component.kind];
   const anode = point(board, component.terminalHoleIds.anode, 0.3);
   const cathode = point(board, component.terminalHoleIds.cathode, 0.3);
   const horizontal = cathode.clone().sub(anode).setY(0).normalize();
@@ -183,7 +183,7 @@ function AxialDiodeMesh({ component, board, selected, onSelect, onBeginDrag }: {
   const anodeBend = anode.clone().setY(center.y);
   const cathodeBend = cathode.clone().setY(center.y);
   const bodyQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), horizontal);
-  const marking = useComponentMarkingTexture(['1N4148']);
+  const marking = useComponentMarkingTexture([component.deviceId.toUpperCase()]);
 
   return (
     <group
@@ -721,7 +721,7 @@ function Tmp36Mesh({ component, board, selected, onSelect, onBeginDrag }: {
   );
 }
 
-type To92Component = Extract<PlacedComponent, { kind: 'bc547' | 'bc557' | '2n3904' | '2n3906' }>;
+type To92Component = Extract<PlacedComponent, { kind: 'bc547' | 'bc557' | '2n3904' | '2n3906' | '2n7000' }>;
 type SimpleRenderableComponent = Extract<PlacedComponent, { kind: 'voltage-source' | 'ground' }>;
 
 function TransistorMesh({ component, board, selected, onSelect, onBeginDrag }: {
@@ -738,7 +738,7 @@ function TransistorMesh({ component, board, selected, onSelect, onBeginDrag }: {
   const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
   const bodyBottomY = bodyCenter.y - physicalPackage.dimensionsMm.y / 2;
   const rotationY = -Math.atan2(axis.z, axis.x);
-  const marking = useComponentMarkingTexture([component.deviceId.toUpperCase(), component.polarity.toUpperCase()]);
+  const marking = useComponentMarkingTexture([component.deviceId.toUpperCase(), 'polarity' in component ? component.polarity.toUpperCase() : 'N-MOS']);
   return (
     <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
       {pins.map((pin, index) => (
@@ -752,13 +752,13 @@ function TransistorMesh({ component, board, selected, onSelect, onBeginDrag }: {
 }
 
 function GenericDipMesh({ component, board, selected, onSelect, onBeginDrag }: {
-  component: Extract<PlacedComponent, { kind: '74hc595' | 'attiny85' }>;
+  component: Extract<PlacedComponent, { kind: '74hc595' | 'attiny85' | 'lm358' | '74hc00' }>;
   board: BreadboardDefinition;
   selected: boolean;
   onSelect: () => void;
   onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
-  const definition: DipPackageDefinition = component.kind === '74hc595' ? DIP_16_PACKAGE : DIP_8_PACKAGE;
+  const definition: DipPackageDefinition = component.kind === '74hc595' ? DIP_16_PACKAGE : component.kind === '74hc00' ? DIP_14_PACKAGE : DIP_8_PACKAGE;
   const physicalPackage = PHYSICAL_PACKAGES[component.kind];
   const pins = Object.values(component.terminalHoleIds).map((holeId) => point(board, holeId, 0.25));
   const center = pins.reduce((sum, pin) => sum.add(pin), new THREE.Vector3()).multiplyScalar(1 / pins.length);
@@ -766,7 +766,7 @@ function GenericDipMesh({ component, board, selected, onSelect, onBeginDrag }: {
   const rotationY = -Math.atan2(packageAxis.z, packageAxis.x);
   const bodyCenter = center.clone().add(new THREE.Vector3(0, physicalPackage.mountingHeightMm, 0));
   const bodyBottomY = bodyCenter.y - definition.bodyDimensionsMm.y / 2;
-  const marking = useComponentMarkingTexture(component.kind === '74hc595' ? ['74HC595N', 'SHIFT REG'] : ['ATTINY85', '20PU']);
+  const marking = useComponentMarkingTexture(component.kind === '74hc595' ? ['74HC595N', 'SHIFT REG'] : component.kind === 'attiny85' ? ['ATTINY85', '20PU'] : component.kind === 'lm358' ? ['LM358B', 'DUAL OP AMP'] : ['74HC00N', 'QUAD NAND']);
   return (
     <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
       {pins.map((pin, index) => {
@@ -953,10 +953,11 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         if (component.kind === 'ne555') return <Dip8Mesh key={component.id} component={component} {...common} />;
         if (component.kind === 'tmp36') return <Tmp36Mesh key={component.id} component={component} {...common} />;
         if (component.kind === 'diode-1n4148') return <AxialDiodeMesh key={component.id} component={component} {...common} />;
-        if (component.kind === 'bc547' || component.kind === 'bc557' || component.kind === '2n3904' || component.kind === '2n3906') return <TransistorMesh key={component.id} component={component as To92Component} {...common} />;
+        if (component.kind === 'zener-1n4733a') return <AxialDiodeMesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'bc547' || component.kind === 'bc557' || component.kind === '2n3904' || component.kind === '2n3906' || component.kind === '2n7000') return <TransistorMesh key={component.id} component={component as To92Component} {...common} />;
         if (component.kind === 'potentiometer') return <PotentiometerMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'seven-segment' || component.kind === 'four-digit-seven-segment') return <SegmentDisplayMesh key={component.id} component={component} {...common} />;
-        if (component.kind === '74hc595' || component.kind === 'attiny85') return <GenericDipMesh key={component.id} component={component} {...common} />;
+        if (component.kind === '74hc595' || component.kind === 'attiny85' || component.kind === 'lm358' || component.kind === '74hc00') return <GenericDipMesh key={component.id} component={component} {...common} />;
         return <SimpleComponent key={component.id} component={component as SimpleRenderableComponent} {...common} />;
       })}
     </>
