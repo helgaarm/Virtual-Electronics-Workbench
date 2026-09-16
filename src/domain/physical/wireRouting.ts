@@ -10,6 +10,7 @@ interface Obstacle {
   bottomY: number;
   topY: number;
   projection: number;
+  halfExtentsMm?: { x: number; z: number };
   // Solid parts need a lateral detour; insulated wires are tidier and remain
   // physically clear when crossed on a higher, straight vertical layer.
   routingMode: 'detour' | 'overpass';
@@ -53,6 +54,41 @@ function projectionAlongRoute(
   return { projection, distanceMm: distance2d(point, closest) };
 }
 
+function crossesRectangle(start: Point3Mm, end: Point3Mm, center: Point3Mm, half: { x: number; z: number }): boolean {
+  let enter = 0;
+  let leave = 1;
+  for (const axis of ['x', 'z'] as const) {
+    const offset = start[axis] - center[axis];
+    const direction = end[axis] - start[axis];
+    if (Math.abs(direction) < 1e-9) {
+      if (Math.abs(offset) > half[axis]) return false;
+    } else {
+      const first = (-half[axis] - offset) / direction;
+      const last = (half[axis] - offset) / direction;
+      enter = Math.max(enter, Math.min(first, last));
+      leave = Math.min(leave, Math.max(first, last));
+      if (enter > leave) return false;
+    }
+  }
+  return true;
+}
+
+function insideBody(obstacle: Obstacle, point: Point3Mm): boolean {
+  const half = obstacle.halfExtentsMm;
+  return half ? Math.abs(point.x - obstacle.center.x) < half.x && Math.abs(point.z - obstacle.center.z) < half.z
+    : distance2d(point, obstacle.center) < obstacle.bodyRadiusMm;
+}
+
+function bodyEdge(obstacle: Obstacle, direction: { x: number; z: number }, side: number): Point3Mm {
+  const half = obstacle.halfExtentsMm;
+  const distance = half ? Math.min(
+    Math.abs(direction.x) > 1e-9 ? half.x / Math.abs(direction.x) : Infinity,
+    Math.abs(direction.z) > 1e-9 ? half.z / Math.abs(direction.z) : Infinity,
+  ) : obstacle.bodyRadiusMm;
+  return { x: obstacle.center.x + direction.x * distance * side, y: obstacle.center.y,
+    z: obstacle.center.z + direction.z * distance * side };
+}
+
 function componentObstacle(
   board: BreadboardDefinition,
   component: Exclude<PlacedComponent, JumperWireComponent>,
@@ -89,6 +125,17 @@ function componentObstacle(
     - packageDefinition.dimensionsMm.y / 2;
 
   const { projection, distanceMm } = projectionAlongRoute(center, start, end);
+
+  // The Nano's 45 × 18 mm board must not reserve a 48 mm diameter circle:
+  // that incorrectly puts the accessible rows beside its headers under its body.
+  // Its allowed 0/180-degree orientations have the same axis-aligned footprint.
+  if (component.kind === 'arduino-nano') {
+    const clearance = MAX_WIRE_RADIUS_MM + WIRE_BOARD_CLEARANCE_MM;
+    const halfExtentsMm = { x: packageDefinition.dimensionsMm.x / 2 + clearance, z: packageDefinition.dimensionsMm.z / 2 + clearance };
+    return crossesRectangle(start, end, center, halfExtentsMm)
+      ? { center, bodyRadiusMm, radiusMm, bottomY, topY, projection, halfExtentsMm, routingMode: 'detour' }
+      : undefined;
+  }
 
   return distanceMm < radiusMm
     ? { center, bodyRadiusMm, radiusMm, bottomY, topY, projection, routingMode: 'detour' }
@@ -222,9 +269,8 @@ function routeSingleJumperWire(
   const detourObstacles = obstacles.filter((obstacle) => obstacle.routingMode === 'detour');
   const sideScore = (side: -1 | 1) => detourObstacles.reduce((score, obstacle) => {
     const candidate = {
-      x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
+      ...bodyEdge(obstacle, perpendicular, side),
       y: peakY,
-      z: obstacle.center.z + perpendicular.z * obstacle.bodyRadiusMm * side,
     };
     const boundaryPenalty = isInsideBoard(board, candidate) ? 0 : 10_000;
     const crowdingPenalty = detourObstacles.reduce((penalty, other) => {
@@ -237,31 +283,41 @@ function routeSingleJumperWire(
   }, 0);
   const side: -1 | 1 = sideScore(-1) <= sideScore(1) ? -1 : 1;
   const startObstacles = detourObstacles.filter(
-    (obstacle) => distance2d(start, obstacle.center) < obstacle.bodyRadiusMm,
+    (obstacle) => insideBody(obstacle, start),
   );
   const endObstacles = detourObstacles.filter(
-    (obstacle) => distance2d(end, obstacle.center) < obstacle.bodyRadiusMm,
+    (obstacle) => insideBody(obstacle, end),
   );
   const endpointObstacles = new Set([...startObstacles, ...endObstacles]);
   const detours = detourObstacles
     .filter((obstacle) => !endpointObstacles.has(obstacle))
     .map((obstacle) => ({
-      x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
+      ...bodyEdge(obstacle, perpendicular, side),
       y: peakY,
-      z: obstacle.center.z + perpendicular.z * obstacle.bodyRadiusMm * side,
     }));
-  const escapePoint = (obstacle: Obstacle, endpoint: Point3Mm) => ({
-    x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
-    // Only the stripped conductor fits below some packages. The renderer starts
-    // the insulation after this escape, where its full radius clears the board.
-    y: obstacle.bottomY - WIRE_LEAD_RADIUS_MM - UNDER_BODY_CLEARANCE_MM > endpoint.y
-      ? Math.min(
-        endpoint.y + 0.25,
-        obstacle.bottomY - WIRE_LEAD_RADIUS_MM - UNDER_BODY_CLEARANCE_MM,
-      )
-      : obstacle.topY + 1.2,
-    z: obstacle.center.z + perpendicular.z * obstacle.bodyRadiusMm * side,
-  });
+
+  // Keep short vertical stripped tips. Route fully insulated under raised
+  // packages when it fits; only genuinely low packages need a bare escape.
+  const insulationFloorY = startHole.positionMm.y + MAX_WIRE_RADIUS_MM + WIRE_BOARD_CLEARANCE_MM;
+  const raiseInsulatedTip = (endpoint: Point3Mm, blockers: Obstacle[]) => {
+    if (blockers.length && blockers.every((obstacle) => obstacle.bottomY > insulationFloorY + MAX_WIRE_RADIUS_MM + UNDER_BODY_CLEARANCE_MM)) {
+      endpoint.y = insulationFloorY;
+    }
+  };
+  raiseInsulatedTip(start, startObstacles);
+  raiseInsulatedTip(end, endObstacles);
+  const escapePoint = (obstacle: Obstacle, endpoint: Point3Mm) => {
+    const radius = endpoint.y >= insulationFloorY ? MAX_WIRE_RADIUS_MM : WIRE_LEAD_RADIUS_MM;
+    return {
+      ...bodyEdge(obstacle, perpendicular, side),
+      y: obstacle.bottomY - radius - UNDER_BODY_CLEARANCE_MM > endpoint.y
+        ? Math.min(
+          endpoint.y + 0.25,
+          obstacle.bottomY - radius - UNDER_BODY_CLEARANCE_MM,
+        )
+        : obstacle.topY + 1.2,
+    };
+  };
   const startEscapes = startObstacles.map((obstacle) => escapePoint(obstacle, start));
   const endEscapes = endObstacles.map((obstacle) => escapePoint(obstacle, end));
   const raisedStart = startEscapes.at(-1) ?? start;

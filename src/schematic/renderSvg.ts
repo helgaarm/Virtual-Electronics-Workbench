@@ -1,23 +1,24 @@
 import type { Schematic } from '../domain/schematic/types';
 import { drawSymbol, type SymbolDrawing } from './symbols';
 import { escapeXml, path, text, wrappedText } from './svgPrimitives';
+import { connectedCircuit } from './seriesParallel';
+import { drawConnectedCircuit } from './connectedDrawing';
 
 export type SchematicLayout = 'wires' | 'labels';
 export interface SchematicDrawing { svg: string; width: number; height: number; layout: SchematicLayout }
 
 export function canDrawConnectedWires(schematic: Schematic): boolean {
-  // Keep routing and exported images legible and bounded for the 100-component project limit.
-  return schematic.nets.length <= 24 && schematic.components.length <= 24;
+  return connectedCircuit(schematic) !== undefined;
 }
 
 export function renderSchematicSvg(schematic: Schematic, preferredLayout: SchematicLayout = 'wires'): SchematicDrawing {
-  const layout = preferredLayout === 'wires' && canDrawConnectedWires(schematic) ? 'wires' : 'labels';
-  const symbols = schematic.components.map(drawSymbol);
+  const circuit = preferredLayout === 'wires' ? connectedCircuit(schematic) : undefined;
+  const connected = circuit ? drawConnectedCircuit(schematic, circuit) : undefined;
+  const layout = connected ? 'wires' : 'labels';
+  const symbols = schematic.components.map((component) => drawSymbol(component));
   const netNames = new Map(schematic.nets.map((net) => [net.id, net.name]));
-  const netX = new Map(schematic.nets.map((net, index) => [net.id, 44 + index * 34]));
-  const busWidth = Math.max(100, schematic.nets.length * 34 + 28);
   const columns = Math.min(3, Math.max(1, symbols.length));
-  const width = layout === 'wires' ? busWidth + 440 : columns * 400 + 40;
+  const width = connected?.width ?? columns * 400 + 40;
   const title = wrappedText(24, 34, schematic.title, Math.floor((width - 48) / 11), 20);
   const note = layout === 'wires'
     ? 'Dots join wires. Crossings without dots are not connected.'
@@ -35,11 +36,9 @@ export function renderSchematicSvg(schematic: Schematic, preferredLayout: Schema
     headerHeight += wrapped.lines * 15 + 6;
   }
   headerHeight += 8;
-  let y = headerHeight + (layout === 'wires' ? 40 : 0);
+  let y = headerHeight + (connected ? connected.height + 12 : 0);
   const placements: Array<{ symbol: SymbolDrawing; x: number; y: number }> = [];
-  if (layout === 'wires') {
-    for (const symbol of symbols) { placements.push({ symbol, x: busWidth + 20, y }); y += symbol.height + 16; }
-  } else {
+  if (!connected) {
     for (let index = 0; index < symbols.length; index += columns) {
       const row = symbols.slice(index, index + columns);
       row.forEach((symbol, column) => placements.push({ symbol, x: 20 + column * 400, y }));
@@ -47,31 +46,20 @@ export function renderSchematicSvg(schematic: Schematic, preferredLayout: Schema
     }
   }
   const height = Math.max(260, y + 34);
-  const elements: string[] = [];
-  if (layout === 'wires') {
-    for (const net of schematic.nets) {
-      const x = netX.get(net.id)!;
-      elements.push(text(x - 10, headerHeight + 15, net.name, 11, '#286e54'));
-      elements.push(path(`M${x} ${headerHeight + 24}V${y - 14}`, '#a7bcb2'));
-    }
-  }
+  const elements: string[] = connected ? [`<g transform="translate(0 ${headerHeight})">${connected.body}</g>`] : [];
   for (const { symbol, x, y: top } of placements) {
     elements.push(`<g transform="translate(${x} ${top})">${symbol.body}</g>`);
     for (const terminal of symbol.pins) {
       const endX = x + terminal.x;
       const endY = top + terminal.y;
       const name = terminal.pin.netId ? netNames.get(terminal.pin.netId)! : 'NC';
-      const startX = layout === 'wires' && terminal.pin.netId ? netX.get(terminal.pin.netId)! : x + 12;
+      const startX = x + 12;
       const routeY = terminal.routeBelow ? top + symbol.height - 16 : endY;
       const d = terminal.routeBelow
         ? `M${endX} ${endY}H${endX + 26}V${routeY}H${startX}`
         : `M${startX} ${routeY}H${endX}`;
       elements.push(`<g data-net="${escapeXml(terminal.pin.netId ?? '')}"><title>${escapeXml(`${terminal.pin.name}: ${name}${terminal.pin.holeId ? ` (${terminal.pin.holeId})` : ''}`)}</title>${path(d, '#286e54')}`);
-      if (layout === 'labels' || !terminal.pin.netId) {
-        elements.push(`<rect x="${startX - 4}" y="${routeY - 10}" width="42" height="19" rx="3" fill="white"/>${text(startX, routeY + 4, name, 11, '#286e54')}`);
-      } else {
-        elements.push(`<circle cx="${startX}" cy="${routeY}" r="3.5" fill="#286e54"/>`);
-      }
+      elements.push(`<rect x="${startX - 4}" y="${routeY - 10}" width="42" height="19" rx="3" fill="white"/>${text(startX, routeY + 4, name, 11, '#286e54')}`);
       elements.push(`<circle cx="${endX}" cy="${endY}" r="3" fill="white" stroke="#286e54" stroke-width="1.5"/></g>`);
     }
   }

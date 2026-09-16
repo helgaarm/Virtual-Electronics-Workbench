@@ -54,7 +54,7 @@ export function SchematicDialog({ project, onClose }: { project: WorkbenchProjec
       </header>
       <div className="schematic-toolbar">
         <label>Connections<select aria-label="Connection style" value={drawing.layout} onChange={(event) => { setLayout(event.target.value as SchematicLayout); setMessage(''); }}>
-          <option value="wires" disabled={!canDrawConnectedWires(schematic)}>Connected wires</option>
+          <option value="wires" disabled={!canDrawConnectedWires(schematic)}>Conventional schematic</option>
           <option value="labels">Net labels</option>
         </select></label>
         <label>Zoom<select aria-label="Drawing zoom" value={zoom} onChange={(event) => setZoom(event.target.value)}>

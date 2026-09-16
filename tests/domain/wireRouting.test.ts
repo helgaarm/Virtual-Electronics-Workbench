@@ -4,6 +4,7 @@ import { createBreadboardDefinition, terminalHoleId } from '../../src/domain/phy
 import { PHYSICAL_PACKAGES } from '../../src/domain/physical/packages';
 import { routeJumperWire, routeJumperWires } from '../../src/domain/physical/wireRouting';
 import { createJumperCurve, createJumperCurves } from '../../src/workbench/scene/wireGeometry';
+import { arduinoNanoProject } from '../../src/domain/starters/arduinoNano';
 
 function distanceFromLineMm(point: { x: number; z: number }, start: { x: number; z: number }, end: { x: number; z: number }): number {
   const dx = end.x - start.x;
@@ -74,6 +75,12 @@ describe('jumper wire routing', () => {
     expect(route[3].x).toBeCloseTo((route[0].x + route.at(-1)!.x) / 2);
     expect(route[3].z).toBeCloseTo(route[0].z);
     expect(route[3].y).toBeGreaterThan(route[0].y);
+  });
+
+  it.each(['C', 'I'] as const)('leaves the accessible %s row beside the Nano clear for normal jumper tips', (row) => {
+    const nano = arduinoNanoProject('blink').components.find((component) => component.kind === 'arduino-nano')!;
+    const adjacent = { ...wire, terminalHoleIds: { a: terminalHoleId(board.id, row, 6), b: terminalHoleId(board.id, row, 14) } };
+    expect(routeJumperWire(board, adjacent, [nano, adjacent])).toEqual(routeJumperWire(board, adjacent, [adjacent]));
   });
 
   it('moves laterally and above a component crossing the direct route', () => {

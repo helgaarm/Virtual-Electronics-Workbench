@@ -5,10 +5,10 @@ export interface DrawingPin { pin: SchematicPin; x: number; y: number; routeBelo
 export interface SymbolDrawing { body: string; pins: DrawingPin[]; height: number }
 
 /** Original procedural symbols. All coordinates are drawing units, never package millimetres. */
-export function drawSymbol(component: SchematicComponent): SymbolDrawing {
+export function drawSymbol(component: SchematicComponent, options?: { inline: boolean; reverse?: boolean; labelLeft?: boolean }): SymbolDrawing {
   const reference = wrappedText(16, 20, component.reference, 38, 14);
   const value = wrappedText(16, 24 + reference.lines * 18, component.value, 48, 11);
-  const offset = Math.max(0, reference.lines * 18 + value.lines * 15 - 33);
+  const offset = options?.inline ? 0 : Math.max(0, reference.lines * 18 + value.lines * 15 - 33);
   const label = reference.svg + value.svg;
   const pins: DrawingPin[] = [];
   const pin = (id: string, x: number, y: number, routeBelow = false) => {
@@ -83,6 +83,15 @@ export function drawSymbol(component: SchematicComponent): SymbolDrawing {
         pin(terminal.id, 88, y);
         body += path(`M88 ${y}H108`) + text(118, y + 4, terminal.name, 11);
       });
+  }
+  if (options?.inline) {
+    const labelX = options.labelLeft ? 112 : component.kind === 'led' ? 216 : 188;
+    const labels = wrappedText(labelX, 111, component.reference, options.labelLeft ? 10 : component.kind === 'led' ? 20 : 24, 14);
+    const values = wrappedText(labelX, 115 + labels.lines * 18, component.value, options.labelLeft ? 12 : 24, 11);
+    return { body: `<g data-component-id="${escapeXml(component.id)}"><title>${escapeXml(`${component.reference}: ${component.value}`)}</title>`
+      + `<g${options.reverse ? ' transform="rotate(180 150 120)"' : ''}>${body}</g>`
+      + `<g${options.labelLeft ? ' text-anchor="end"' : ''}>${labels.svg}${values.svg}</g></g>`,
+    pins: pins.map((item) => options.reverse ? { ...item, x: 300 - item.x, y: 240 - item.y } : item), height: 104 };
   }
   const pinLabels = showPinLabels ? pins.map((item) => text(item.x + 7, item.y - offset - 6, item.pin.name, 10)).join('') : '';
   return {
