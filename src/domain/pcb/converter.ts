@@ -1,8 +1,7 @@
 import type { PlacedComponent } from '../components/types';
 import { terminalEntries } from '../components/types';
 import type { WorkbenchProject } from '../project';
-import { createBreadboardDefinition } from '../physical/breadboard';
-import { UnionFind } from '../graph/unionFind';
+import { physicalHoleNets } from '../physical/connectivity';
 import { footprintForKind } from './footprints';
 import { DEFAULT_PCB_RULES, type PcbComponent, type PcbNet, type PcbProject } from './types';
 
@@ -23,29 +22,6 @@ function valueOf(component: PlacedComponent): string {
 
 export function circuitFingerprint(project: WorkbenchProject): string {
   return JSON.stringify(project.components.map((component) => [component.id, component.kind, terminalEntries(component)]));
-}
-
-/** Build permanent physical copper groups. Device behaviour (notably switch.closed) is excluded. */
-function physicalHoleNets(project: WorkbenchProject): Record<string, string> {
-  const board = createBreadboardDefinition(project.board.id, project.board.columns);
-  const union = new UnionFind();
-  const firstByStrip = new Map<string, string>();
-  for (const hole of board.holes) {
-    union.add(hole.id);
-    const first = firstByStrip.get(hole.stripId);
-    if (first) union.union(first, hole.id); else firstByStrip.set(hole.stripId, hole.id);
-  }
-  for (const component of project.components) {
-    if (component.kind === 'jumper-wire') union.union(component.terminalHoleIds.a, component.terminalHoleIds.b);
-  }
-  const groundHoles = project.components.filter((component) => component.kind === 'ground').map((component) => component.terminalHoleIds.ground);
-  for (const hole of groundHoles.slice(1)) union.union(groundHoles[0], hole);
-  const groups = new Map<string, string[]>();
-  for (const hole of board.holes) {
-    const root = union.find(hole.id); const members = groups.get(root) ?? []; members.push(hole.id); groups.set(root, members);
-  }
-  const stableId = new Map([...groups].map(([root, holes]) => [root, `pcb-net-${[...holes].sort()[0]}`]));
-  return Object.fromEntries(board.holes.map((hole) => [hole.id, stableId.get(union.find(hole.id))!]));
 }
 
 function placeComponents(candidates: readonly PlacedComponent[]): { components: PcbComponent[]; widthMm: number; heightMm: number } {

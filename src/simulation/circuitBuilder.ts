@@ -40,6 +40,10 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
   }
 
   for (const component of project.components) {
+    if (component.kind === 'arduino-nano') {
+      union.union(component.terminalHoleIds.pin4, component.terminalHoleIds.pin29);
+      union.union(component.terminalHoleIds.pin3, component.terminalHoleIds.pin28);
+    }
     const pair = endpoints(component);
     const conducts =
       component.kind === 'jumper-wire' || (component.kind === 'switch' && component.closed);
@@ -68,7 +72,8 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
     componentId: issue.componentId,
   }));
 
-  let groundNodeId = groundHoles[0] ? holeToNodeId[groundHoles[0]] : undefined;
+  const nano = project.components.find((component) => component.kind === 'arduino-nano');
+  let groundNodeId = groundHoles[0] ? holeToNodeId[groundHoles[0]] : nano ? holeToNodeId[nano.terminalHoleIds.pin4] : undefined;
   if (!groundNodeId) {
     const source = project.components.find((component) => component.kind === 'voltage-source');
     groundNodeId = source
@@ -91,6 +96,17 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
     );
 
     switch (component.kind) {
+      case 'arduino-nano': {
+        const pins = componentTerminalNodes[component.id];
+        electricalComponents.push(
+          { id: component.id, kind: 'voltage-source', positiveNodeId: pins.pin27, negativeNodeId: pins.pin4, voltageV: project.powerOn ? 5 : 0 },
+          { id: `${component.id}:3v3`, kind: 'voltage-source', positiveNodeId: pins.pin17, negativeNodeId: pins.pin4, voltageV: project.powerOn ? 3.3 : 0 },
+          { id: `${component.id}:reset`, kind: 'resistor', positiveNodeId: pins.pin3, negativeNodeId: pins.pin27, resistanceOhms: 10_000 },
+          { id: `${component.id}:led-r`, kind: 'resistor', positiveNodeId: pins.pin16, negativeNodeId: `${component.id}:led-node`, resistanceOhms: 1_000 },
+          { id: `${component.id}:led`, kind: 'led', positiveNodeId: `${component.id}:led-node`, negativeNodeId: pins.pin4, forwardVoltageV: 2, onResistanceOhms: 12 },
+        );
+        break;
+      }
       case 'resistor':
         if (component.resistanceOhms <= 0) {
           errors.push({
@@ -242,12 +258,13 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
 
   return {
     circuit: {
-      nodes: roots.map((root) => ({ id: nodeIdByRoot.get(root)! })),
+      nodes: [...roots.map((root) => ({ id: nodeIdByRoot.get(root)! })), ...project.components.filter((c) => c.kind === 'arduino-nano').map((c) => ({ id: `${c.id}:led-node` }))],
       groundNodeId,
       components: electricalComponents,
-      digitalDevices: project.components.flatMap((component) => component.kind === 'attiny85' || component.kind === '74hc595'
+      digitalDevices: project.components.flatMap((component) => component.kind === 'attiny85' || component.kind === '74hc595' || component.kind === 'arduino-nano'
         ? [{ id: component.id, kind: component.kind, pins: componentTerminalNodes[component.id],
-          ...(component.kind === 'attiny85' ? { firmwareId: component.firmwareId, clockHz: component.clockHz } : {}) }]
+          ...(component.kind === 'attiny85' ? { firmwareId: component.firmwareId, clockHz: component.clockHz } : {}),
+          ...(component.kind === 'arduino-nano' ? { programId: component.programId, firmware: component.firmware } : {}) }]
         : []),
     },
     holeToNodeId,

@@ -1,4 +1,5 @@
 import { NE555_PIN_NAMES } from './types';
+import { NANO_PIN_NAMES } from './arduinoNano';
 
 export interface ElectronicDeviceMetadata {
   id: string;
@@ -69,6 +70,17 @@ const transistor = (
 });
 
 export const STANDARD_DEVICE_CATALOG = {
+  'arduino-nano': device({
+    id: 'arduino-nano', name: 'Arduino Nano (classic)', category: 'Integrated Circuits', subcategory: 'Microcontrollers',
+    packageId: 'NANO-30', manufacturerReference: 'Arduino A000005', description: 'Breadboard-mounted classic Nano with USB power, built-in examples and custom compiled sketches.',
+    pins: NANO_PIN_NAMES.map((name, index) => ({ number: index + 1, id: `pin${index + 1}`, name })),
+    supportedSupplyRangeV: { minimum: 4.5, maximum: 5.5 },
+    simulationModels: [{ id: 'nano-examples', level: 'behavioural', description: 'Shared-clock examples or 16 MHz AVR firmware with GPIO, timers, PWM, single ADC conversions, interrupts, session EEPROM and serial output.' }],
+    limitations: ['Compile custom sketches externally for the classic Nano ATmega328P and import Intel HEX; other Nano variants are not supported.', 'USB supplies ideal 5 V and 3.3 V. VIN regulation, bootloader, UART wiring/input, hardware SPI, I²C, watchdog, sleep and clock changes are not simulated.', '50 Ω GPIO drive and 30 kΩ pull-up are approximations. Custom digital inputs sample every 50 µs; built-in examples every 1 ms. No overcurrent or thermal model.'],
+    sourceDocumentIds: ['arduino-nano-a000005-rev4', 'arduino-nano-pinout-2021'],
+    datasheetUrls: ['https://docs.arduino.cc/resources/datasheets/A000005-datasheet.pdf', 'https://docs.arduino.cc/resources/pinouts/A000005-full-pinout.pdf'],
+    testedExamples: ['Arduino Nano Blink', 'Arduino Nano Button', 'Arduino Nano Analog Input'],
+  }),
   '1n4148': device({
     id: '1n4148', name: '1N4148', category: 'Semiconductors', subcategory: 'Diodes',
     description: 'Glass axial high-speed switching diode.', packageId: 'DO-35', manufacturerReference: 'Nexperia 1N4148',

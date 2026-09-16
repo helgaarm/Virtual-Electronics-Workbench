@@ -1,4 +1,5 @@
 import type { PlacedComponent } from '../domain/components/types';
+import { MAX_NANO_HEX_CHARACTERS, parseNanoHex, type NanoFirmware } from '../domain/components/nanoFirmware';
 import { LED_COLORS, terminalEntries, WIRE_COLORS } from '../domain/components/types';
 import {
   createDefaultOscilloscopeSettings,
@@ -218,7 +219,7 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
   const kind = enumValue(source.kind, `${path}.kind`, [
     'voltage-source', 'ground', 'resistor', 'led', 'capacitor', 'switch', 'jumper-wire', 'ne555', 'tmp36',
     'diode-1n4148', 'bc547', 'bc557', '2n3904', '2n3906', 'potentiometer',
-    'seven-segment', 'four-digit-seven-segment', '74hc595', 'attiny85',
+    'seven-segment', 'four-digit-seven-segment', '74hc595', 'attiny85', 'arduino-nano',
     'lm358', '2n7000', '74hc00', 'zener-1n4733a',
   ] as const);
   const base = {
@@ -336,6 +337,18 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
       return { ...base, kind, deviceId: '74hc595', packageId: 'DIP-16', firmwareState: 'electrical-pins', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 16 }, (_, i) => `pin${i + 1}`)) };
     case 'attiny85':
       return { ...base, kind, deviceId: 'attiny85', packageId: 'DIP-8', firmwareId: stringValue(source.firmwareId, `${path}.firmwareId`, 80), clockHz: finiteNumber(source.clockHz, `${path}.clockHz`, 1, 20_000_000), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 8 }, (_, i) => `pin${i + 1}`)) };
+    case 'arduino-nano': {
+      const programId = enumValue(source.programId, `${path}.programId`, ['blink', 'button-led', 'analog-threshold', 'custom'] as const);
+      let firmware: NanoFirmware | undefined;
+      if (source.firmware !== undefined) {
+        const input = record(source.firmware, `${path}.firmware`);
+        firmware = { name: stringValue(input.name, `${path}.firmware.name`, 80), hex: stringValue(input.hex, `${path}.firmware.hex`, MAX_NANO_HEX_CHARACTERS) };
+        const parsed = parseNanoHex(firmware.hex);
+        if (!parsed.ok) throw new ProjectValidationError(`${path}.firmware.hex`, parsed.error);
+      }
+      if (programId === 'custom' && !firmware) throw new ProjectValidationError(`${path}.firmware`, 'custom programs need compiled Nano firmware');
+      return { ...base, kind, deviceId: enumValue(source.deviceId, `${path}.deviceId`, ['arduino-nano'] as const), packageId: enumValue(source.packageId, `${path}.packageId`, ['NANO-30'] as const), programId, ...(firmware ? { firmware } : {}), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 30 }, (_, i) => `pin${i + 1}`)) };
+    }
     case 'lm358':
       return { ...base, kind, deviceId: 'lm358b', packageId: 'DIP-8', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 8 }, (_, i) => `pin${i + 1}`)) };
     case '74hc00':

@@ -47,6 +47,7 @@ export function measureComponent(
 
   const voltageTerminals = component.kind === 'ne555'
     ? ['pin8', 'pin1']
+    : component.kind === 'arduino-nano' ? ['pin27', 'pin4']
     : component.kind === 'tmp36'
       ? ['vout', 'gnd']
       : terminals.slice(0, 2).map(([name]) => name);

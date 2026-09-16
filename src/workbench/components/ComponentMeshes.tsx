@@ -11,6 +11,7 @@ import type { Point3Mm } from '../../domain/physical/geometry';
 import { CylinderBetween, SmoothTube } from '../scene/geometry';
 import { createJumperGeometry } from '../scene/wireGeometry';
 import { DIP_8_PACKAGE, DIP_14_PACKAGE, DIP_16_PACKAGE, type DipPackageDefinition } from '../../domain/physical/dipPackages';
+import { ArduinoNanoMesh } from './ArduinoNanoMesh';
 
 interface Props {
   board: BreadboardDefinition;
@@ -965,6 +966,7 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         );
         if (component.kind === 'switch') return <TactileSwitchMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'ne555') return <Dip8Mesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'arduino-nano') return <ArduinoNanoMesh key={component.id} component={component} current={result.componentCurrents[`${component.id}:led`] ?? 0} {...common} />;
         if (component.kind === 'tmp36') return <Tmp36Mesh key={component.id} component={component} {...common} />;
         if (component.kind === 'diode-1n4148') return <AxialDiodeMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'zener-1n4733a') return <AxialDiodeMesh key={component.id} component={component} {...common} />;

@@ -96,6 +96,7 @@ export const PHYSICAL_PACKAGES: Record<ComponentKind, PhysicalPackageDefinition>
   'four-digit-seven-segment': { packageType: '12-PIN-4-DIGIT-DISPLAY', dimensionsMm: { x: 40, y: 8, z: 19 }, leadDiameterMm: 0.5, mountingHeightMm: 6, allowedOrientations: [0, 180] },
   '74hc595': { packageType: DIP_16_PACKAGE.id, dimensionsMm: DIP_16_PACKAGE.bodyDimensionsMm, leadDiameterMm: DIP_16_PACKAGE.leadWidthMm, mountingHeightMm: 5.2, allowedOrientations: [0, 180] },
   attiny85: { packageType: DIP_8_PACKAGE.id, dimensionsMm: DIP_8_PACKAGE.bodyDimensionsMm, leadDiameterMm: DIP_8_PACKAGE.leadWidthMm, mountingHeightMm: 5.2, allowedOrientations: [0, 180] },
+  'arduino-nano': { packageType: 'NANO-30', dimensionsMm: { x: 45, y: 1.6, z: 18 }, leadDiameterMm: 0.64, mountingHeightMm: 4, allowedOrientations: [0, 180] },
   lm358: dipPhysical(DIP_8_PACKAGE),
   '74hc00': dipPhysical(DIP_14_PACKAGE),
   '2n7000': to92Physical(),

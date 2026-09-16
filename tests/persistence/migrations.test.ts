@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WIRE_COLORS } from '../../src/domain/components/types';
-import { createLedExampleProject } from '../../src/domain/project';
+import { createLedExampleProject, PROJECT_SCHEMA_VERSION } from '../../src/domain/project';
 import { createStarterProject } from '../../src/domain/starterProjects';
 import {
   migrateProjectDocument,
@@ -31,7 +31,7 @@ describe('project document migrations', () => {
     delete legacy.simulation;
     for (const probe of legacy.probes as Array<Record<string, unknown>>) delete probe.instrumentId;
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(12);
+    expect(migrated.version).toBe(PROJECT_SCHEMA_VERSION);
     expect(migrated.revision).toBe(0);
     expect(migrated.probes[0].instrumentId).toBe('multimeter');
     expect(migrated.analysis).toMatchObject({
@@ -94,7 +94,7 @@ describe('project document migrations', () => {
     channels.ch1.voltsPerDivisionV = 0.001;
 
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(12);
+    expect(migrated.version).toBe(PROJECT_SCHEMA_VERSION);
     expect(migrated.simulation).toEqual({ timeStepSeconds: 0.00005, speed: 0.25 });
     expect(migrated.oscilloscope.timePerDivisionSeconds).toBe(0.00005);
     expect(migrated.oscilloscope.channels.ch1.voltsPerDivisionV).toBe(0.01);
@@ -119,7 +119,7 @@ describe('project document migrations', () => {
     delete legacy.frequencyCounter;
     delete legacy.logicAnalyser;
     const migrated = migrateProjectDocument(legacy);
-    expect(migrated.version).toBe(12);
+    expect(migrated.version).toBe(PROJECT_SCHEMA_VERSION);
     expect(migrated.frequencyCounter).toMatchObject({
       activeTerminal: 'input', triggerEdge: 'rising', triggerLevelV: 2.5,
     });

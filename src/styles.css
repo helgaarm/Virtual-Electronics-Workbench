@@ -79,17 +79,61 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 .panel-heading h2 { margin: 4px 0 0; font-size: 16px; letter-spacing: -.02em; }
 .eyebrow, .section-label { color: #8b8f8c; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .16em; }
 .palette { overflow: auto; }
-.palette-list { padding: 0 12px; display: grid; gap: 7px; }
+.palette-search { margin: 0 12px; }
+.palette-search label { display: block; margin: 0 0 6px 3px; color: #646b68; font-size: 10px; font-weight: 650; }
+.palette-search-input { position: relative; }
+.palette-search input { width: 100%; min-width: 0; height: 36px; padding: 0 30px 0 10px; border: 1px solid var(--line); border-radius: 8px; background: white; font-size: 11px; }
+.palette-search input::-webkit-search-cancel-button { display: none; }
+.palette-search button { position: absolute; top: 3px; right: 3px; width: 30px; height: 30px; border: 0; border-radius: 5px; background: transparent; color: #646b68; font-size: 18px; cursor: pointer; }
+.palette-search button:hover { background: #f0eee8; }
+.palette-results { margin: 12px 15px 8px; color: #646b68; font-size: 10px; }
+.palette-folders { display: grid; gap: 5px; padding: 0 10px 10px; }
+.palette-folder { min-width: 0; }
+.palette-folder h3 { margin: 0; font-size: 11px; }
+.palette-folder-heading { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 42px; padding: 8px; border: 1px solid #e4e1d9; border-radius: 8px; background: #f5f3ed; color: #4a5650; text-align: left; font-weight: 650; }
+button.palette-folder-heading { cursor: pointer; }
+button.palette-folder-heading:hover { border-color: #c8cfc6; background: #edf1e9; }
+.palette-folder-icon { width: 18px; height: 18px; flex-shrink: 0; color: #7c896e; }
+.palette-folder-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.palette-folder-count { min-width: 18px; padding: 2px 4px; border-radius: 5px; background: #e7e8e0; color: #58634f; font-size: 10px; text-align: center; }
+.palette-folder-chevron { font-size: 18px; line-height: 1; }
+.palette-folder-heading[aria-expanded="true"] .palette-folder-chevron { transform: rotate(90deg); }
+.palette-list { padding: 5px 0; display: grid; gap: 3px; }
+.palette-list[hidden] { display: none; }
+.palette-empty { margin: 12px 18px; color: #646b68; font-size: 11px; line-height: 1.6; }
 .part-card { width: 100%; min-height: 58px; display: grid; grid-template-columns: 39px 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid transparent; border-radius: 10px; background: transparent; text-align: left; cursor: pointer; }
 .part-card:hover { border-color: #d9d7cf; background: #f3f1ec; transform: translateY(-1px); }
 .part-card > span:nth-child(2) { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.part-card strong { font-size: 12px; }.part-card small { color: #858a87; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.part-card strong { font-size: 12px; overflow-wrap: anywhere; }.part-card small { color: #858a87; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .part-icon { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid #dad8d1; border-radius: 9px; background: #f8f7f3; color: #56605d; font-family: "DM Mono", monospace; font-size: 16px; }
 .part-icon-voltage-source { color: #ad4c47; }.part-icon-ground { color: #323a38; }.part-icon-resistor { color: #967233; }.part-icon-led { color: #cb3e37; }.part-icon-jumper-wire { color: #3275b5; }
 .add-mark { color: #969a97; font-size: 17px; }
 .palette-hint { margin: 18px 22px; padding-top: 16px; border-top: 1px solid #e5e3dd; color: #8b8f8d; font-size: 10px; line-height: 1.55; }
 
-.workbench-stage { min-width: 0; display: grid; grid-template-rows: 43px auto minmax(0, 1fr); background: #e8e5de; }
+.workbench-stage { min-width: 0; display: grid; grid-template-rows: minmax(43px, auto) auto minmax(0, 1fr); background: #e8e5de; }
+.workbench-stage > .stage-toolbar { flex-wrap: wrap; gap: 8px; padding-top: 7px; padding-bottom: 7px; }
+.schematic-launch { padding: 6px 9px; border: 1px solid #b7c5ba; border-radius: 6px; background: #edf3ed; color: #355940; font-size: 10px; font-weight: 700; cursor: pointer; }
+.schematic-dialog { width: min(1160px, calc(100vw - 24px)); height: min(900px, calc(100dvh - 32px)); max-width: none; max-height: none; padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: inherit; box-shadow: var(--shadow); }
+.schematic-dialog[open] { display: flex; flex-direction: column; }
+.schematic-dialog::backdrop { background: rgba(29, 38, 34, .48); }
+.schematic-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--line); }
+.schematic-heading h2 { margin: 4px 0 0; font-size: 19px; }
+.schematic-dialog button, .schematic-dialog select { min-height: 36px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: white; color: inherit; font-size: 12px; }
+.schematic-dialog button { cursor: pointer; }
+.schematic-dialog button:hover { background: #f0f3ec; }
+.schematic-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px 22px 8px; }
+.schematic-toolbar label { display: grid; gap: 5px; font-size: 10px; font-weight: 650; color: #59665e; }
+.schematic-export-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.schematic-dialog .schematic-copy { background: #315f45; border-color: #315f45; color: white; }
+.schematic-dialog .schematic-copy:hover { background: #274d37; }
+.schematic-explanation { margin: 5px 22px; color: #617168; font-size: 11px; line-height: 1.6; }
+.schematic-warnings { max-height: 120px; overflow: auto; margin: 5px 22px; padding: 8px 10px; border: 1px solid #dcc08b; border-radius: 7px; background: #fff7e7; font-size: 11px; flex-shrink: 0; }
+.schematic-warnings summary { cursor: pointer; }
+.schematic-export-status { min-height: 18px; margin: 4px 22px 10px; font-size: 12px; color: #315f45; }
+.schematic-preview { min-height: 120px; flex: 1; overflow: auto; margin: 0 16px 16px; border: 1px solid var(--line); border-radius: 8px; background: #eeeee8; }
+.schematic-preview:focus-visible { outline: 3px solid #96b6a5; outline-offset: 2px; }
+.schematic-preview img { display: block; height: auto; margin: 0 auto; background: white; }
+.schematic-empty { padding: 40px 20px; text-align: center; color: #617168; font-size: 14px; }
 .stage-toolbar { z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 0 13px; border-bottom: 1px solid #d6d3cc; background: rgba(249,248,244,.88); }
 .view-buttons { display: flex; gap: 4px; }
 .view-buttons button { min-width: 42px; height: 27px; padding: 0 9px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #727875; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; cursor: pointer; }
@@ -211,5 +255,19 @@ button:disabled { cursor: not-allowed; opacity: 0.45; }
 }
 
 @media (max-width: 760px) {
+  .schematic-heading { padding: 14px; }.schematic-toolbar { padding: 12px 14px 8px; }.schematic-export-actions { margin-left: 0; }.schematic-preview { margin: 0 8px 8px; }.schematic-explanation, .schematic-export-status, .schematic-warnings { margin-left: 14px; margin-right: 14px; }
+  .palette-folder .palette-list { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   body { overflow: auto; }.app-shell { height: auto; min-height: 100vh; grid-template-rows: auto auto auto 36px; }.app-header { min-height: 118px; grid-template-columns: auto 1fr auto; grid-template-rows: 58px 48px; padding: 0 12px; }.workspace-switcher { grid-column: 1 / 4; grid-row: 2; justify-self: stretch; }.workspace-switcher button { flex: 1; }.header-actions { justify-self: center; }.header-actions .icon-button { display: none; }.project-bar { min-height: 112px; align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; padding: 9px 14px; }.project-name { width: 100%; align-items: flex-start; flex-direction: column; gap: 5px; }.project-name-control { width: 100%; }.project-name input { flex: 1; width: auto; min-width: 0; }.project-loaders { width: 100%; flex-direction: column; align-items: stretch; gap: 6px; }.open-project, .starter-project { width: 100%; }.open-project select, .starter-project select { flex: 1; max-width: none; }.build-layout { min-height: 900px; grid-template-columns: 1fr; grid-template-rows: auto 550px auto; }.palette-list { grid-template-columns: repeat(2, 1fr); }.palette-hint { display: none; }.workbench-stage { min-height: 550px; }.environment-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }.environment-heading { grid-column: 1 / -1; }.inspector { min-height: 360px; }.analysis-layout { grid-template-columns: 1fr; }.instrument-rack { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px; }.instrument-rack .panel-heading, .instrument-rack .probe-rack { grid-column: 1 / -1; }.instrument-rack .instrument { width: 100%; margin: 0; }.instrument-rack .probe-rack { margin: 6px 4px 0; }.analysis-main { padding: 12px; }.meter-value { font-size: 36px; }.meter-probes { flex-direction: column; align-items: center; gap: 7px; }.probe-workflow-heading { align-items: flex-start; }.probe-controls { grid-template-columns: 1fr; }.probe-hole-select, .probe-instruction, .probe-actions { grid-column: 1; }.probe-actions { flex-wrap: wrap; }.probe-actions .danger-quiet { margin-left: 0; }.scope-heading, .generator-heading { align-items: flex-start; }.scope-measurements, .generator-controls, .generator-connections { grid-template-columns: 1fr; }.scope-settings, .logic-controls { grid-template-columns: 1fr 1fr; }.scope-channel-card dl { grid-template-columns: 1fr 1fr; }.logic-channel-tabs { grid-template-columns: repeat(4, 1fr); }.logic-legend { flex-direction: column; gap: 4px; }.generator-readout strong { font-size: 27px; }.analysis-grid { grid-template-columns: 1fr; }.status-bar { position: sticky; bottom: 0; z-index: 5; }.status-message { display: none; }
 }
+.nano-program > label { display: grid; gap: 6px; }
+.nano-program select { width: 100%; }
+.nano-program input[type="file"] { width: 100%; min-width: 0; font-size: 11px; margin: 6px 0; }
+.nano-program .nano-firmware-label { margin-top: 12px; }
+.nano-program [role="alert"] { color: #a52f28; overflow-wrap: anywhere; }
+.nano-program dl > div { display: flex; justify-content: space-between; font-size: 12px; line-height: 1.7; }
+.nano-program dd { margin: 0; }
+.nano-program p { font-size: 12px; line-height: 1.55; }
+.nano-program details { margin-top: 12px; }
+.nano-program summary { cursor: pointer; font-size: 12px; }
+.nano-program pre { max-width: 100%; overflow: auto; padding: 10px; background: #f1f4f6; border-radius: 6px; font-size: 11px; }
+.nano-program [role="status"] { display: block; margin-top: 6px; font-size: 12px; }

@@ -8,6 +8,7 @@ import {
   WIRE_COLORS,
 } from '../domain/components/types';
 import { recolorLed } from '../domain/components/led';
+import { NanoProgram } from './NanoProgram';
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import type { ComponentMeasurement, MeasurementValue } from '../measurement/dcMeasurements';
 import { breadboardHoleOptionGroups } from './breadboardHoleOptions';
@@ -17,6 +18,7 @@ interface Props {
   component?: PlacedComponent;
   board: BreadboardDefinition;
   measurement?: ComponentMeasurement;
+  nanoSerialOutput?: string;
   onUpdate: (component: PlacedComponent) => void;
   onRotate: () => void;
   onDelete: () => void;
@@ -31,6 +33,7 @@ export function Inspector({
   component,
   board,
   measurement,
+  nanoSerialOutput,
   onUpdate,
   onRotate,
   onDelete,
@@ -48,6 +51,7 @@ export function Inspector({
 
   const holeOptionGroups = breadboardHoleOptionGroups(board);
   const anchored = isComponentAnchored(component);
+  const halfTurn = component.kind === 'ne555' || component.kind === 'tmp36' || component.kind === 'arduino-nano';
 
   const updateTerminal = (terminal: string, holeId: string) => {
     onUpdate({
@@ -196,6 +200,7 @@ export function Inspector({
       {component.kind === 'diode-1n4148' && <section className="inspector-section"><div className="section-label">1N4148 · DO-35 glass diode</div><small>Nonlinear Shockley junction · cathode is identified by its band.</small></section>}
       {component.kind === '74hc595' && <section className="inspector-section"><div className="section-label">74HC595 · DIP-16</div><small>Serial data, shift/latch clocks, clear, output enable, cascade output, and eight finite-drive outputs.</small></section>}
       {component.kind === 'attiny85' && <section className="inspector-section"><div className="section-label">ATtiny85 · DIP-8</div><small>Firmware: {component.firmwareId} · {(component.clockHz / 1e6).toFixed(1)} MHz · ADC and mixed-signal GPIO</small></section>}
+      {component.kind === 'arduino-nano' && <NanoProgram key={component.id} component={component} serialOutput={nanoSerialOutput} onUpdate={onUpdate} />}
       {(component.kind === 'seven-segment' || component.kind === 'four-digit-seven-segment') && <section className="inspector-section"><div className="section-label">{component.commonType} LED display</div><small>Segments illuminate from simulated junction current; multiplexed brightness uses visual persistence only.</small></section>}
 
       {component.kind === 'ne555' && (
@@ -238,7 +243,7 @@ export function Inspector({
         </small>
       </section>
 
-      {component.kind !== 'ne555' && (
+      {component.kind !== 'ne555' && component.kind !== 'arduino-nano' && (
         <section className="inspector-section">
           <div className="section-label">Breadboard connections</div>
           <div className="terminal-list">
@@ -261,7 +266,7 @@ export function Inspector({
       <section className="inspector-section measurements">
         <div className="section-label">Live simulation</div>
         <dl>
-          <div title={measurement?.voltage.reason}><dt>{component.kind === 'ne555' ? 'Supply voltage' : component.kind === 'tmp36' ? 'Sensor output' : 'Voltage drop'}</dt><dd>{reading(measurement?.voltage, formatVoltage)}</dd></div>
+          <div title={measurement?.voltage.reason}><dt>{component.kind === 'ne555' || component.kind === 'arduino-nano' ? 'Supply voltage' : component.kind === 'tmp36' ? 'Sensor output' : 'Voltage drop'}</dt><dd>{reading(measurement?.voltage, formatVoltage)}</dd></div>
           <div title={measurement?.current.reason}><dt>Current</dt><dd>{reading(measurement?.current, formatCurrent)}</dd></div>
           <div title={measurement?.power.reason}><dt>Power</dt><dd>{reading(measurement?.power, (value) => `${Math.abs(value * 1_000).toFixed(2)} mW`)}</dd></div>
         </dl>
@@ -271,7 +276,7 @@ export function Inspector({
       </section>
 
       <div className="inspector-actions">
-        <button disabled={anchored} onClick={onRotate} title={anchored ? 'Unanchor before rotating' : `Rotate ${component.kind === 'ne555' || component.kind === 'tmp36' ? 180 : 90} degrees`}>↻ Rotate</button>
+        <button disabled={anchored} onClick={onRotate} title={anchored ? 'Unanchor before rotating' : `Rotate ${halfTurn ? 180 : 90} degrees`}>↻ Rotate</button>
         <button className="danger-quiet" onClick={onDelete}>Delete</button>
       </div>
     </aside>

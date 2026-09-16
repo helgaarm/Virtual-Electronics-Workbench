@@ -2,6 +2,9 @@ import type { DigitalDevice, DigitalState } from '../../domain/circuit/digital';
 import type { Circuit, ElectricalComponent, TransientFrame, TransientState } from '../../domain/circuit/types';
 import { createAttiny85Runtime, stepAttiny85 } from '../microcontroller/attiny85Runtime';
 import { THERMOMETER_HEX } from '../microcontroller/thermometerFirmware';
+import { sampleNanoExample } from '../microcontroller/nanoExamples';
+import { NANO_PROGRAM_IDS } from '../../domain/components/arduinoNano';
+import { NanoAvrRuntime, NANO_CLOCK_HZ, NANO_GPIO, PinState } from '../microcontroller/nanoAvrRuntime';
 import { create74hc595State, hc595InputLevel, step74hc595 } from '../models/shiftRegister74hc595';
 import { emptySimulationResult } from '../mna';
 import { flattenCircuit } from '../subcircuits';
@@ -15,15 +18,20 @@ const MAX_INSTRUCTIONS_PER_STEP = 100_000;
 export function createDigitalState(devices: readonly DigitalDevice[], previous?: DigitalState): DigitalState {
   const mcus: DigitalState['mcus'] = {};
   const registers: DigitalState['registers'] = {};
+  const nanos: DigitalState['nanos'] = {};
   for (const device of devices) {
-    if (device.kind === '74hc595') registers[device.id] = previous?.registers[device.id] ?? create74hc595State();
+    if (device.kind === 'arduino-nano' && device.programId) {
+      const old = previous?.nanos?.[device.id];
+      nanos[device.id] = old?.programId === device.programId && old.firmwareHex === device.firmware?.hex ? { ...old }
+        : { programId: device.programId, powered: false, outputHigh: false, nextTimeSeconds: 0, startedAtSeconds: 0, firmwareHex: device.firmware?.hex };
+    } else if (device.kind === '74hc595') registers[device.id] = previous?.registers[device.id] ?? create74hc595State();
     else if (device.firmwareId === 'thermometer-v1') {
       const old = previous?.mcus[device.id];
       mcus[device.id] = old ? { ...old, cpu: { ...old.cpu, registers: old.cpu.registers.slice(), sram: old.cpu.sram.slice() } }
         : { cpu: createAttiny85Runtime(THERMOMETER_HEX), nextTimeSeconds: 0, powered: false };
     }
   }
-  return { mcus, registers };
+  return { mcus, registers, nanos };
 }
 
 function voltage(voltages: Record<string, number>, device: DigitalDevice, pin: number): number {
@@ -31,8 +39,8 @@ function voltage(voltages: Record<string, number>, device: DigitalDevice, pin: n
 }
 
 function supply(voltages: Record<string, number>, device: DigitalDevice): number {
-  return voltage(voltages, device, device.kind === 'attiny85' ? 8 : 16)
-    - voltage(voltages, device, device.kind === 'attiny85' ? 4 : 8);
+  return voltage(voltages, device, device.kind === 'arduino-nano' ? 27 : device.kind === 'attiny85' ? 8 : 16)
+    - voltage(voltages, device, device.kind === '74hc595' ? 8 : 4);
 }
 
 function powered(voltages: Record<string, number>, device: DigitalDevice): boolean {
@@ -43,8 +51,8 @@ function powered(voltages: Record<string, number>, device: DigitalDevice): boole
 function stampDevices(circuit: Circuit, digital: DigitalState, voltages: Record<string, number>): Circuit {
   const components: ElectricalComponent[] = [...circuit.components];
   for (const device of circuit.digitalDevices ?? []) {
-    const groundPin = device.kind === 'attiny85' ? 4 : 8;
-    const supplyPin = device.kind === 'attiny85' ? 8 : 16;
+    const groundPin = device.kind === '74hc595' ? 8 : 4;
+    const supplyPin = device.kind === 'arduino-nano' ? 27 : device.kind === 'attiny85' ? 8 : 16;
     const ground = device.pins[`pin${groundPin}`];
     const vcc = device.pins[`pin${supplyPin}`];
     const resistor = (name: string, pin: number, to: string, resistanceOhms: number) => components.push({
@@ -56,7 +64,19 @@ function stampDevices(circuit: Circuit, digital: DigitalState, voltages: Record<
       if (pin !== `pin${groundPin}` && pin !== `pin${supplyPin}`) resistor(`leak-${pin}`, Number(pin.slice(3)), ground, 100e6);
     }
     if (!powered(voltages, device)) continue;
-    if (device.kind === 'attiny85') {
+    if (device.kind === 'arduino-nano') {
+      const nano = digital.nanos[device.id];
+      if (nano?.powered) {
+        if (nano.programId === 'custom') {
+          NANO_GPIO.forEach(([pin], index) => {
+            const output = nano.avr?.outputStates[index];
+            if (output === PinState.High || output === PinState.Low) resistor(`gpio-${pin}`, pin, output === PinState.High ? vcc : ground, 50);
+            else if (output === PinState.InputPullUp) resistor(`pullup-${pin}`, pin, vcc, 30_000);
+          });
+        } else resistor('d13', 16, nano.outputHigh ? vcc : ground, 50);
+        if (nano.programId === 'button-led') resistor('pullup-d2', 5, vcc, 30_000);
+      }
+    } else if (device.kind === 'attiny85') {
       const mcu = digital.mcus[device.id];
       if (!mcu?.powered) continue;
       PORT_PINS.forEach((pin, bit) => {
@@ -90,11 +110,23 @@ function sampleRegisters(devices: readonly DigitalDevice[], digital: DigitalStat
 
 export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elapsedSeconds: number, analogStep: AnalogStep): TransientFrame {
   const devices = circuit.digitalDevices ?? [];
+  // Nano input polls can invoke an analogue solve; bound them separately from cheap AVR instructions.
+  if (devices.filter((device) => device.kind === 'arduino-nano').length * Math.ceil(elapsedSeconds / 0.001) > 5_000) {
+    return { state, result: emptySimulationResult([{ code: 'DIGITAL_STEP_BUDGET', message: 'Use a smaller timestep for the Nano examples (at most 5,000 input polls per step).' }]) };
+  }
+  const invalidNano = devices.find((device) => device.kind === 'arduino-nano' && (!device.programId || (device.programId === 'custom' ? !device.firmware : !NANO_PROGRAM_IDS.includes(device.programId))));
+  if (invalidNano) return { state, result: emptySimulationResult([{ code: 'UNSUPPORTED_FIRMWARE', message: `${invalidNano.id} needs a supported Nano example or compiled firmware.`, componentId: invalidNano.id }]) };
   const invalid = devices.find((device) => device.kind === 'attiny85'
     && (device.firmwareId !== 'thermometer-v1' || !Number.isFinite(device.clockHz) || device.clockHz! <= 0));
   if (invalid) return { state, result: emptySimulationResult([{ code: 'UNSUPPORTED_FIRMWARE', message: `${invalid.id} needs supported firmware and a positive clock frequency.`, componentId: invalid.id }]) };
   if (!Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0) return analogStep({ ...circuit, digitalDevices: [] }, state, elapsedSeconds);
   const digital = createDigitalState(devices, state.digital);
+  const customDevices = devices.filter((device) => device.kind === 'arduino-nano' && device.programId === 'custom');
+  if (customDevices.length * elapsedSeconds * NANO_CLOCK_HZ > MAX_INSTRUCTIONS_PER_STEP) {
+    return { state, result: emptySimulationResult([{ code: 'DIGITAL_STEP_BUDGET', message: 'Use a timestep of 5 ms or smaller for one Nano running custom firmware; reduce it further for multiple Nanos.' }]) };
+  }
+  const firmwareError = (error: unknown, componentId?: string): TransientFrame => ({ state, result: emptySimulationResult([{ code: 'NANO_FIRMWARE_ERROR', message: error instanceof Error ? error.message : 'Nano firmware execution failed.', componentId }]) });
+  const avrRuntimes = new Map<string, NanoAvrRuntime>();
   const baseCircuit = flattenCircuit(circuit);
   let frame: TransientFrame;
   const hasError = () => frame.result.status === 'error';
@@ -137,6 +169,20 @@ export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elap
   solve(0);
   if (hasError()) return { state, result: frame!.result };
   for (const device of devices) {
+    if (device.kind === 'arduino-nano') {
+      const nano = digital.nanos[device.id];
+      const active = supply(voltages, device) >= 4.5 && supply(voltages, device) <= 5.5
+        && voltage(voltages, device, 3) - voltage(voltages, device, 4) >= supply(voltages, device) * 0.6;
+      if (!active || !nano.powered) {
+        nano.startedAtSeconds = state.timeSeconds;
+        nano.nextTimeSeconds = state.timeSeconds;
+        nano.outputHigh = false;
+        nano.eeprom = nano.avr?.eeprom ?? nano.eeprom;
+        nano.avr = undefined;
+      }
+      nano.powered = active;
+      continue;
+    }
     if (device.kind !== 'attiny85') continue;
     const mcu = digital.mcus[device.id];
     const groundV = voltage(voltages, device, 4);
@@ -151,15 +197,68 @@ export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elap
   sampleRegisters(devices, digital, voltages);
   solve(0);
   if (hasError()) return { state, result: frame!.result };
+  let inputSettles = 0;
+  for (const device of customDevices) {
+    const nano = digital.nanos[device.id];
+    if (!nano.powered) continue;
+    try {
+      const runtime = new NanoAvrRuntime(device.firmware!.hex, nano.avr, nano.eeprom);
+      runtime.connect((pin) => voltage(voltages, device, pin), () => {
+        if (++inputSettles > 2_000) throw new Error('Firmware reads inputs too frequently for this timestep. Reduce the simulation timestep.');
+        const eventTime = nano.startedAtSeconds + runtime.cpu.cycles / NANO_CLOCK_HZ;
+        if (eventTime > analogState.timeSeconds) solve(eventTime - analogState.timeSeconds);
+        if (hasError()) throw new Error(frame.result.errors[0]?.message ?? 'Electrical simulation failed.');
+      });
+      nano.avr = runtime.snapshot();
+      avrRuntimes.set(device.id, runtime);
+    } catch (error) { return firmwareError(error, device.id); }
+  }
   const runningDevices = devices.filter((device) => device.kind === 'attiny85' && digital.mcus[device.id]?.powered);
   if (runningDevices.length && (elapsedSeconds > 0.01
     || runningDevices.reduce((sum, device) => sum + elapsedSeconds * device.clockHz!, 0) > MAX_INSTRUCTIONS_PER_STEP)) {
     return { state, result: emptySimulationResult([{ code: 'DIGITAL_STEP_BUDGET', message: 'Use a timestep of 10 ms or less and reduce the MCU clock if necessary; the digital execution budget was exceeded.' }]) };
   }
   const endTime = state.timeSeconds + elapsedSeconds;
+  const nanoDevices = devices.filter((device) => device.kind === 'arduino-nano');
   let instructions = 0;
   while (true) {
     const nextDevice = runningDevices.reduce<DigitalDevice | undefined>((best, device) => !best || digital.mcus[device.id].nextTimeSeconds < digital.mcus[best.id].nextTimeSeconds ? device : best, undefined);
+    const nextNano = nanoDevices.reduce<DigitalDevice | undefined>((best, device) => !best || digital.nanos[device.id].nextTimeSeconds < digital.nanos[best.id].nextTimeSeconds ? device : best, undefined);
+    if (nextNano && digital.nanos[nextNano.id].nextTimeSeconds < endTime
+      && (!nextDevice || digital.nanos[nextNano.id].nextTimeSeconds <= digital.mcus[nextDevice.id].nextTimeSeconds)) {
+      if (++instructions > MAX_INSTRUCTIONS_PER_STEP) return { state, result: emptySimulationResult([{ code: 'DIGITAL_STEP_BUDGET', message: 'Use a smaller timestep for the Nano examples.' }]) };
+      const nano = digital.nanos[nextNano.id];
+      const eventTime = Math.max(analogState.timeSeconds, nano.nextTimeSeconds);
+      if (nextNano.programId === 'custom') {
+        const runtime = avrRuntimes.get(nextNano.id);
+        if (!runtime) { nano.nextTimeSeconds = endTime; continue; }
+        try {
+          const beforeCycles = runtime.cpu.cycles;
+          runtime.step();
+          nano.nextTimeSeconds += (runtime.cpu.cycles - beforeCycles) / NANO_CLOCK_HZ;
+          if (runtime.outputsChanged) {
+            if (++inputSettles > 2_000) throw new Error('Firmware switches outputs too frequently for this timestep. Reduce the simulation timestep.');
+            if (eventTime > analogState.timeSeconds) solve(eventTime - analogState.timeSeconds);
+            nano.avr = { ...nano.avr!, outputStates: runtime.outputs() };
+            solve(0);
+            if (hasError()) return { state, result: frame!.result };
+            sampleRegisters(devices, digital, voltages); solve(0);
+            if (hasError()) return { state, result: frame!.result };
+            runtime.sampleInputs(); runtime.outputsChanged = false;
+          }
+        } catch (error) { return firmwareError(error, nextNano.id); }
+        continue;
+      }
+      if (eventTime > analogState.timeSeconds) solve(eventTime - analogState.timeSeconds);
+      if (hasError()) return { state, result: frame!.result };
+      sampleNanoExample(nextNano, nano, eventTime, (pin) => voltage(voltages, nextNano, pin));
+      solve(0);
+      if (hasError()) return { state, result: frame!.result };
+      sampleRegisters(devices, digital, voltages);
+      solve(0);
+      if (hasError()) return { state, result: frame!.result };
+      continue;
+    }
     if (!nextDevice) break;
     const mcu = digital.mcus[nextDevice.id];
     if (mcu.nextTimeSeconds >= endTime) break;
@@ -194,5 +293,8 @@ export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elap
   sampleRegisters(devices, digital, voltages);
   solve(0);
   if (hasError()) return { state, result: frame!.result };
+  for (const [id, runtime] of avrRuntimes) {
+    try { digital.nanos[id].avr = runtime.snapshot(); } catch (error) { return firmwareError(error, id); }
+  }
   return { state: { ...analogState, timeSeconds: endTime, digital, displayCurrentsA }, result: { ...frame!.result, displayCurrentsA } };
 }

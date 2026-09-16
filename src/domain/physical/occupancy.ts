@@ -2,6 +2,7 @@ import type { PlacedComponent } from '../components/types';
 import { terminalEntries } from '../components/types';
 import type { BreadboardDefinition } from './breadboard';
 import { leadSpanViolation, PHYSICAL_PACKAGES } from './packages';
+import { validNanoPlacement } from './arduinoNano';
 
 export interface OccupancyIssue {
   code: 'UNKNOWN_HOLE' | 'HOLE_OCCUPIED' | 'DUPLICATE_TERMINAL' | 'LEAD_SPAN_OUT_OF_RANGE' | 'INVALID_PACKAGE_PLACEMENT' | 'PACKAGE_OVERLAP';
@@ -92,6 +93,10 @@ export function validateOccupancy(
       occupied.set(holeId, component.id);
     }
     const terminals = terminalEntries(component);
+    if (component.kind === 'arduino-nano' && !validNanoPlacement(board, component)) {
+      issues.push({ code: 'INVALID_PACKAGE_PLACEMENT', componentId: component.id, holeId: terminals[0]?.[1] ?? '',
+        message: `${component.label} needs 15 consecutive columns, 15.24 mm header spacing, and its rigid pin order across the centre channel.` });
+    }
     if (component.kind === 'ne555') {
       const pinHoles = terminals
         .map(([, holeId]) => board.holes.find((hole) => hole.id === holeId))

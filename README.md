@@ -54,6 +54,7 @@ connections and model limits.
 
 ### Save and revisit experiments
 
+- Simulate a [classic Arduino Nano](docs/arduino-nano.md) on the breadboard with built-in examples or your own compiled `.hex` sketch. Custom programs execute AVR instructions with connected GPIO, PWM, timers, ADC and serial output.
 - Create, save, save as, list, and reopen complete versioned projects through a loopback-only API and
   SQLite database.
 - Preserve stable component and instrument IDs and reject stale-tab writes with optimistic revisions.
@@ -110,7 +111,8 @@ This runs repository-security, architecture-boundary, and local-documentation-li
 ## Interaction notes
 
 - Drag empty space to orbit; wheel/trackpad zooms; the camera controls also support pan.
-- Add parts from the left drawer. The editor chooses compatible free holes.
+- Open a category folder in the left parts drawer, then select a component to add it. Folder counts show the available parts; multiple folders can stay open. Search by name, type, or package across all folders, and clear the search to return to your open folders. The editor chooses compatible free holes.
+- In **Build**, select **Circuit drawing** above the breadboard to generate a schematic of the current board. Copy it as an image or download PNG/SVG. Connected wires use junction dots; **Net labels** gives a compact view where matching labels connect. Larger circuits automatically use net labels. Jumpers and board strips become connections, switches retain their current position, and ICs retain their external pin names. Attached signal-generator leads are included; measurement probes are not components in the drawing. The view is derived from the board and does not change or save a separate circuit. If copying is unavailable, use a download. SVG retains full detail for large drawings; PNG dimensions are bounded.
 - Choose a classic circuit under **Start projects** and load it as a fresh unsaved workbench.
 - Load **RC charge and discharge**, then use the footer controls to run, pause, single-step, reset, or change the transient timestep and speed. The generator’s 0–5 V square wave alternately charges and discharges the capacitor through the resistor.
 - In **Test & Analysis**, select **Oscilloscope** to compare CH1 and CH2, **Signal generator** to drive a square/sine signal, **Frequency counter** to measure an input edge stream, or **Logic analyser** to inspect up to eight threshold-aware digital channels. Every lead can be attached by a board click or printed-hole selector. For high frequencies, reduce the footer Step until the sampling warning disappears. At the 50 µs step, speed is limited to 2× so the clock can keep pace.

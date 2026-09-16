@@ -10,6 +10,7 @@ export function sameVisibleComponentCurrents(components: readonly PlacedComponen
   );
   return components.every((part) => {
     if (part.kind === 'led') return bucket(previous, part.id, false) === bucket(next, part.id, false);
+    if (part.kind === 'arduino-nano') return bucket(previous, `${part.id}:led`, false) === bucket(next, `${part.id}:led`, false);
     const prefixes = part.kind === 'seven-segment' ? [part.id]
       : part.kind === 'four-digit-seven-segment' ? [1, 2, 3, 4].map((digit) => `${part.id}:digit${digit}`) : [];
     return prefixes.every((prefix) => segments.every((segment) => bucket(previous, `${prefix}:${segment}`, true) === bucket(next, `${prefix}:${segment}`, true)));

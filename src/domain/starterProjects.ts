@@ -3,8 +3,12 @@ import type { PlacedComponent } from './components/types';
 import { railHoleId, terminalHoleId } from './physical/breadboard';
 import { createEmptyProject, createLedExampleProject, type WorkbenchProject } from './project';
 import { firstPressWinsProject } from './starters/firstPressWins';
+import { arduinoNanoProject } from './starters/arduinoNano';
 
 export const STARTER_PROJECTS = [
+  { id: 'nano-blink', name: 'Arduino Nano Blink', description: 'USB-powered classic Nano blinks its D13 LED and a breadboard LED through a 330 Ω resistor. One second on, one second off.' },
+  { id: 'nano-button', name: 'Arduino Nano Button', description: 'Close the switch connected to D2 to light the LED. Uses the Nano internal pull-up.' },
+  { id: 'nano-analog', name: 'Arduino Nano Analog Input', description: 'Adjust the potentiometer connected to A0. The LED lights when the input reaches about 2.5 V.' },
   {
     id: 'first-press-wins',
     name: 'First to Press Wins',
@@ -494,6 +498,9 @@ function digitalThermometerProject(): WorkbenchProject {
 }
 
 const STARTER_FACTORIES: Record<StarterProjectId, () => WorkbenchProject> = {
+  'nano-blink': () => arduinoNanoProject('blink'),
+  'nano-button': () => arduinoNanoProject('button-led'),
+  'nano-analog': () => arduinoNanoProject('analog-threshold'),
   'first-press-wins': firstPressWinsProject,
   'switched-led': createLedExampleProject,
   'voltage-divider': voltageDividerProject,

@@ -8,6 +8,8 @@ import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import { railHoleId, terminalHoleId } from '../domain/physical/breadboard';
 import { nextQuarterTurn, rotatePoint } from '../domain/physical/geometry';
 import { buildOccupancy } from '../domain/physical/occupancy';
+import { validateOccupancy, validatePackageOverlaps } from '../domain/physical/occupancy';
+import { nanoTerminalHoles } from '../domain/physical/arduinoNano';
 import { leadSpanViolation } from '../domain/physical/packages';
 
 function holePairHasValidSpan(
@@ -38,6 +40,7 @@ function nextLabel(kind: ComponentKind, components: PlacedComponent[]): string {
     'diode-1n4148': 'D', bc547: 'Q', bc557: 'Q', '2n3904': 'Q', '2n3906': 'Q',
     potentiometer: 'RV', 'seven-segment': 'DS', 'four-digit-seven-segment': 'DS',
     '74hc595': 'U', attiny85: 'U',
+    'arduino-nano': 'Nano',
     lm358: 'U', '74hc00': 'U', '2n7000': 'Q', 'zener-1n4733a': 'D',
   };
   let index = 1;
@@ -78,6 +81,13 @@ export function createPlacedComponent(
     anchored: true,
   };
 
+  if (kind === 'arduino-nano') {
+    for (let column = 3; column <= board.columns - 16; column += 1) {
+      const candidate: PlacedComponent = { ...base, kind, deviceId: kind, packageId: 'NANO-30', programId: 'blink', terminalHoleIds: nanoTerminalHoles(board.id, column) };
+      if (![...validateOccupancy(board, [...components, candidate]), ...validatePackageOverlaps(board, [...components, candidate])].some((issue) => issue.componentId === candidate.id)) return candidate;
+    }
+    return undefined;
+  }
   if (kind === 'voltage-source') {
     const occupied = buildOccupancy(components);
     const positiveCandidates = Array.from({ length: board.columns }, (_, index) =>
@@ -242,7 +252,7 @@ export function rotatePlacedComponent(
   allComponents: PlacedComponent[],
 ): PlacedComponent | undefined {
   const terminals = terminalEntries(component);
-  if (component.kind === 'ne555' || component.kind === 'tmp36') {
+  if (component.kind === 'ne555' || component.kind === 'tmp36' || component.kind === 'arduino-nano') {
     const holes = terminals.map(([, holeId]) => board.holes.find((hole) => hole.id === holeId));
     if (holes.some((hole) => !hole)) return undefined;
     const positions = holes.map((hole) => hole!);
@@ -377,6 +387,7 @@ export function paletteDescription(kind: ComponentKind): string {
   if (kind === 'four-digit-seven-segment') return 'Display · multiplexed · 4 digits';
   if (kind === '74hc595') return 'Logic · serial-in / parallel-out · DIP-16';
   if (kind === 'attiny85') return 'Microcontroller · AVR · DIP-8';
+  if (kind === 'arduino-nano') return 'Classic Nano · examples or custom .hex';
   if (kind === 'lm358') return 'Analogue · dual op-amp · DIP-8';
   if (kind === '2n7000') return 'N-channel MOSFET · TO-92';
   if (kind === '74hc00') return 'Logic · four NAND gates · DIP-14';

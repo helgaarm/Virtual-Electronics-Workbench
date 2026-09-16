@@ -1,10 +1,15 @@
+import type { NanoProgramId } from '../components/arduinoNano';
+import type { NanoFirmware } from '../components/nanoFirmware';
+import type { NanoAvrSnapshot } from './nanoAvr';
 /** Extracted pin maps and volatile execution state; never part of a saved project. */
 export interface DigitalDevice {
   id: string;
-  kind: 'attiny85' | '74hc595';
+  kind: 'attiny85' | '74hc595' | 'arduino-nano';
   pins: Record<string, string>;
   firmwareId?: string;
   clockHz?: number;
+  programId?: NanoProgramId | 'custom';
+  firmware?: NanoFirmware;
 }
 
 export interface AvrState {
@@ -26,6 +31,8 @@ export interface RegisterState {
 }
 
 export interface DigitalState {
+  nanos: Record<string, { programId: NanoProgramId | 'custom'; powered: boolean; outputHigh: boolean; nextTimeSeconds: number; startedAtSeconds: number;
+    firmwareHex?: string; avr?: NanoAvrSnapshot; eeprom?: Uint8Array }>;
   mcus: Record<string, { cpu: AvrState; nextTimeSeconds: number; powered: boolean }>;
   registers: Record<string, RegisterState>;
 }

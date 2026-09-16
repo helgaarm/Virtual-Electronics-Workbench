@@ -75,5 +75,5 @@ are redistributed. Firmware, wiring, and runtime additions are original MIT-lice
 
 Regression tests cover positive/negative temperatures, decoded segment currents, broken nets,
 sensor/chip supply and reset disconnection, power cycling, topology, package clearance, and
-project serialization. All execution and current-history state is volatile; saved project
-schema 12 and existing saved project documents remain unchanged.
+project serialization. All execution and current-history state is volatile. The thermometer document
+shape is unchanged; older saved projects remain compatible with the current schema.

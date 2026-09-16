@@ -1,4 +1,6 @@
 import type { QuarterTurn } from '../physical/geometry';
+import type { NanoProgramId } from './arduinoNano';
+import type { NanoFirmware } from './nanoFirmware';
 
 export const LED_COLORS = ['red', 'green', 'yellow', 'blue', 'white'] as const;
 export type LedColor = (typeof LED_COLORS)[number];
@@ -125,6 +127,13 @@ export interface Attiny85Component extends ComponentBase {
   clockHz: number; terminalHoleIds: Record<`pin${number}`, string>;
 }
 
+export interface ArduinoNanoComponent extends ComponentBase {
+  kind: 'arduino-nano'; deviceId: 'arduino-nano'; packageId: 'NANO-30';
+  programId: NanoProgramId | 'custom';
+  firmware?: NanoFirmware;
+  terminalHoleIds: Record<`pin${number}`, string>;
+}
+
 export interface Lm358Component extends ComponentBase {
   kind: 'lm358'; deviceId: 'lm358b'; packageId: 'DIP-8';
   terminalHoleIds: Record<`pin${number}`, string>;
@@ -155,6 +164,7 @@ export type PlacedComponent =
   | Tmp36Component
   | SmallSignalDiodeComponent | TransistorComponent | PotentiometerComponent
   | SevenSegmentComponent | FourDigitSevenSegmentComponent | ShiftRegisterComponent | Attiny85Component
+  | ArduinoNanoComponent
   | Lm358Component | Mosfet2n7000Component | Nand74hc00Component | Zener1n4733aComponent;
 
 export type ComponentKind = PlacedComponent['kind'];
@@ -197,6 +207,7 @@ export function componentDisplayName(kind: ComponentKind): string {
     case 'four-digit-seven-segment': return '4-digit 7-segment display';
     case '74hc595': return '74HC595 shift register';
     case 'attiny85': return 'ATtiny85 microcontroller';
+    case 'arduino-nano': return 'Arduino Nano (classic)';
     case 'lm358': return 'LM358B dual op-amp';
     case '2n7000': return '2N7000 N-channel MOSFET';
     case '74hc00': return '74HC00 quad NAND';
