@@ -21,9 +21,11 @@ interface RoutedWire {
 }
 
 const WIRE_CLEARANCE_MM = 1.4;
-const MAX_WIRE_RADIUS_MM = 0.58;
-const WIRE_INSERTION_DEPTH_MM = 0.65;
-const WIRE_STRAIGHT_LEAD_HEIGHT_MM = 0.1;
+export const MAX_WIRE_RADIUS_MM = 0.58;
+export const WIRE_INSERTION_DEPTH_MM = 0.65;
+export const WIRE_BOARD_CLEARANCE_MM = 0.08;
+const WIRE_LEAD_RADIUS_MM = PHYSICAL_PACKAGES['jumper-wire'].leadDiameterMm / 2;
+const WIRE_STRAIGHT_LEAD_HEIGHT_MM = WIRE_LEAD_RADIUS_MM + WIRE_BOARD_CLEARANCE_MM;
 const UNDER_BODY_CLEARANCE_MM = 0.04;
 const WIRE_TO_WIRE_CLEARANCE_MM = 1.65;
 const WIRE_OBSTACLE_SAMPLE_SPACING_MM = 1.5;
@@ -214,7 +216,8 @@ function routeSingleJumperWire(
   const directionX = (end.x - start.x) / directDistance;
   const directionZ = (end.z - start.z) / directDistance;
   const perpendicular = { x: -directionZ, z: directionX };
-  const peakY = Math.max(defaultPeakY, ...obstacles.map((obstacle) => obstacle.topY + 1.2));
+  const peakY = Math.max(defaultPeakY, ...obstacles.map((obstacle) => obstacle.topY + 1.2
+    + (obstacle.routingMode === 'overpass' ? MAX_WIRE_RADIUS_MM : 0)));
 
   const detourObstacles = obstacles.filter((obstacle) => obstacle.routingMode === 'detour');
   const sideScore = (side: -1 | 1) => detourObstacles.reduce((score, obstacle) => {
@@ -249,10 +252,12 @@ function routeSingleJumperWire(
     }));
   const escapePoint = (obstacle: Obstacle, endpoint: Point3Mm) => ({
     x: obstacle.center.x + perpendicular.x * obstacle.bodyRadiusMm * side,
-    y: obstacle.bottomY - MAX_WIRE_RADIUS_MM - UNDER_BODY_CLEARANCE_MM > endpoint.y
+    // Only the stripped conductor fits below some packages. The renderer starts
+    // the insulation after this escape, where its full radius clears the board.
+    y: obstacle.bottomY - WIRE_LEAD_RADIUS_MM - UNDER_BODY_CLEARANCE_MM > endpoint.y
       ? Math.min(
         endpoint.y + 0.25,
-        obstacle.bottomY - MAX_WIRE_RADIUS_MM - UNDER_BODY_CLEARANCE_MM,
+        obstacle.bottomY - WIRE_LEAD_RADIUS_MM - UNDER_BODY_CLEARANCE_MM,
       )
       : obstacle.topY + 1.2,
     z: obstacle.center.z + perpendicular.z * obstacle.bodyRadiusMm * side,

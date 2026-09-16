@@ -9,7 +9,7 @@ import type { SimulationResult } from '../../domain/circuit/types';
 import { routeJumperWires } from '../../domain/physical/wireRouting';
 import type { Point3Mm } from '../../domain/physical/geometry';
 import { CylinderBetween, SmoothTube } from '../scene/geometry';
-import { createJumperCurve } from '../scene/wireGeometry';
+import { createJumperGeometry } from '../scene/wireGeometry';
 import { DIP_8_PACKAGE, DIP_14_PACKAGE, DIP_16_PACKAGE, type DipPackageDefinition } from '../../domain/physical/dipPackages';
 
 interface Props {
@@ -443,22 +443,27 @@ function WireMesh({ component, route, selected, onSelect, onBeginDrag }: {
       const [x, y, z] = entry.split(',').map(Number);
       return { x, y, z };
     });
-    const curve = createJumperCurve(stableRoute);
-    return curve
-      ? new THREE.TubeGeometry(curve, Math.max(72, stableRoute.length * 18), selected ? 0.58 : 0.48, 16, false)
-      : undefined;
+    return createJumperGeometry(stableRoute, selected);
   }, [routeSignature, selected]);
-  useEffect(() => () => geometry?.dispose(), [geometry]);
+  useEffect(() => () => {
+    geometry?.conductor.dispose();
+    geometry?.insulation.forEach((section) => section.dispose());
+  }, [geometry]);
   if (!geometry) return null;
   return (
-    <mesh
-      geometry={geometry}
+    <group
       onClick={(event) => { event.stopPropagation(); onSelect(); }}
       onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
-      castShadow
     >
-      <meshStandardMaterial color={component.color} roughness={0.68} emissive={selected ? '#2e76d0' : '#000000'} emissiveIntensity={0.2} />
-    </mesh>
+      <mesh geometry={geometry.conductor} castShadow>
+        <meshStandardMaterial color="#b8bec0" roughness={0.35} metalness={0.8} />
+      </mesh>
+      {geometry.insulation.map((section, index) => (
+        <mesh key={index} geometry={section} castShadow>
+          <meshStandardMaterial color={component.color} roughness={0.68} emissive={selected ? '#2e76d0' : '#000000'} emissiveIntensity={0.2} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 

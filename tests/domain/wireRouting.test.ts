@@ -3,7 +3,7 @@ import { terminalEntries, type CapacitorComponent, type GroundComponent, type Ju
 import { createBreadboardDefinition, terminalHoleId } from '../../src/domain/physical/breadboard';
 import { PHYSICAL_PACKAGES } from '../../src/domain/physical/packages';
 import { routeJumperWire, routeJumperWires } from '../../src/domain/physical/wireRouting';
-import { createJumperCurve } from '../../src/workbench/scene/wireGeometry';
+import { createJumperCurve, createJumperCurves } from '../../src/workbench/scene/wireGeometry';
 
 function distanceFromLineMm(point: { x: number; z: number }, start: { x: number; z: number }, end: { x: number; z: number }): number {
   const dx = end.x - start.x;
@@ -16,7 +16,7 @@ function expectCurveToClearComponent(
   route: ReturnType<typeof routeJumperWire>,
   component: Exclude<PlacedComponent, JumperWireComponent>,
 ) {
-  const curve = createJumperCurve(route)!;
+  const curves = createJumperCurves(route)!;
   const componentHoles = terminalEntries(component)
     .map(([, holeId]) => holeId)
     .map((holeId) => board.holes.find((hole) => hole.id === holeId)!);
@@ -29,13 +29,19 @@ function expectCurveToClearComponent(
   const bodyRadius = Math.max(packageDefinition.dimensionsMm.x, packageDefinition.dimensionsMm.z) / 2;
   const bodyBottom = center.y + packageDefinition.mountingHeightMm - packageDefinition.dimensionsMm.y / 2;
   const bodyTop = center.y + packageDefinition.mountingHeightMm + packageDefinition.dimensionsMm.y / 2;
-  const wireRadius = 0.58;
-
-  for (let index = 0; index <= 300; index += 1) {
-    const sample = curve.getPoint(index / 300);
-    const overlapsFootprint = Math.hypot(sample.x - center.x, sample.z - center.z) < bodyRadius + wireRadius;
-    const overlapsHeight = sample.y + wireRadius > bodyBottom && sample.y - wireRadius < bodyTop;
-    expect(overlapsFootprint && overlapsHeight).toBe(false);
+  // Check the actual conductor and selected insulation separately: stripped
+  // ends fit under low packages, but insulation must still clear their bodies.
+  const sections = [
+    { curve: curves.conductor, wireRadius: PHYSICAL_PACKAGES['jumper-wire'].leadDiameterMm / 2 },
+    ...curves.insulation.map((curve) => ({ curve, wireRadius: 0.58 })),
+  ];
+  for (const { curve, wireRadius } of sections) {
+    for (let index = 0; index <= 300; index += 1) {
+      const sample = curve.getPoint(index / 300);
+      const overlapsFootprint = Math.hypot(sample.x - center.x, sample.z - center.z) < bodyRadius + wireRadius;
+      const overlapsHeight = sample.y + wireRadius > bodyBottom && sample.y - wireRadius < bodyTop;
+      expect(overlapsFootprint && overlapsHeight).toBe(false);
+    }
   }
 }
 
