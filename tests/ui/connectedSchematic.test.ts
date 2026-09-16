@@ -99,12 +99,13 @@ describe('conventional schematic layout', () => {
     expect(renderSchematicSvg(reordered).svg).toBe(renderSchematicSvg(model).svg);
   });
 
-  it('preserves all components and nets when a bridge or disconnected circuit needs labels', () => {
+  it('routes bridges and disconnected circuits while keeping the explicit label option', () => {
     const bridge = network([['R1', 'supply', 'a'], ['R2', 'a', 'ground'], ['R3', 'supply', 'b'], ['R4', 'b', 'ground'], ['R5', 'a', 'b']]);
     const disconnected = network([['R1', 'supply', 'ground'], ['R2', 'unused1', 'unused2']]);
     for (const model of [bridge, disconnected]) {
       expect(connectedCircuit(model)).toBeUndefined();
-      expect(renderSchematicSvg(model).layout).toBe('labels');
+      expect(renderSchematicSvg(model).layout).toBe('wires');
+      expect(renderSchematicSvg(model, 'labels').layout).toBe('labels');
       const document = parse(model);
       expect(document.querySelectorAll('[data-component-id]')).toHaveLength(model.components.length);
       expect(document.querySelectorAll('[data-net]')).toHaveLength(model.components.length * 2);

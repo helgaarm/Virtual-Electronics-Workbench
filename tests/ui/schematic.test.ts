@@ -109,6 +109,18 @@ describe('circuit drawing dialog', () => {
     expect(button('Close ×').disabled).toBe(false);
   });
 
+  it('enables the conventional 555 drawing and restores its wires after switching to labels', async () => {
+    await act(async () => root.render(createElement(SchematicDialog, { project: createStarterProject('ne555-astable'), onClose })));
+    const select = container.querySelector<HTMLSelectElement>('[aria-label="Connection style"]')!;
+    expect(select.value).toBe('wires');
+    expect(select.querySelector<HTMLOptionElement>('[value="wires"]')!.disabled).toBe(false);
+    expect(decodeURIComponent(container.querySelector('img')!.src)).toContain('data-wire-net');
+    await act(async () => { select.value = 'labels'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+    expect(decodeURIComponent(container.querySelector('img')!.src)).not.toContain('data-wire-net');
+    await act(async () => { select.value = 'wires'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+    expect(decodeURIComponent(container.querySelector('img')!.src)).toContain('data-wire-net');
+  });
+
   it('copies the current drawing, downloads both formats, and reports clipboard denial', async () => {
     const copy = vi.spyOn(exporter, 'copySchematicImage').mockResolvedValue(undefined);
     const download = vi.spyOn(exporter, 'downloadSchematic').mockImplementation(() => undefined);

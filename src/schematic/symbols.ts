@@ -5,7 +5,7 @@ export interface DrawingPin { pin: SchematicPin; x: number; y: number; routeBelo
 export interface SymbolDrawing { body: string; pins: DrawingPin[]; height: number }
 
 /** Original procedural symbols. All coordinates are drawing units, never package millimetres. */
-export function drawSymbol(component: SchematicComponent, options?: { inline: boolean; reverse?: boolean; labelLeft?: boolean }): SymbolDrawing {
+export function drawSymbol(component: SchematicComponent, options?: { inline: boolean; reverse?: boolean; labelLeft?: boolean; hideLabels?: boolean }): SymbolDrawing {
   const reference = wrappedText(16, 20, component.reference, 38, 14);
   const value = wrappedText(16, 24 + reference.lines * 18, component.value, 48, 11);
   const offset = options?.inline ? 0 : Math.max(0, reference.lines * 18 + value.lines * 15 - 33);
@@ -90,7 +90,7 @@ export function drawSymbol(component: SchematicComponent, options?: { inline: bo
     const values = wrappedText(labelX, 115 + labels.lines * 18, component.value, options.labelLeft ? 12 : 24, 11);
     return { body: `<g data-component-id="${escapeXml(component.id)}"><title>${escapeXml(`${component.reference}: ${component.value}`)}</title>`
       + `<g${options.reverse ? ' transform="rotate(180 150 120)"' : ''}>${body}</g>`
-      + `<g${options.labelLeft ? ' text-anchor="end"' : ''}>${labels.svg}${values.svg}</g></g>`,
+      + (options.hideLabels ? '' : `<g${options.labelLeft ? ' text-anchor="end"' : ''}>${labels.svg}${values.svg}</g>`) + '</g>',
     pins: pins.map((item) => options.reverse ? { ...item, x: 300 - item.x, y: 240 - item.y } : item), height: 104 };
   }
   const pinLabels = showPinLabels ? pins.map((item) => text(item.x + 7, item.y - offset - 6, item.pin.name, 10)).join('') : '';

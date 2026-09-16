@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { WorkbenchProject } from '../domain/project';
 import { buildSchematic } from '../domain/schematic/buildSchematic';
-import { canDrawConnectedWires, renderSchematicSvg, type SchematicLayout } from '../schematic/renderSvg';
+import { renderSchematicSvg, type SchematicLayout } from '../schematic/renderSvg';
 import { copySchematicImage, downloadSchematic, schematicFilename, schematicPng } from './schematicExport';
 
 export function SchematicDialog({ project, onClose }: { project: WorkbenchProject; onClose: () => void }) {
@@ -12,7 +12,9 @@ export function SchematicDialog({ project, onClose }: { project: WorkbenchProjec
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const schematic = useMemo(() => buildSchematic(project), [project]);
-  const drawing = useMemo(() => renderSchematicSvg(schematic, layout), [schematic, layout]);
+  const conventionalDrawing = useMemo(() => renderSchematicSvg(schematic), [schematic]);
+  const drawing = useMemo(() => layout === 'wires' ? conventionalDrawing : renderSchematicSvg(schematic, 'labels'), [schematic, layout, conventionalDrawing]);
+  const supportsWires = conventionalDrawing.layout === 'wires';
   const imageSource = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawing.svg)}`, [drawing.svg]);
   const empty = schematic.components.length === 0;
 
@@ -54,7 +56,7 @@ export function SchematicDialog({ project, onClose }: { project: WorkbenchProjec
       </header>
       <div className="schematic-toolbar">
         <label>Connections<select aria-label="Connection style" value={drawing.layout} onChange={(event) => { setLayout(event.target.value as SchematicLayout); setMessage(''); }}>
-          <option value="wires" disabled={!canDrawConnectedWires(schematic)}>Conventional schematic</option>
+          <option value="wires" disabled={!supportsWires}>Conventional schematic</option>
           <option value="labels">Net labels</option>
         </select></label>
         <label>Zoom<select aria-label="Drawing zoom" value={zoom} onChange={(event) => setZoom(event.target.value)}>
@@ -70,7 +72,7 @@ export function SchematicDialog({ project, onClose }: { project: WorkbenchProjec
         </div>
       </div>
       <p className="schematic-explanation">Generated from breadboard strips and jumper connections. Switches show their current position. {drawing.layout === 'labels' ? 'Pins with matching net labels are connected.' : 'Dots mark connections; crossings without dots are not connected.'}</p>
-      {!canDrawConnectedWires(schematic) && <p className="schematic-explanation">This circuit uses net labels to keep the drawing readable.</p>}
+      {!supportsWires && <p className="schematic-explanation">A connected layout is not available for this circuit yet. Matching net labels show its connections.</p>}
       {schematic.warnings.length > 0 && <details className="schematic-warnings"><summary>{schematic.warnings.length} board connection warning(s)</summary><ul>{schematic.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul></details>}
       <p className="schematic-export-status" role="status">{busy ? 'Preparing image…' : message}</p>
       <div className="schematic-preview" tabIndex={0} aria-label="Scrollable circuit drawing">

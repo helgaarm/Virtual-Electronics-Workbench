@@ -3,17 +3,20 @@ import { drawSymbol, type SymbolDrawing } from './symbols';
 import { escapeXml, path, text, wrappedText } from './svgPrimitives';
 import { connectedCircuit } from './seriesParallel';
 import { drawConnectedCircuit } from './connectedDrawing';
+import { drawTimerCircuit } from './timerDrawing';
+import { drawGraphCircuit } from './graphDrawing';
 
 export type SchematicLayout = 'wires' | 'labels';
 export interface SchematicDrawing { svg: string; width: number; height: number; layout: SchematicLayout }
 
 export function canDrawConnectedWires(schematic: Schematic): boolean {
-  return connectedCircuit(schematic) !== undefined;
+  return connectedCircuit(schematic) !== undefined || drawTimerCircuit(schematic) !== undefined || drawGraphCircuit(schematic) !== undefined;
 }
 
 export function renderSchematicSvg(schematic: Schematic, preferredLayout: SchematicLayout = 'wires'): SchematicDrawing {
   const circuit = preferredLayout === 'wires' ? connectedCircuit(schematic) : undefined;
-  const connected = circuit ? drawConnectedCircuit(schematic, circuit) : undefined;
+  const connected: { body: string; width: number; height: number; note?: string } | undefined = circuit ? drawConnectedCircuit(schematic, circuit)
+    : preferredLayout === 'wires' ? drawTimerCircuit(schematic) ?? drawGraphCircuit(schematic) : undefined;
   const layout = connected ? 'wires' : 'labels';
   const symbols = schematic.components.map((component) => drawSymbol(component));
   const netNames = new Map(schematic.nets.map((net) => [net.id, net.name]));
@@ -28,6 +31,7 @@ export function renderSchematicSvg(schematic: Schematic, preferredLayout: Schema
   const notes = [
     `${schematic.components.length} components · ${schematic.nets.length} nets · ${schematic.jumperCount} jumpers represented as connections`,
     note,
+    ...(connected?.note ? [connected.note] : []),
     ...(schematic.warnings.length ? [`${schematic.warnings.length} board connection warning(s). Check the board before using this drawing.`] : []),
   ];
   for (const line of notes) {
