@@ -20,7 +20,7 @@ describe('SQLite project persistence', () => {
     return value;
   }
 
-  it.each(['nano-blink', 'nano-button', 'nano-analog'] as const)('round-trips the %s program and all 30 pins through SQLite and HTTP', async (id) => {
+  it.each(['nano-blink', 'nano-button', 'nano-analog', 'wind-constant-power', 'wind-constant-temperature'] as const)('round-trips the %s program and all 30 pins through SQLite and HTTP', async (id) => {
     const repo = repository();
     const app = createApp(repo);
     const project = createStarterProject(id);
@@ -31,11 +31,11 @@ describe('SQLite project persistence', () => {
     expect(loaded.body.revision).toBe(saved.body.revision);
   });
 
-  it.each([12, 13])('opens and upgrades a copy of a schema-%i database while preserving the recovery original', (version) => {
+  it.each([12, 13, 14])('opens and upgrades a copy of a schema-%i database while preserving the recovery original', (version) => {
     const directory = mkdtempSync(join(tmpdir(), 'vew-nano-migration-'));
     const original = join(directory, 'original.sqlite');
     const copy = join(directory, 'copy.sqlite');
-    const legacy = { ...createStarterProject(version === 13 ? 'nano-blink' : 'switched-led'), version, revision: 1 };
+    const legacy = { ...createStarterProject(version >= 13 ? 'nano-blink' : 'switched-led'), version, revision: 1 };
     let repo: SqliteProjectRepository | undefined;
     try {
       repo = new SqliteProjectRepository(original); repo.close(); repo = undefined;

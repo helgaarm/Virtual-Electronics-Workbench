@@ -584,6 +584,8 @@ export default function App() {
             </div>
           </section>
           <Inspector
+            key={project.id}
+            windReadings={selectedComponentId ? transientRuntime.frame?.state.digital?.nanos[selectedComponentId]?.wind : undefined}
             component={selectedComponent}
             board={board}
             measurement={selectedMeasurement}

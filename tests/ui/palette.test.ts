@@ -114,7 +114,7 @@ describe('component folders', () => {
 describe('component search', () => {
   it('matches folder names, descriptions, kinds, and multiple case-insensitive terms', () => {
     const kinds = (query: string) => getPaletteFolders(query).flatMap((folder) => folder.parts.map((part) => part.kind));
-    expect(kinds('Passive components')).toEqual(['resistor', 'capacitor', 'potentiometer']);
+    expect(kinds('Passive components')).toEqual(['heater-resistor', 'resistor', 'capacitor', 'potentiometer']);
     expect(kinds('  nPn   to-92 ')).toEqual(['bc547', '2n3904']);
     expect(kinds('potentiometer')).toEqual(['potentiometer']);
     expect(kinds('transistors MOSFET')).toEqual(['2n7000']);

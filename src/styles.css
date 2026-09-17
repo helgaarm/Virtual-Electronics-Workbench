@@ -271,3 +271,9 @@ button.palette-folder-heading:hover { border-color: #c8cfc6; background: #edf1e9
 .nano-program summary { cursor: pointer; font-size: 12px; }
 .nano-program pre { max-width: 100%; overflow: auto; padding: 10px; background: #f1f4f6; border-radius: 6px; font-size: 11px; }
 .nano-program [role="status"] { display: block; margin-top: 6px; font-size: 12px; }
+.wind-sensor-controls { margin: 16px 0 0; padding: 14px 0; }
+.wind-sensor-controls dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; font-size: 12px; }
+.wind-sensor-controls label { display: grid; gap: 5px; margin: 10px 0; font-size: 12px; }
+.wind-sensor-controls input, .wind-sensor-controls textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.wind-sensor-controls textarea { resize: vertical; min-height: 100px; font: inherit; padding: 8px; }
+.wind-sensor-controls button { max-width: 100%; white-space: normal; }

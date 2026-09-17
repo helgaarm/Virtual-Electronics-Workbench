@@ -1,4 +1,4 @@
-import { ADCMuxInputType, AVRADC, AVREEPROM, AVRIOPort, AVRTimer, AVRUSART, CPU, EEPROMMemoryBackend, PinState, adcConfig, avrInstruction, portBConfig, portCConfig, portDConfig, timer0Config, timer1Config, timer2Config, usart0Config } from 'avr8js';
+import { ADCMuxInputType, AVRADC, AVREEPROM, AVRIOPort, AVRTimer, AVRTWI, AVRUSART, CPU, EEPROMMemoryBackend, PinState, adcConfig, avrInstruction, portBConfig, portCConfig, portDConfig, timer0Config, timer1Config, timer2Config, twiConfig, usart0Config } from 'avr8js';
 import type { NanoAvrSnapshot } from '../../domain/circuit/nanoAvr';
 import { parseNanoHex } from '../../domain/components/nanoFirmware';
 
@@ -40,6 +40,10 @@ function primitiveState(object: object): Record<string, number | boolean | strin
  * Regression tests compare uninterrupted execution with structured-cloned continuations.
  */
 export class NanoAvrRuntime {
+  onTwiAddress: (address: number, write: boolean) => boolean = () => false;
+  onTwiByte: (address: number, value: number) => boolean = () => false;
+  private twiAddress = -1;
+  private pendingTwi?: NanoAvrSnapshot['pendingTwi'];
   outputsChanged = false;
   readonly cpu: CPU;
   readonly ports: AVRIOPort[];
@@ -67,7 +71,21 @@ export class NanoAvrRuntime {
     this.eeprom = new EEPROMMemoryBackend(1_024);
     if (retainedEeprom) this.eeprom.memory.set(retainedEeprom);
     const eeprom = new AVREEPROM(cpu, this.eeprom);
-    this.peripherals = [...this.ports, ...timers, this.adc, usart, eeprom];
+    const twi = new AVRTWI(cpu, twiConfig, NANO_CLOCK_HZ);
+    this.peripherals = [...this.ports, ...timers, this.adc, usart, eeprom, twi];
+    this.callbacks.set('twi', () => {
+      const request = this.pendingTwi;
+      this.pendingTwi = undefined;
+      if (!request) return;
+      this.settleInputs();
+      if (request.control & 0x20) { this.twiAddress = -1; twi.completeStart(); }
+      else if (request.control & 0x10) { this.twiAddress = -1; twi.completeStop(); }
+      else if (request.status === 8 || request.status === 16) {
+        this.twiAddress = request.data >> 1;
+        twi.completeConnect(this.onTwiAddress(this.twiAddress, !(request.data & 1)));
+      } else if (request.status === 0x18 || request.status === 0x28) twi.completeWrite(this.onTwiByte(this.twiAddress, request.data));
+      else if (request.status === 0x40 || request.status === 0x50) twi.completeRead(255);
+    });
     this.callbacks.set('adc', () => this.adc.completeADCRead(this.adcResult));
     this.callbacks.set('usart-tx', () => {
       const interrupts = usart as unknown as { UDRE: Interrupt; TXC: Interrupt };
@@ -82,7 +100,8 @@ export class NanoAvrRuntime {
         if (++pending >= 64) throw new Error('Firmware scheduled too many pending peripheral events.');
       }
       const id = this.clockContext === 'eeprom' ? (cycles === 4 ? 'eeprom-enable' : 'eeprom-ready') : this.clockContext;
-      return addClockEvent(id ? this.callbacks.get(id)! : callback, cycles);
+      const eventCycles = id === 'twi' ? Math.max(1, Math.round(NANO_CLOCK_HZ / twi.sclFrequency * ((this.pendingTwi?.control ?? 0) & 0x30 ? 1 : 9))) : cycles;
+      return addClockEvent(id ? this.callbacks.get(id)! : callback, eventCycles);
     };
     for (const [address, context] of [[adcConfig.ADCSRA, 'adc'], [usart0Config.UDR, 'usart-tx'], [0x3f, 'eeprom']] as const) {
       const hook = cpu.writeHooks[address];
@@ -105,8 +124,22 @@ export class NanoAvrRuntime {
       cpu.addClockEvent(this.callbacks.get('adc')!, this.adc.sampleCycles);
     };
     usart.onByteTransmit = (byte) => { this.serialOutput = (this.serialOutput + String.fromCharCode(byte)).slice(-MAX_SERIAL_CHARACTERS); };
+    const twiHook = cpu.writeHooks[twiConfig.TWCR];
+    cpu.writeHooks[twiConfig.TWCR] = (...args) => {
+      if (!(args[0] & 4)) {
+        cpu.clearClockEvent(this.callbacks.get('twi')!);
+        this.pendingTwi = undefined; this.twiAddress = -1;
+      } else if ((args[0] & 0x84) === 0x84) {
+        // A transfer owns its latched control/data until completion. Merely changing
+        // interrupt-enable bits must not replace that snapshot's pending transaction.
+        if (this.pendingTwi) throw new Error('TWI transfer restarted before completion.');
+        this.pendingTwi = { control: args[0], status: cpu.data[twiConfig.TWSR] & 0xf8, data: cpu.data[twiConfig.TWDR] };
+      }
+      this.clockContext = 'twi';
+      try { return twiHook(...args); } finally { this.clockContext = ''; }
+    };
     // Unsupported peripherals fail explicitly instead of leaving firmware in an unexplained busy loop.
-    for (const [address, mask, name] of [[0x4c, 0x40, 'hardware SPI'], [0xbc, 4, 'I²C/TWI'], [0x60, 0x48, 'watchdog'], [0x57, 1, 'self-programming flash'], [0x61, 0x8f, 'clock prescaling']] as const) {
+    for (const [address, mask, name] of [[0x4c, 0x40, 'hardware SPI'], [0x60, 0x48, 'watchdog'], [0x57, 1, 'self-programming flash'], [0x61, 0x8f, 'clock prescaling']] as const) {
       cpu.writeHooks[address] = (value) => { if (value & mask) throw new Error(`${name} is not supported by this Nano runtime.`); };
     }
     const adcHook = cpu.writeHooks[adcConfig.ADCSRA];
@@ -143,6 +176,8 @@ export class NanoAvrRuntime {
       this.nextInputCycle = previous.nextInputCycle;
       this.eeprom.memory.set(previous.eeprom);
       this.serialOutput = previous.serialOutput;
+      this.twiAddress = previous.twiAddress ?? -1;
+      this.pendingTwi = previous.pendingTwi ? { ...previous.pendingTwi } : undefined;
     }
   }
 
@@ -178,6 +213,7 @@ export class NanoAvrRuntime {
       clockEvents.push({ id, cycles: event.cycles });
     }
     return { data: this.cpu.data.slice(), pc: this.cpu.pc, cycles: this.cpu.cycles, nextInputCycle: this.nextInputCycle,
+      twiAddress: this.twiAddress, pendingTwi: this.pendingTwi ? { ...this.pendingTwi } : undefined,
       pendingInterrupts: internals.pendingInterrupts.map((value) => value ? { ...value } : null),
       nextInterrupt: this.cpu.nextInterrupt, maxInterrupt: this.cpu.maxInterrupt,
       peripherals: this.peripherals.map(primitiveState), clockEvents, adcResult: this.adcResult,

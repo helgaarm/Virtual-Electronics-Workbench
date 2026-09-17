@@ -21,8 +21,10 @@ single wavelength does not fully describe a real source spectrum; it is an expli
 input for wavelength-sensitive component models.
 
 The TMP36 reads shared temperature and produces its electrical output through circuit extraction.
-Humidity, wind, illuminance, and wavelength are stored simulation inputs ready for compatible sensor
-models; they do not fabricate electrical outputs when no such sensor is present.
+NTC thermistors respond to shared temperature and wind through an illustrative electrothermal model.
+Connected heater power warms an associated NTC; airflow increases cooling. See the
+[wind-sensor guide](wind-sensor.md) for assumptions and measured calibration. Humidity, illuminance
+and wavelength remain stored inputs for future compatible models; they do not fabricate outputs.
 
 Environment settings are bounded and validated when a project is loaded. Projects from schema
 versions before 12 migrate to 25 °C, 50% RH, still air, 500 lux daylight at 550 nm.

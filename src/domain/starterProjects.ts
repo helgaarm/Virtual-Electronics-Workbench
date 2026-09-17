@@ -4,8 +4,11 @@ import { railHoleId, terminalHoleId } from './physical/breadboard';
 import { createEmptyProject, createLedExampleProject, type WorkbenchProject } from './project';
 import { firstPressWinsProject } from './starters/firstPressWins';
 import { arduinoNanoProject } from './starters/arduinoNano';
+import { windSensorProject } from './starters/windSensor';
 
 export const STARTER_PROJECTS = [
+  { id: 'wind-constant-power', name: 'Wind Sensor · Constant Power', description: 'Two NTCs, a 150 Ω heater and an I²C OLED. Change Environment airflow. Shows temperature difference; wind speed requires your measured calibration.' },
+  { id: 'wind-constant-temperature', name: 'Wind Sensor · Constant Temperature', description: 'Nano D9 controls the heater through a MOSFET to target ambient +20 °C. Calibrate heater power after settling; heater limits are shown explicitly.' },
   { id: 'nano-blink', name: 'Arduino Nano Blink', description: 'USB-powered classic Nano blinks its D13 LED and a breadboard LED through a 330 Ω resistor. One second on, one second off.' },
   { id: 'nano-button', name: 'Arduino Nano Button', description: 'Close the switch connected to D2 to light the LED. Uses the Nano internal pull-up.' },
   { id: 'nano-analog', name: 'Arduino Nano Analog Input', description: 'Adjust the potentiometer connected to A0. The LED lights when the input reaches about 2.5 V.' },
@@ -498,6 +501,8 @@ function digitalThermometerProject(): WorkbenchProject {
 }
 
 const STARTER_FACTORIES: Record<StarterProjectId, () => WorkbenchProject> = {
+  'wind-constant-power': () => windSensorProject(false),
+  'wind-constant-temperature': () => windSensorProject(true),
   'nano-blink': () => arduinoNanoProject('blink'),
   'nano-button': () => arduinoNanoProject('button-led'),
   'nano-analog': () => arduinoNanoProject('analog-threshold'),

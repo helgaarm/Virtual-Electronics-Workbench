@@ -9,6 +9,9 @@ import { create74hc595State, hc595InputLevel, step74hc595 } from '../models/shif
 import { emptySimulationResult } from '../mna';
 import { flattenCircuit } from '../subcircuits';
 import { canRetainOperatingPoint, reduceResistivePins } from './resistivePins';
+import { thermalResistances, withThermalResult } from '../models/thermalSensor';
+import { connectedOled, createOledState, oledByte, oledDisplays } from '../models/oled';
+import { sampleWindExample } from '../microcontroller/windExample';
 
 type AnalogStep = (circuit: Circuit, state: TransientState, elapsedSeconds: number) => TransientFrame;
 const PORT_PINS = [5, 6, 7, 2, 3, 1];
@@ -22,7 +25,7 @@ export function createDigitalState(devices: readonly DigitalDevice[], previous?:
   for (const device of devices) {
     if (device.kind === 'arduino-nano' && device.programId) {
       const old = previous?.nanos?.[device.id];
-      nanos[device.id] = old?.programId === device.programId && old.firmwareHex === device.firmware?.hex ? { ...old }
+      nanos[device.id] = old?.programId === device.programId && old.firmwareHex === device.firmware?.hex ? { ...old, ...(old.wind ? { wind: { ...old.wind } } : {}) }
         : { programId: device.programId, powered: false, outputHigh: false, nextTimeSeconds: 0, startedAtSeconds: 0, firmwareHex: device.firmware?.hex };
     } else if (device.kind === '74hc595') registers[device.id] = previous?.registers[device.id] ?? create74hc595State();
     else if (device.firmwareId === 'thermometer-v1') {
@@ -31,7 +34,7 @@ export function createDigitalState(devices: readonly DigitalDevice[], previous?:
         : { cpu: createAttiny85Runtime(THERMOMETER_HEX), nextTimeSeconds: 0, powered: false };
     }
   }
-  return { mcus, registers, nanos };
+  return { mcus, registers, nanos, ...(previous?.oleds ? { oleds: structuredClone(previous.oleds) } : {}) };
 }
 
 function voltage(voltages: Record<string, number>, device: DigitalDevice, pin: number): number {
@@ -73,7 +76,8 @@ function stampDevices(circuit: Circuit, digital: DigitalState, voltages: Record<
             if (output === PinState.High || output === PinState.Low) resistor(`gpio-${pin}`, pin, output === PinState.High ? vcc : ground, 50);
             else if (output === PinState.InputPullUp) resistor(`pullup-${pin}`, pin, vcc, 30_000);
           });
-        } else resistor('d13', 16, nano.outputHigh ? vcc : ground, 50);
+        } else if (nano.programId.startsWith('wind-')) resistor('heater-d9', 12, nano.outputHigh ? vcc : ground, 50);
+        else resistor('d13', 16, nano.outputHigh ? vcc : ground, 50);
         if (nano.programId === 'button-led') resistor('pullup-d2', 5, vcc, 30_000);
       }
     } else if (device.kind === 'attiny85') {
@@ -138,7 +142,7 @@ export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elap
   let previousSteady = false;
   const solve = (dt: number) => {
     const actualDt = Math.max(1e-10, dt);
-    const reduction = reduceResistivePins(stampDevices(baseCircuit, digital, voltages));
+    const reduction = reduceResistivePins(thermalResistances(stampDevices(baseCircuit, digital, voltages), analogState));
     const key = JSON.stringify(reduction.circuit.components);
     const steady = canRetainOperatingPoint(reduction.circuit, reduction.fixedVoltages, analogState.capacitorVoltages);
     if (steady && previousSteady && previousResult && key === previousKey) {
@@ -153,6 +157,7 @@ export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elap
     previousSteady = steady;
     previousResult = frame.result.status === 'error' ? undefined : frame.result;
     frame = { ...frame, result: reduction.restore(frame.result) };
+    frame = withThermalResult(circuit, analogState, frame, dt);
     frame.state = { ...frame.state, nodeVoltages: frame.result.nodeVoltages };
     if (frame.result.status === 'error') return;
     voltages = frame.result.nodeVoltages;
@@ -174,6 +179,7 @@ export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elap
       const active = supply(voltages, device) >= 4.5 && supply(voltages, device) <= 5.5
         && voltage(voltages, device, 3) - voltage(voltages, device, 4) >= supply(voltages, device) * 0.6;
       if (!active || !nano.powered) {
+        nano.wind = undefined;
         nano.startedAtSeconds = state.timeSeconds;
         nano.nextTimeSeconds = state.timeSeconds;
         nano.outputHigh = false;
@@ -203,6 +209,20 @@ export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elap
     if (!nano.powered) continue;
     try {
       const runtime = new NanoAvrRuntime(device.firmware!.hex, nano.avr, nano.eeprom);
+      runtime.onTwiAddress = (address, write) => {
+        const oled = write ? connectedOled(circuit, device, address, voltages) : undefined;
+        if (!oled) return false;
+        digital.oleds ??= {};
+        const display = digital.oleds[oled.id] ??= createOledState();
+        display.expectsControl = true;
+        return true;
+      };
+      runtime.onTwiByte = (address, value) => {
+        const oled = connectedOled(circuit, device, address, voltages);
+        const display = oled && digital.oleds?.[oled.id];
+        if (!oled || !display) return false;
+        oledByte(display, value, oled.controller); return true;
+      };
       runtime.connect((pin) => voltage(voltages, device, pin), () => {
         if (++inputSettles > 2_000) throw new Error('Firmware reads inputs too frequently for this timestep. Reduce the simulation timestep.');
         const eventTime = nano.startedAtSeconds + runtime.cpu.cycles / NANO_CLOCK_HZ;
@@ -251,7 +271,8 @@ export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elap
       }
       if (eventTime > analogState.timeSeconds) solve(eventTime - analogState.timeSeconds);
       if (hasError()) return { state, result: frame!.result };
-      sampleNanoExample(nextNano, nano, eventTime, (pin) => voltage(voltages, nextNano, pin));
+      if (nextNano.programId?.startsWith('wind-')) sampleWindExample(circuit, digital, nextNano, eventTime, voltages);
+      else sampleNanoExample(nextNano, nano, eventTime, (pin) => voltage(voltages, nextNano, pin));
       solve(0);
       if (hasError()) return { state, result: frame!.result };
       sampleRegisters(devices, digital, voltages);
@@ -296,5 +317,5 @@ export function stepDigitalCircuit(circuit: Circuit, state: TransientState, elap
   for (const [id, runtime] of avrRuntimes) {
     try { digital.nanos[id].avr = runtime.snapshot(); } catch (error) { return firmwareError(error, id); }
   }
-  return { state: { ...analogState, timeSeconds: endTime, digital, displayCurrentsA }, result: { ...frame!.result, displayCurrentsA } };
+  return { state: { ...analogState, timeSeconds: endTime, digital, displayCurrentsA }, result: { ...frame!.result, displayCurrentsA, oledDisplays: oledDisplays(circuit, digital, voltages) } };
 }

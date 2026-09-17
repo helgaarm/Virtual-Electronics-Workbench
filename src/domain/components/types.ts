@@ -1,6 +1,7 @@
 import type { QuarterTurn } from '../physical/geometry';
 import type { NanoProgramId } from './arduinoNano';
 import type { NanoFirmware } from './nanoFirmware';
+import type { WindSensorSettings } from './windSensor';
 
 export const LED_COLORS = ['red', 'green', 'yellow', 'blue', 'white'] as const;
 export type LedColor = (typeof LED_COLORS)[number];
@@ -131,7 +132,23 @@ export interface ArduinoNanoComponent extends ComponentBase {
   kind: 'arduino-nano'; deviceId: 'arduino-nano'; packageId: 'NANO-30';
   programId: NanoProgramId | 'custom';
   firmware?: NanoFirmware;
+  windSettings?: WindSensorSettings;
   terminalHoleIds: Record<`pin${number}`, string>;
+}
+
+export interface NtcThermistorComponent extends ComponentBase {
+  kind: 'ntc-thermistor'; nominalResistanceOhms: number; nominalTemperatureC: number; betaK: number;
+  /** Explicit thermal assembly association, independent of electrical connections. */
+  heaterId?: string;
+  terminalHoleIds: { a: string; b: string };
+}
+export interface HeaterResistorComponent extends ComponentBase {
+  kind: 'heater-resistor'; resistanceOhms: number; ratedPowerW: number;
+  terminalHoleIds: { a: string; b: string };
+}
+export interface OledComponent extends ComponentBase {
+  kind: 'oled-i2c'; controller: 'sh1106' | 'ssd1306'; address: 60 | 61;
+  terminalHoleIds: { gnd: string; vcc: string; scl: string; sda: string };
 }
 
 export interface Lm358Component extends ComponentBase {
@@ -153,6 +170,7 @@ export interface Zener1n4733aComponent extends ComponentBase {
 }
 
 export type PlacedComponent =
+  | NtcThermistorComponent | HeaterResistorComponent | OledComponent
   | VoltageSourceComponent
   | GroundComponent
   | ResistorComponent
@@ -179,6 +197,9 @@ export function terminalEntries(component: PlacedComponent): Array<[string, stri
 
 export function componentDisplayName(kind: ComponentKind): string {
   switch (kind) {
+    case 'ntc-thermistor': return '10 kΩ NTC thermistor';
+    case 'heater-resistor': return 'Heater resistor · 0.5 W';
+    case 'oled-i2c': return '1.3-inch I²C OLED';
     case 'voltage-source':
       return '5 V power';
     case 'ground':

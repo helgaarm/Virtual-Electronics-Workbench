@@ -28,6 +28,7 @@ function holePairHasValidSpan(
 
 function nextLabel(kind: ComponentKind, components: PlacedComponent[]): string {
   const prefix: Record<ComponentKind, string> = {
+    'ntc-thermistor': 'NTC', 'heater-resistor': 'RH', 'oled-i2c': 'OLED',
     'voltage-source': 'V',
     ground: 'GND',
     resistor: 'R',
@@ -84,6 +85,14 @@ export function createPlacedComponent(
   if (kind === 'arduino-nano') {
     for (let column = 3; column <= board.columns - 16; column += 1) {
       const candidate: PlacedComponent = { ...base, kind, deviceId: kind, packageId: 'NANO-30', programId: 'blink', terminalHoleIds: nanoTerminalHoles(board.id, column) };
+      if (![...validateOccupancy(board, [...components, candidate]), ...validatePackageOverlaps(board, [...components, candidate])].some((issue) => issue.componentId === candidate.id)) return candidate;
+    }
+    return undefined;
+  }
+  if (kind === 'oled-i2c') {
+    for (let column = 8; column <= board.columns - 8; column++) {
+      const candidate: PlacedComponent = { ...base, kind, controller: 'sh1106', address: 60,
+        terminalHoleIds: { gnd: terminalHoleId(board.id, 'A', column), vcc: terminalHoleId(board.id, 'A', column + 1), scl: terminalHoleId(board.id, 'A', column + 2), sda: terminalHoleId(board.id, 'A', column + 3) } };
       if (![...validateOccupancy(board, [...components, candidate]), ...validatePackageOverlaps(board, [...components, candidate])].some((issue) => issue.componentId === candidate.id)) return candidate;
     }
     return undefined;
@@ -210,6 +219,8 @@ export function createPlacedComponent(
   if (!second) return undefined;
 
   switch (kind) {
+    case 'ntc-thermistor': return { ...base, kind, nominalResistanceOhms: 10_000, nominalTemperatureC: 25, betaK: 3950, terminalHoleIds: { a: first, b: second } };
+    case 'heater-resistor': return { ...base, kind, resistanceOhms: 150, ratedPowerW: 0.5, terminalHoleIds: { a: first, b: second } };
     case 'resistor':
       return {
         ...base,
@@ -252,7 +263,7 @@ export function rotatePlacedComponent(
   allComponents: PlacedComponent[],
 ): PlacedComponent | undefined {
   const terminals = terminalEntries(component);
-  if (component.kind === 'ne555' || component.kind === 'tmp36' || component.kind === 'arduino-nano') {
+  if (component.kind === 'ne555' || component.kind === 'tmp36' || component.kind === 'arduino-nano' || component.kind === 'oled-i2c') {
     const holes = terminals.map(([, holeId]) => board.holes.find((hole) => hole.id === holeId));
     if (holes.some((hole) => !hole)) return undefined;
     const positions = holes.map((hole) => hole!);
@@ -371,6 +382,9 @@ export function movePlacedComponent(
 }
 
 export function paletteDescription(kind: ComponentKind): string {
+  if (kind === 'ntc-thermistor') return '10 kΩ at 25 °C · Beta 3950 · thermal sensor';
+  if (kind === 'heater-resistor') return '150 Ω · 0.5 W · thermal heater';
+  if (kind === 'oled-i2c') return '128 × 64 · SH1106 / SSD1306 · I²C';
   if (kind === 'voltage-source') return '5.00 V DC source';
   if (kind === 'resistor') return 'Axial · 220 Ω';
   if (kind === 'led') return '5 mm · red';

@@ -1,8 +1,11 @@
 import type { NanoProgramId } from '../components/arduinoNano';
 import type { NanoFirmware } from '../components/nanoFirmware';
 import type { NanoAvrSnapshot } from './nanoAvr';
+import type { WindSensorSettings } from '../components/windSensor';
+import type { OledState } from './oled';
 /** Extracted pin maps and volatile execution state; never part of a saved project. */
 export interface DigitalDevice {
+  windSettings?: WindSensorSettings;
   id: string;
   kind: 'attiny85' | '74hc595' | 'arduino-nano';
   pins: Record<string, string>;
@@ -31,8 +34,10 @@ export interface RegisterState {
 }
 
 export interface DigitalState {
+  oleds?: Record<string, OledState>;
   nanos: Record<string, { programId: NanoProgramId | 'custom'; powered: boolean; outputHigh: boolean; nextTimeSeconds: number; startedAtSeconds: number;
-    firmwareHex?: string; avr?: NanoAvrSnapshot; eeprom?: Uint8Array }>;
+    firmwareHex?: string; avr?: NanoAvrSnapshot; eeprom?: Uint8Array;
+    wind?: { airC: number; hotC: number; deltaC: number; duty: number; integral: number; lastSampleSeconds: number; settledSince?: number; status: string; speedMps?: number; powerW: number; adcAir: number; adcHot: number; fault?: boolean } }>;
   mcus: Record<string, { cpu: AvrState; nextTimeSeconds: number; powered: boolean }>;
   registers: Record<string, RegisterState>;
 }

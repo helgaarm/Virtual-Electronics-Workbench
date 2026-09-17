@@ -9,6 +9,7 @@ import {
 } from '../domain/components/types';
 import { recolorLed } from '../domain/components/led';
 import { NanoProgram } from './NanoProgram';
+import type { DigitalState } from '../domain/circuit/digital';
 import type { BreadboardDefinition } from '../domain/physical/breadboard';
 import type { ComponentMeasurement, MeasurementValue } from '../measurement/dcMeasurements';
 import { breadboardHoleOptionGroups } from './breadboardHoleOptions';
@@ -19,6 +20,7 @@ interface Props {
   board: BreadboardDefinition;
   measurement?: ComponentMeasurement;
   nanoSerialOutput?: string;
+  windReadings?: DigitalState['nanos'][string]['wind'];
   onUpdate: (component: PlacedComponent) => void;
   onRotate: () => void;
   onDelete: () => void;
@@ -34,6 +36,7 @@ export function Inspector({
   board,
   measurement,
   nanoSerialOutput,
+  windReadings,
   onUpdate,
   onRotate,
   onDelete,
@@ -51,7 +54,7 @@ export function Inspector({
 
   const holeOptionGroups = breadboardHoleOptionGroups(board);
   const anchored = isComponentAnchored(component);
-  const halfTurn = component.kind === 'ne555' || component.kind === 'tmp36' || component.kind === 'arduino-nano';
+  const halfTurn = component.kind === 'ne555' || component.kind === 'tmp36' || component.kind === 'arduino-nano' || component.kind === 'oled-i2c';
 
   const updateTerminal = (terminal: string, holeId: string) => {
     onUpdate({
@@ -78,6 +81,18 @@ export function Inspector({
           <small>{formatResistance(component.resistanceOhms)} · {component.tolerancePercent}% tolerance</small>
         </section>
       )}
+      {component.kind === 'heater-resistor' && <section className="inspector-section"><label>Heater resistance (Ω)<input type="number" min={10} max={100000} value={component.resistanceOhms} onChange={e => { const value = e.target.valueAsNumber; if (Number.isFinite(value) && value >= 10 && value <= 100000) onUpdate({ ...component, resistanceOhms: value }); }} /></label><small>Rated {component.ratedPowerW} W. Raising power changes calibration. Never drive this load directly from a GPIO.</small></section>}
+      {component.kind === 'ntc-thermistor' && <section className="inspector-section">
+        <label>Nominal resistance (Ω)<input type="number" min={100} max={1000000} value={component.nominalResistanceOhms} onChange={e => { const value = e.target.valueAsNumber; if (Number.isFinite(value) && value >= 100 && value <= 1e6) onUpdate({ ...component, nominalResistanceOhms: value }); }} /></label>
+        <label>Beta coefficient (K)<input type="number" min={1000} max={6000} value={component.betaK} onChange={e => { const value = e.target.valueAsNumber; if (Number.isFinite(value) && value >= 1000 && value <= 6000) onUpdate({ ...component, betaK: value }); }} /></label>
+        <label>Thermally coupled heater ID<input maxLength={80} value={component.heaterId ?? ''} onChange={e => { const value = e.target.value; if (!value || /^[a-zA-Z0-9_-]+$/.test(value)) onUpdate({ ...component, heaterId: value || undefined }); }} /></label>
+        <small>Leave blank for ambient. A heater ID links the thermal assembly; electrical connections still come from the breadboard.</small>
+      </section>}
+      {component.kind === 'oled-i2c' && <section className="inspector-section">
+        <label>OLED controller<select value={component.controller} onChange={e => onUpdate({ ...component, controller: e.target.value as 'sh1106' | 'ssd1306' })}><option value="sh1106">SH1106</option><option value="ssd1306">SSD1306</option></select></label>
+        <label>I²C address<select value={component.address} onChange={e => onUpdate({ ...component, address: Number(e.target.value) as 60 | 61 })}><option value={60}>0x3C</option><option value={61}>0x3D</option></select></label>
+        <small>GND, VCC, SCL, SDA. This model represents a 3–5 V compatible module with pull-ups. Verify the markings on your physical module.</small>
+      </section>}
 
       {component.kind === 'voltage-source' && (
         <section className="inspector-section">
@@ -200,7 +215,7 @@ export function Inspector({
       {component.kind === 'diode-1n4148' && <section className="inspector-section"><div className="section-label">1N4148 · DO-35 glass diode</div><small>Nonlinear Shockley junction · cathode is identified by its band.</small></section>}
       {component.kind === '74hc595' && <section className="inspector-section"><div className="section-label">74HC595 · DIP-16</div><small>Serial data, shift/latch clocks, clear, output enable, cascade output, and eight finite-drive outputs.</small></section>}
       {component.kind === 'attiny85' && <section className="inspector-section"><div className="section-label">ATtiny85 · DIP-8</div><small>Firmware: {component.firmwareId} · {(component.clockHz / 1e6).toFixed(1)} MHz · ADC and mixed-signal GPIO</small></section>}
-      {component.kind === 'arduino-nano' && <NanoProgram key={component.id} component={component} serialOutput={nanoSerialOutput} onUpdate={onUpdate} />}
+      {component.kind === 'arduino-nano' && <NanoProgram key={component.id} component={component} serialOutput={nanoSerialOutput} windReadings={windReadings} onUpdate={onUpdate} />}
       {(component.kind === 'seven-segment' || component.kind === 'four-digit-seven-segment') && <section className="inspector-section"><div className="section-label">{component.commonType} LED display</div><small>Segments illuminate from simulated junction current; multiplexed brightness uses visual persistence only.</small></section>}
 
       {component.kind === 'ne555' && (
@@ -266,7 +281,7 @@ export function Inspector({
       <section className="inspector-section measurements">
         <div className="section-label">Live simulation</div>
         <dl>
-          <div title={measurement?.voltage.reason}><dt>{component.kind === 'ne555' || component.kind === 'arduino-nano' ? 'Supply voltage' : component.kind === 'tmp36' ? 'Sensor output' : 'Voltage drop'}</dt><dd>{reading(measurement?.voltage, formatVoltage)}</dd></div>
+          <div title={measurement?.voltage.reason}><dt>{component.kind === 'ne555' || component.kind === 'arduino-nano' || component.kind === 'oled-i2c' ? 'Supply voltage' : component.kind === 'tmp36' ? 'Sensor output' : 'Voltage drop'}</dt><dd>{reading(measurement?.voltage, formatVoltage)}</dd></div>
           <div title={measurement?.current.reason}><dt>Current</dt><dd>{reading(measurement?.current, formatCurrent)}</dd></div>
           <div title={measurement?.power.reason}><dt>Power</dt><dd>{reading(measurement?.power, (value) => `${Math.abs(value * 1_000).toFixed(2)} mW`)}</dd></div>
         </dl>

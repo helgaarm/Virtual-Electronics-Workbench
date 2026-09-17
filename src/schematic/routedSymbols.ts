@@ -5,7 +5,7 @@ import { escapeXml, text, wrappedText } from './svgPrimitives';
 
 export interface SymbolPort { pin: SchematicPin; x: number; y: number; direction: number; lead: string }
 export interface RoutedSymbol { body: string; ports: SymbolPort[]; boxes: RoutingBox[]; width: number; height: number }
-const primitives = new Set(['resistor', 'capacitor', 'led', 'diode-1n4148', 'zener-1n4733a', 'switch', 'voltage-source', 'signal-generator', 'ground', 'potentiometer', 'bc547', 'bc557', '2n3904', '2n3906', '2n7000']);
+const primitives = new Set(['ntc-thermistor', 'heater-resistor', 'resistor', 'capacitor', 'led', 'diode-1n4148', 'zener-1n4733a', 'switch', 'voltage-source', 'signal-generator', 'ground', 'potentiometer', 'bc547', 'bc557', '2n3904', '2n3906', '2n7000']);
 export const pinFunction = (pin: SchematicPin) => pin.name.replace(/^\d+\s+/, '');
 export const groundPin = (pin: SchematicPin) => /^(GND|VSS|COM[12]?)$/.test(pinFunction(pin));
 export const supplyPin = (pin: SchematicPin) => /^(VCC|VIN|5V|3V3|\+VS|V\+)$/.test(pinFunction(pin));

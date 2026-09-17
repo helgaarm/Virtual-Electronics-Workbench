@@ -24,7 +24,7 @@ export function containsCapacitor(circuit: Circuit): boolean {
 }
 
 export function containsTransientDevice(circuit: Circuit): boolean {
-  if (circuit.digitalDevices?.length) return true;
+  if (circuit.digitalDevices?.length || circuit.thermal) return true;
   const containsStatefulSubcircuit = (component: Circuit['components'][number]): boolean => (
     component.kind === 'subcircuit'
       && (component.definition.stateful === true
@@ -153,6 +153,8 @@ export function reconcileTransientRuntimeState(
     : {};
   const retainedState = previousState && clearNodeVoltages
     ? {
+      digital: previousState.digital,
+      sensorTemperaturesC: previousState.sensorTemperaturesC,
       timeSeconds: previousState.timeSeconds,
       capacitorVoltages: previousState.capacitorVoltages,
       ...(Object.keys(stableInternalNodeVoltages).length > 0

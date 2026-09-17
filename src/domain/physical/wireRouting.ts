@@ -1,7 +1,7 @@
 import { terminalEntries, type JumperWireComponent, type PlacedComponent } from '../components/types';
 import { getHole, type BreadboardDefinition } from './breadboard';
 import type { Point3Mm } from './geometry';
-import { PHYSICAL_PACKAGES } from './packages';
+import { PHYSICAL_PACKAGES, packageCenterOffsetZMm } from './packages';
 
 interface Obstacle {
   center: Point3Mm;
@@ -109,6 +109,7 @@ function componentObstacle(
     { x: 0, y: 0, z: 0 },
   );
   const packageDefinition = PHYSICAL_PACKAGES[component.kind];
+  center.z += packageCenterOffsetZMm(component.kind, component.rotation);
   const bodyRadiusMm = Math.max(packageDefinition.dimensionsMm.x, packageDefinition.dimensionsMm.z) / 2
     + WIRE_CLEARANCE_MM;
   const terminalReachMm = Math.max(
@@ -129,7 +130,7 @@ function componentObstacle(
   // The Nano's 45 × 18 mm board must not reserve a 48 mm diameter circle:
   // that incorrectly puts the accessible rows beside its headers under its body.
   // Its allowed 0/180-degree orientations have the same axis-aligned footprint.
-  if (component.kind === 'arduino-nano') {
+  if (component.kind === 'arduino-nano' || component.kind === 'oled-i2c') {
     const clearance = MAX_WIRE_RADIUS_MM + WIRE_BOARD_CLEARANCE_MM;
     const halfExtentsMm = { x: packageDefinition.dimensionsMm.x / 2 + clearance, z: packageDefinition.dimensionsMm.z / 2 + clearance };
     return crossesRectangle(start, end, center, halfExtentsMm)

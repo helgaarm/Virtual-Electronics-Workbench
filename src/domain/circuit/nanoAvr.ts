@@ -1,5 +1,7 @@
 /** Volatile, structured-cloneable snapshots. Nothing here is stored in project documents. */
 export interface NanoAvrSnapshot {
+  twiAddress?: number;
+  pendingTwi?: { control: number; status: number; data: number };
   data: Uint8Array;
   pc: number;
   cycles: number;

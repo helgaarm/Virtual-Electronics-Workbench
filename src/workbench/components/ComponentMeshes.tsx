@@ -12,6 +12,7 @@ import { CylinderBetween, SmoothTube } from '../scene/geometry';
 import { createJumperGeometry } from '../scene/wireGeometry';
 import { DIP_8_PACKAGE, DIP_14_PACKAGE, DIP_16_PACKAGE, type DipPackageDefinition } from '../../domain/physical/dipPackages';
 import { ArduinoNanoMesh } from './ArduinoNanoMesh';
+import { ThermalPartMesh, OledMesh } from './WindSensorMeshes';
 
 interface Props {
   board: BreadboardDefinition;
@@ -954,6 +955,8 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
             : undefined,
         };
         if (component.kind === 'resistor') return <AxialResistor key={component.id} component={component} {...common} />;
+        if (component.kind === 'ntc-thermistor' || component.kind === 'heater-resistor') return <ThermalPartMesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'oled-i2c') return <OledMesh key={component.id} component={component} pixels={result.oledDisplays?.[component.id]?.pixels} {...common} />;
         if (component.kind === 'led') return <LedMesh key={component.id} component={component} current={result.componentCurrents[component.id] ?? 0} {...common} />;
         if (component.kind === 'capacitor') return <RadialCapacitorMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'jumper-wire') return (

@@ -14,6 +14,9 @@ function engineeringValue(value: number, unit: string): string {
 
 function componentValue(component: PlacedComponent, project: WorkbenchProject): string {
   switch (component.kind) {
+    case 'ntc-thermistor': return `${engineeringValue(component.nominalResistanceOhms, 'Ω')} NTC · B ${component.betaK} K`;
+    case 'heater-resistor': return `${engineeringValue(component.resistanceOhms, 'Ω')} · ${component.ratedPowerW} W heater`;
+    case 'oled-i2c': return `${component.controller.toUpperCase()} 128×64 · 0x${component.address.toString(16)}`;
     case 'resistor': return `${engineeringValue(component.resistanceOhms, 'Ω')} ±${component.tolerancePercent}%`;
     case 'capacitor': return `${engineeringValue(component.capacitanceFarads, 'F')} / ${component.ratedVoltageV} V`;
     case 'potentiometer': return `${engineeringValue(component.totalResistanceOhms, 'Ω')} · ${Math.round(component.wiperPosition * 100)}%`;

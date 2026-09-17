@@ -11,6 +11,7 @@ import { createNe555Subcircuit } from './models/ne555';
 import { createTmp36Subcircuit } from './models/tmp36';
 import { potentiometerResistances } from './models/potentiometer';
 import { create74hc00Subcircuit, createLm358Subcircuit } from './models/expansionPack';
+import { ntcResistanceOhms } from '../domain/components/windSensor';
 
 export interface CircuitExtraction {
   circuit: Circuit;
@@ -96,6 +97,16 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
     );
 
     switch (component.kind) {
+      case 'ntc-thermistor':
+        electricalComponents.push({ id: component.id, kind: 'resistor', positiveNodeId: componentTerminalNodes[component.id].a, negativeNodeId: componentTerminalNodes[component.id].b,
+          resistanceOhms: ntcResistanceOhms(project.environment.temperatureC, component.nominalResistanceOhms, component.nominalTemperatureC, component.betaK) });
+        break;
+      case 'oled-i2c': {
+        const pins = componentTerminalNodes[component.id];
+        electricalComponents.push({ id: component.id, kind: 'resistor', positiveNodeId: pins.vcc, negativeNodeId: pins.gnd, resistanceOhms: 250 },
+          ...['sda', 'scl'].map(pin => ({ id: `${component.id}:pullup-${pin}`, kind: 'resistor' as const, positiveNodeId: pins[pin], negativeNodeId: pins.vcc, resistanceOhms: 4700 })));
+        break;
+      }
       case 'arduino-nano': {
         const pins = componentTerminalNodes[component.id];
         electricalComponents.push(
@@ -108,6 +119,7 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
         break;
       }
       case 'resistor':
+      case 'heater-resistor':
         if (component.resistanceOhms <= 0) {
           errors.push({
             code: 'INVALID_RESISTANCE',
@@ -188,7 +200,7 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
         break;
       case '2n7000':
         electricalComponents.push(
-          { id: `${component.id}:channel`, kind: 'smooth-switch', positiveNodeId: holeToNodeId[component.terminalHoleIds.drain], negativeNodeId: holeToNodeId[component.terminalHoleIds.source], controlPositiveNodeId: holeToNodeId[component.terminalHoleIds.gate], controlNegativeNodeId: holeToNodeId[component.terminalHoleIds.source], onResistanceOhms: 5, transitionVoltageV: 0.35 },
+          { id: `${component.id}:channel`, kind: 'smooth-switch', positiveNodeId: holeToNodeId[component.terminalHoleIds.drain], negativeNodeId: holeToNodeId[component.terminalHoleIds.source], controlPositiveNodeId: holeToNodeId[component.terminalHoleIds.gate], controlNegativeNodeId: holeToNodeId[component.terminalHoleIds.source], onResistanceOhms: 5, transitionVoltageV: 0.15, controlThresholdV: 2.1 },
           { id: `${component.id}:body-diode`, kind: 'diode', positiveNodeId: holeToNodeId[component.terminalHoleIds.source], negativeNodeId: holeToNodeId[component.terminalHoleIds.drain], model: { saturationCurrentA: 1e-12, emissionCoefficient: 1.5, temperatureK: 298.15 } },
         );
         break;
@@ -261,10 +273,16 @@ export function extractCircuit(project: WorkbenchProject): CircuitExtraction {
       nodes: [...roots.map((root) => ({ id: nodeIdByRoot.get(root)! })), ...project.components.filter((c) => c.kind === 'arduino-nano').map((c) => ({ id: `${c.id}:led-node` }))],
       groundNodeId,
       components: electricalComponents,
+      ...(project.components.some(c => c.kind === 'ntc-thermistor' || c.kind === 'heater-resistor') ? { thermal: {
+        ambientTemperatureC: project.environment.temperatureC, windSpeedMps: project.environment.windSpeedMps,
+        sensors: project.components.flatMap(c => c.kind === 'ntc-thermistor' ? [{ id: c.id, nominalResistanceOhms: c.nominalResistanceOhms, nominalTemperatureC: c.nominalTemperatureC, betaK: c.betaK, heaterId: c.heaterId }] : []),
+        heaters: project.components.flatMap(c => c.kind === 'heater-resistor' ? [{ id: c.id, ratedPowerW: c.ratedPowerW }] : []),
+      } } : {}),
+      oleds: project.components.flatMap(c => c.kind === 'oled-i2c' ? [{ id: c.id, controller: c.controller, address: c.address, pins: { gnd: componentTerminalNodes[c.id].gnd, vcc: componentTerminalNodes[c.id].vcc, scl: componentTerminalNodes[c.id].scl, sda: componentTerminalNodes[c.id].sda } }] : []),
       digitalDevices: project.components.flatMap((component) => component.kind === 'attiny85' || component.kind === '74hc595' || component.kind === 'arduino-nano'
         ? [{ id: component.id, kind: component.kind, pins: componentTerminalNodes[component.id],
           ...(component.kind === 'attiny85' ? { firmwareId: component.firmwareId, clockHz: component.clockHz } : {}),
-          ...(component.kind === 'arduino-nano' ? { programId: component.programId, firmware: component.firmware } : {}) }]
+          ...(component.kind === 'arduino-nano' ? { programId: component.programId, firmware: component.firmware, windSettings: component.windSettings } : {}) }]
         : []),
     },
     holeToNodeId,

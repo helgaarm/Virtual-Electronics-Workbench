@@ -26,7 +26,8 @@ Firmware is included when saving the project. Switching to a built-in example pr
 | Interrupts | Timer, ADC and sampled GPIO interrupts. Inputs are sampled every 50 µs and when firmware reads a PIN register; faster external pulses can be missed. |
 | Serial | Transmitted bytes appear in the Nano inspector. UART pin waveforms and serial input are not modeled. |
 | EEPROM | 1 KB, retained across Nano reset and power changes during the current runtime. Loading a project, resetting the simulation or changing firmware clears it. EEPROM is not persisted to SQLite. |
-| Unsupported hardware | Enabling SPI, I²C/TWI, watchdog, self-programming flash or clock prescaling, or executing SLEEP/BREAK, reports a structured simulation error. VIN regulation, bootloader/fuses, timer input capture and overload/thermal protection are not modeled. |
+| I²C/TWI | Single-master writes to powered, connected SH1106/SSD1306 OLED models; address/data ACK/NACK and cloneable pending transactions. Slave reads, arbitration, clock stretching and bit-level SDA/SCL waveforms are not modeled. |
+| Unsupported hardware | Enabling SPI, watchdog, self-programming flash or clock prescaling, or executing SLEEP/BREAK, reports a structured simulation error. VIN regulation, bootloader/fuses, timer input capture and overload/thermal protection are not modeled. |
 
 Execution and electrical settling have separate work limits so imported firmware cannot monopolize a worker indefinitely. A budget error asks for a smaller timestep. Simulation time can advance more slowly than wall time; pause, step and continuation all use the shared simulation clock. Do not use the model to validate electrical limits or power designs.
 
@@ -36,15 +37,21 @@ The module uses 30 breadboard holes in two rows: 15 pins per row at 2.54 mm pitc
 
 ## Included programs
 
-These three programs are inexpensive behavioral models and do not require compilation. Their equivalent Arduino sketches can be copied from the inspector.
+These programs are inexpensive behavioral models and do not require compilation. Their equivalent Arduino sketches can be copied from the inspector.
 
 | Program | Input | Output |
 | --- | --- | --- |
 | Blink | Shared simulation clock | D13 high for 1 s, low for 1 s |
 | Button → LED | D2 with internal pull-up; switch to GND | D13 high while D2 is low |
 | Analog input → LED | A0, potentiometer between 5V and GND | D13 high at ADC codes 512–1023 |
+| Wind: constant power | A0/A1 NTC dividers | D9 heater driver, A4/A5 OLED, measured deltaT calibration |
+| Wind: constant temperature | A0/A1 NTC dividers | D9 PI-controlled heater, A4/A5 OLED, measured power calibration |
 
-The output drives the actual electrical network through 50 Ω. Both the onboard indicator (a 1 kΩ resistor and LED) and any breadboard LED obtain brightness from solved current. Inputs are read from solved voltages relative to Nano GND. The ADC clamps and quantizes to 10 bits using the 5V supply as reference. Input examples sample every 1 ms. The button input uses a 30 kΩ pull-up; unused pins have 100 MΩ leakage to ground for a deterministic disconnected state. Reset has a 10 kΩ pull-up; grounding either RESET header stops the program and leaves D13 high impedance.
+See the [wind-sensor build guide](wind-sensor.md) for complete circuits, calibration and Arduino source.
+Wind examples sample every 100 ms, use 50 Hz behavioral PWM and shut down on sensor/temperature faults.
+The equivalent compiled sketch uses normal Arduino PWM and performs ADC averaging.
+
+The output drives the actual electrical network through 50 Ω. Both the onboard indicator (a 1 kΩ resistor and LED) and any breadboard LED obtain brightness from solved current. Inputs are read from solved voltages relative to Nano GND. The ADC clamps and quantizes to 10 bits using the 5V supply as reference. The Button and Analog Input examples sample every 1 ms. The button input uses a 30 kΩ pull-up; unused pins have 100 MΩ leakage to ground for a deterministic disconnected state. Reset has a 10 kΩ pull-up; grounding either RESET header stops the program and leaves D13 high impedance.
 
 USB power follows the workbench power switch, supplying ideal 5 V and 3.3 V. Both GND headers share a node, as do both RESET headers, in simulation, schematic generation and PCB connectivity. The USB ground becomes the reference when no explicit ground marker exists. Switching programs or restoring power starts the selected example again. Example timing and snapshots use the shared simulation clock, including pause, step and worker transfers; no browser animation drives circuit behavior.
 
@@ -67,7 +74,7 @@ Only factual pin assignments and dimensions are transcribed. The pinout artwork 
 
 ## Persistence and checks
 
-Project schema 13 introduced `arduino-nano`, the `NANO-30` package and example `programId`. Schema **14** adds optional validated firmware `{ name, hex }` and the `custom` program. Schemas 1–13 migrate forward without SQLite table changes or automatic rewriting of saved projects. HEX validation checks record lengths, checksums, address bounds, overlapping data, a reset vector and EOF; malformed projects are rejected before storage. Firmware text is bounded to 192 KiB and flash to 32 KiB. Use the [recovery procedure](persistence-and-recovery.md) before upgrading older databases.
+Project schema 13 introduced `arduino-nano`, the `NANO-30` package and example `programId`. Schema **14** adds optional validated firmware `{ name, hex }` and the `custom` program. Schema **15** adds NTC/heater/OLED components and optional wind settings/calibration. Schemas 1–14 migrate forward without SQLite table changes or automatic rewriting of saved projects. HEX validation checks record lengths, checksums, address bounds, overlapping data, a reset vector and EOF; malformed projects are rejected before storage. Firmware text is bounded to 192 KiB and flash to 32 KiB. Use the [recovery procedure](persistence-and-recovery.md) before upgrading older databases.
 
 CPU RAM, registers, pending interrupts, timer phase, peripheral events, serial output and EEPROM are part of structured-cloneable runtime snapshots, not persisted projects. The snapshot adapter depends on AVR8js internals and pins its exact version; update it and its continuation tests together when upgrading the dependency.
 

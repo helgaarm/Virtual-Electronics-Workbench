@@ -24,6 +24,10 @@ export function drawSymbol(component: SchematicComponent, options?: { inline: bo
   let showPinLabels = true;
   const leads = path('M150 68V98 M150 142V172');
   switch (component.kind) {
+    case 'ntc-thermistor':
+      twoPins('a', 'b'); body = leads + path('M137 98H163V142H137Z M128 148L170 90 M128 148H140') + text(172, 97, '−t°', 11); break;
+    case 'heater-resistor':
+      twoPins('a', 'b'); body = leads + path('M137 98H163V142H137Z') + text(171, 124, 'H', 12); break;
     case 'resistor':
     case 'potentiometer':
       body = leads + path('M137 98H163V142H137Z');

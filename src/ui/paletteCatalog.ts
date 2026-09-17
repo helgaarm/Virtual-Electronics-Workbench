@@ -16,6 +16,9 @@ export type PaletteFolderId = (typeof PALETTE_FOLDERS)[number]['id'];
 
 // An exhaustive record makes a folder and icon required for every new component kind.
 const PARTS: Record<ComponentKind, { folderId: PaletteFolderId; icon: string }> = {
+  'ntc-thermistor': { folderId: 'inputs', icon: 'NTC' },
+  'heater-resistor': { folderId: 'passive', icon: 'HEAT' },
+  'oled-i2c': { folderId: 'displays', icon: 'OLED' },
   'voltage-source': { folderId: 'power', icon: 'DC' },
   ground: { folderId: 'power', icon: 'GND' },
   'jumper-wire': { folderId: 'power', icon: 'WIRE' },

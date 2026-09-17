@@ -41,6 +41,11 @@ into a tested circuit. Change **Environment → Temperature** to observe the rea
 10-bit ADC resolves approximately 0.49 °C. See the [thermometer guide](docs/thermometer.md) for
 connections and model limits.
 
+Two [Arduino wind-sensor starters](docs/wind-sensor.md) add NTC thermistors, a resistor heater and a
+128×64 I²C OLED: compare constant power with a MOSFET-controlled constant-temperature sensor. The
+complete Uno/Nano sketch and build guide include power calculations and measured calibration;
+wind speed stays unknown until calibration is entered. Thermal behavior is illustrative.
+
 ### Test and measure
 
 - Attach persisted multimeter leads to actual breadboard holes and compare multiple named readings.
