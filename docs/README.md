@@ -12,6 +12,8 @@ Start with the learning workflow before the optional, experimental PCB material.
 - [Multimeter, oscilloscope, generator, counter, and logic analyser](instruments.md)
 - [Component model](component-model.md)
 - [Standard component pack](standard-component-pack.md)
+- [Classic Arduino Nano: built-in examples and custom firmware](arduino-nano.md)
+- [Two-NTC wind sensor: circuits, Arduino sketch, calibration and constant-temperature control](wind-sensor.md)
 - [Digital thermometer: wiring, firmware, and measurements](thermometer.md)
 - [Prioritized component expansion proposal](component-expansion-proposal.md)
 - [NE555 model and teaching limitations](ne555.md)

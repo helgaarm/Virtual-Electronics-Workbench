@@ -407,6 +407,7 @@ export function AnalysisWorkspace({
               <button onClick={onSwitchToBuild}>Return to Build ↗</button>
             </div>
             <WorkbenchCanvas
+              powerOn={project.powerOn}
               board={board}
               components={project.components}
               result={simulation.result}

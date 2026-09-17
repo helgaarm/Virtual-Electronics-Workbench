@@ -1,4 +1,5 @@
 import { NE555_PIN_NAMES } from './types';
+import { NANO_PIN_NAMES } from './arduinoNano';
 
 export interface ElectronicDeviceMetadata {
   id: string;
@@ -69,6 +70,37 @@ const transistor = (
 });
 
 export const STANDARD_DEVICE_CATALOG = {
+  'ntc-thermistor': device({
+    id: 'ntc-thermistor', name: '10 kΩ NTC thermistor', category: 'Sensors', subcategory: 'Temperature', packageId: 'NTC-RADIAL-P2.54', manufacturerReference: 'Generic Beta NTC; Vishay NTCLE100 mechanical reference',
+    description: 'Configurable Beta resistor with a shared-clock lumped thermal model.', pins: [{ number: 1, id: 'a', name: 'A' }, { number: 2, id: 'b', name: 'B' }],
+    simulationModels: [{ id: 'beta-electrothermal', level: 'behavioural', description: 'Resistance follows temperature; solved electrical power heats the bead/linked assembly and airflow cools it.' }],
+    limitations: ['Default Beta 3950 is a generic requested parameter, not the Vishay 10 kΩ part (3977 K).', 'Heat capacity, coupling and wind-dependent conductance are illustrative assembly parameters, not manufacturer wind calibration.', 'Thermal association is explicit via heater ID; proximity alone does not create coupling.'],
+    sourceDocumentIds: ['vishay-ntcle100-2025'], datasheetUrls: ['https://www.vishay.com/docs/29049/ntcle100.pdf'], testedExamples: ['Wind Sensor · Constant Power', 'Wind Sensor · Constant Temperature'],
+  }),
+  'heater-resistor': device({
+    id: 'heater-resistor', name: '150 Ω heater resistor', category: 'Passive', subcategory: 'Heaters', packageId: 'AXIAL-HEATER-0.5W', manufacturerReference: 'Vishay MRS25 mechanical reference; verify selected rating',
+    description: 'Power-rated resistor whose solved dissipation can heat a coupled NTC.', pins: [{ number: 1, id: 'a', name: 'A' }, { number: 2, id: 'b', name: 'B' }],
+    simulationModels: [{ id: 'resistive-heater', level: 'behavioural', description: 'Ohmic electrical branch and V×I heat input.' }],
+    limitations: ['No burn-out or detailed heater-body temperature; rating is checked against solved power.', 'Mounting height is an explicit procedural assumption.'], sourceDocumentIds: ['vishay-mrs25'], datasheetUrls: ['https://www.vishay.com/docs/28724/mrs16m25.pdf'], testedExamples: ['Wind Sensor · Constant Power', 'Wind Sensor · Constant Temperature'],
+  }),
+  'oled-i2c': device({
+    id: 'oled-i2c', name: '1.3-inch I²C OLED', category: 'Displays', subcategory: 'OLED', packageId: 'OLED-1.3-I2C-4', manufacturerReference: 'LCDWIKI MC130GX (GND-first header)',
+    description: '128×64 OLED controller RAM written through Nano I²C transactions.', pins: ['GND', 'VCC', 'SCL', 'SDA'].map((name, i) => ({ number: i + 1, id: name.toLowerCase(), name })), supportedSupplyRangeV: { minimum: 3, maximum: 5.5 },
+    simulationModels: [{ id: 'oled-controller-ram', level: 'behavioural', description: 'SH1106 page addressing or SSD1306 page/horizontal/vertical addressing, display enable and inversion.' }],
+    limitations: ['Single-master, byte-level I²C, with actual wire/power checks. Bit waveforms, arbitration, clock stretching, slave mode and other peripherals are not modeled.', 'Scrolling, segment remap and COM scan commands are not visually emulated. SH1106 and SSD1306 share the procedural module outline.', '20 mA at 5 V and 4.7 kΩ onboard pull-ups are explicit approximations. Header offset, thickness and mounting height are procedural assumptions; PCB and active-area sizes are sourced.'],
+    sourceDocumentIds: ['lcdwiki-mc130gx-rev1'], datasheetUrls: ['https://www.lcdwiki.com/res/MC130GX_VX/1.3inch_IIC_OLED_Module_MC130GX%26MC130VX_User_Manual_EN.pdf'], testedExamples: ['Wind Sensor · Constant Power', 'Wind Sensor · Constant Temperature'],
+  }),
+  'arduino-nano': device({
+    id: 'arduino-nano', name: 'Arduino Nano (classic)', category: 'Integrated Circuits', subcategory: 'Microcontrollers',
+    packageId: 'NANO-30', manufacturerReference: 'Arduino A000005', description: 'Breadboard-mounted classic Nano with USB power, built-in examples and custom compiled sketches.',
+    pins: NANO_PIN_NAMES.map((name, index) => ({ number: index + 1, id: `pin${index + 1}`, name })),
+    supportedSupplyRangeV: { minimum: 4.5, maximum: 5.5 },
+    simulationModels: [{ id: 'nano-examples', level: 'behavioural', description: 'Shared-clock examples or 16 MHz AVR firmware with GPIO, timers, PWM, single ADC conversions, interrupts, session EEPROM and serial output.' }],
+    limitations: ['Compile custom sketches externally for the classic Nano ATmega328P and import Intel HEX; other Nano variants are not supported.', 'USB supplies ideal 5 V and 3.3 V. VIN regulation, bootloader, UART wiring/input, hardware SPI, watchdog, sleep and clock changes are not simulated. I²C supports single-master writes to modeled OLEDs, not arbitrary peripherals or bus waveforms.', '50 Ω GPIO drive and 30 kΩ pull-up are approximations. Custom digital inputs sample every 50 µs; built-in input examples every 1 ms. Wind examples use 100 ms samples and 50 Hz PWM. No Nano overcurrent or thermal model.'],
+    sourceDocumentIds: ['arduino-nano-a000005-rev4', 'arduino-nano-pinout-2021'],
+    datasheetUrls: ['https://docs.arduino.cc/resources/datasheets/A000005-datasheet.pdf', 'https://docs.arduino.cc/resources/pinouts/A000005-full-pinout.pdf'],
+    testedExamples: ['Arduino Nano Blink', 'Arduino Nano Button', 'Arduino Nano Analog Input'],
+  }),
   '1n4148': device({
     id: '1n4148', name: '1N4148', category: 'Semiconductors', subcategory: 'Diodes',
     description: 'Glass axial high-speed switching diode.', packageId: 'DO-35', manufacturerReference: 'Nexperia 1N4148',

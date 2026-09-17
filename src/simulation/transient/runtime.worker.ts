@@ -18,6 +18,8 @@ export interface TransientWorkerResponse {
 
 globalThis.onmessage = (event: MessageEvent<TransientWorkerRequest>) => {
   const request = event.data;
+  // Yield only between complete steps: batch size never changes solver results.
+  const deadlineMs = performance.now() + 50;
   const response: TransientWorkerResponse = {
     id: request.id,
     batch: runTransientRuntimeSteps(
@@ -26,6 +28,7 @@ globalThis.onmessage = (event: MessageEvent<TransientWorkerRequest>) => {
       request.sampleNodeIds,
       request.stepCount,
       request.singleCaptureEndTimeSeconds,
+      () => performance.now() >= deadlineMs,
     ),
   };
   globalThis.postMessage(response);

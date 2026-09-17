@@ -41,6 +41,11 @@ into a tested circuit. Change **Environment → Temperature** to observe the rea
 10-bit ADC resolves approximately 0.49 °C. See the [thermometer guide](docs/thermometer.md) for
 connections and model limits.
 
+Two [Arduino wind-sensor starters](docs/wind-sensor.md) add NTC thermistors, a resistor heater and a
+128×64 I²C OLED: compare constant power with a MOSFET-controlled constant-temperature sensor. The
+complete Uno/Nano sketch and build guide include power calculations and measured calibration;
+wind speed stays unknown until calibration is entered. Thermal behavior is illustrative.
+
 ### Test and measure
 
 - Attach persisted multimeter leads to actual breadboard holes and compare multiple named readings.
@@ -54,6 +59,7 @@ connections and model limits.
 
 ### Save and revisit experiments
 
+- Simulate a [classic Arduino Nano](docs/arduino-nano.md) on the breadboard with built-in examples or your own compiled `.hex` sketch. Custom programs execute AVR instructions with connected GPIO, PWM, timers, ADC and serial output.
 - Create, save, save as, list, and reopen complete versioned projects through a loopback-only API and
   SQLite database.
 - Preserve stable component and instrument IDs and reject stale-tab writes with optimistic revisions.
@@ -110,7 +116,8 @@ This runs repository-security, architecture-boundary, and local-documentation-li
 ## Interaction notes
 
 - Drag empty space to orbit; wheel/trackpad zooms; the camera controls also support pan.
-- Add parts from the left drawer. The editor chooses compatible free holes.
+- Open a category folder in the left parts drawer, then select a component to add it. Folder counts show the available parts; multiple folders can stay open. Search by name, type, or package across all folders, and clear the search to return to your open folders. The editor chooses compatible free holes.
+- In **Build**, select **Circuit drawing** above the breadboard to generate a schematic of the current board. Copy it as an image or download PNG/SVG. Series and parallel circuits use a conventional layout with a source on the left, connected component branches and ground below. NE555 circuits place timing components on the left and output components on the right. Nano circuits, transistors, sensors, potentiometers and other ICs also support wired drawings; IC symbols show numbered pins on both sides, and open circles mark unused or unconnected pins. All built-in starters support connected drawings. Complex circuits may need zooming or an SVG download to read comfortably. Routing follows the actual board, including incorrect connections and open pins. Dots mark junctions; crossings without dots are not connected. **Net labels** gives a compact view where matching labels connect; oversized or unroutable circuits use this view automatically. General routing is bounded to 48 components, 192 terminals, 40,000 grid cells and 800,000 search expansions; unusually long labels also use the label view. Jumpers and board strips become connections, switches retain their current position, and ICs retain their external pin names. Attached signal-generator leads are included; measurement probes are not components in the drawing. The view is derived from the board and does not change or save a separate circuit. If copying is unavailable, use a download. SVG retains full detail for large drawings; PNG dimensions are bounded.
 - Choose a classic circuit under **Start projects** and load it as a fresh unsaved workbench.
 - Load **RC charge and discharge**, then use the footer controls to run, pause, single-step, reset, or change the transient timestep and speed. The generator’s 0–5 V square wave alternately charges and discharges the capacitor through the resistor.
 - In **Test & Analysis**, select **Oscilloscope** to compare CH1 and CH2, **Signal generator** to drive a square/sine signal, **Frequency counter** to measure an input edge stream, or **Logic analyser** to inspect up to eight threshold-aware digital channels. Every lead can be attached by a board click or printed-hole selector. For high frequencies, reduce the footer Step until the sampling warning disappears. At the 50 µs step, speed is limited to 2× so the clock can keep pace.

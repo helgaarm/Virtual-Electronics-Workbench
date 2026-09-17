@@ -1,10 +1,12 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createLedExampleProject, PROJECT_SCHEMA_VERSION } from '../../src/domain/project';
 import { createStarterProject } from '../../src/domain/starterProjects';
+import { GPIO_SERIAL_ADC_HEX } from '../fixtures/nanoFirmware';
 import { createApp } from '../../server/app';
 import { ProjectConflictError, SqliteProjectRepository } from '../../server/sqliteProjectRepository';
 
@@ -17,6 +19,51 @@ describe('SQLite project persistence', () => {
     repositories.push(value);
     return value;
   }
+
+  it.each(['nano-blink', 'nano-button', 'nano-analog', 'wind-constant-power', 'wind-constant-temperature'] as const)('round-trips the %s program and all 30 pins through SQLite and HTTP', async (id) => {
+    const repo = repository();
+    const app = createApp(repo);
+    const project = createStarterProject(id);
+    const saved = await request(app).put(`/api/projects/${project.id}`).send(project).expect(200);
+    const loaded = await request(app).get(`/api/projects/${project.id}`).expect(200);
+    expect(loaded.body.components).toEqual(project.components);
+    expect(loaded.body.version).toBe(PROJECT_SCHEMA_VERSION);
+    expect(loaded.body.revision).toBe(saved.body.revision);
+  });
+
+  it.each([12, 13, 14])('opens and upgrades a copy of a schema-%i database while preserving the recovery original', (version) => {
+    const directory = mkdtempSync(join(tmpdir(), 'vew-nano-migration-'));
+    const original = join(directory, 'original.sqlite');
+    const copy = join(directory, 'copy.sqlite');
+    const legacy = { ...createStarterProject(version >= 13 ? 'nano-blink' : 'switched-led'), version, revision: 1 };
+    let repo: SqliteProjectRepository | undefined;
+    try {
+      repo = new SqliteProjectRepository(original); repo.close(); repo = undefined;
+      const db = new DatabaseSync(original);
+      try { db.prepare('INSERT INTO projects VALUES (?, ?, ?, ?, ?)').run(legacy.id, legacy.name, legacy.createdAt, legacy.updatedAt, JSON.stringify(legacy)); }
+      finally { db.close(); }
+      const before = readFileSync(original);
+      copyFileSync(original, copy);
+      repo = new SqliteProjectRepository(copy);
+      const loaded = repo.get(legacy.id)!;
+      expect(loaded).toEqual({ ...legacy, version: PROJECT_SCHEMA_VERSION });
+      expect(repo.save(loaded).revision).toBe(2);
+      repo.close(); repo = undefined;
+      expect(readFileSync(original)).toEqual(before);
+      repo = new SqliteProjectRepository(original);
+      expect(repo.get(legacy.id)?.revision).toBe(1);
+    } finally { repo?.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('persists custom Nano firmware and refuses invalid replacements without losing the saved program', async () => {
+    const repo = repository(); const app = createApp(repo);
+    const project = createStarterProject('nano-blink');
+    project.components = project.components.map((part) => part.kind === 'arduino-nano' ? { ...part, programId: 'custom', firmware: { name: 'user.hex', hex: GPIO_SERIAL_ADC_HEX } } : part);
+    const saved = (await request(app).put(`/api/projects/${project.id}`).send(project).expect(200)).body;
+    expect((await request(app).get(`/api/projects/${project.id}`).expect(200)).body.components).toEqual(project.components);
+    await request(app).put(`/api/projects/${project.id}`).send({ ...saved, components: project.components.map((part) => part.kind === 'arduino-nano' ? { ...part, firmware: { name: 'bad.hex', hex: ':bad' } } : part) }).expect(400);
+    expect(repo.get(project.id)?.components).toEqual(project.components);
+  });
 
   it('round-trips, lists, updates and deletes a complete project', () => {
     const repo = repository();

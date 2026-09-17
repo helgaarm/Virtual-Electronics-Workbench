@@ -1,7 +1,8 @@
 import type { PlacedComponent } from '../components/types';
 import { terminalEntries } from '../components/types';
 import type { BreadboardDefinition } from './breadboard';
-import { leadSpanViolation, PHYSICAL_PACKAGES } from './packages';
+import { leadSpanViolation, PHYSICAL_PACKAGES, packageCenterOffsetZMm } from './packages';
+import { validNanoPlacement } from './arduinoNano';
 
 export interface OccupancyIssue {
   code: 'UNKNOWN_HOLE' | 'HOLE_OCCUPIED' | 'DUPLICATE_TERMINAL' | 'LEAD_SPAN_OUT_OF_RANGE' | 'INVALID_PACKAGE_PLACEMENT' | 'PACKAGE_OVERLAP';
@@ -30,7 +31,7 @@ function packageFootprint(
     .filter((hole) => hole !== undefined);
   if (holes.length === 0) return undefined;
   const centerX = holes.reduce((sum, hole) => sum + hole.positionMm.x, 0) / holes.length;
-  const centerZ = holes.reduce((sum, hole) => sum + hole.positionMm.z, 0) / holes.length;
+  const centerZ = holes.reduce((sum, hole) => sum + hole.positionMm.z, 0) / holes.length + packageCenterOffsetZMm(component.kind, component.rotation);
   const dimensions = PHYSICAL_PACKAGES[component.kind].dimensionsMm;
   const first = holes[0];
   const second = holes[1];
@@ -92,6 +93,17 @@ export function validateOccupancy(
       occupied.set(holeId, component.id);
     }
     const terminals = terminalEntries(component);
+    if (component.kind === 'oled-i2c') {
+      const pins = ['gnd', 'vcc', 'scl', 'sda'].map(pin => board.holes.find(h => h.id === component.terminalHoleIds[pin as keyof typeof component.terminalHoleIds]));
+      const direction = component.rotation === 180 ? -1 : 1;
+      if (![0, 180].includes(component.rotation) || pins.some((pin, i) => !pin || pin.kind !== 'terminal' || pin.row !== pins[0]?.row || pin.column !== pins[0]!.column + i * direction)) {
+        issues.push({ code: 'INVALID_PACKAGE_PLACEMENT', componentId: component.id, holeId: terminals[0]?.[1] ?? '', message: `${component.label} needs four consecutive holes in one terminal row, ordered GND, VCC, SCL, SDA.` });
+      }
+    }
+    if (component.kind === 'arduino-nano' && !validNanoPlacement(board, component)) {
+      issues.push({ code: 'INVALID_PACKAGE_PLACEMENT', componentId: component.id, holeId: terminals[0]?.[1] ?? '',
+        message: `${component.label} needs 15 consecutive columns, 15.24 mm header spacing, and its rigid pin order across the centre channel.` });
+    }
     if (component.kind === 'ne555') {
       const pinHoles = terminals
         .map(([, holeId]) => board.holes.find((hole) => hole.id === holeId))

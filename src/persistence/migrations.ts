@@ -1,4 +1,8 @@
 import type { PlacedComponent } from '../domain/components/types';
+import { NANO_PROGRAM_IDS } from '../domain/components/arduinoNano';
+import type { WindSensorSettings } from '../domain/components/windSensor';
+import { validWindCalibration } from '../domain/components/windSensor';
+import { MAX_NANO_HEX_CHARACTERS, parseNanoHex, type NanoFirmware } from '../domain/components/nanoFirmware';
 import { LED_COLORS, terminalEntries, WIRE_COLORS } from '../domain/components/types';
 import {
   createDefaultOscilloscopeSettings,
@@ -212,13 +216,31 @@ function rotationValue(value: unknown, path: string): (typeof ROTATIONS)[number]
   return value as (typeof ROTATIONS)[number];
 }
 
+function parseWindSettings(value: unknown, path: string, increasing?: boolean): WindSensorSettings {
+  const source = record(value, path);
+  if (!Array.isArray(source.calibration) || source.calibration.length > 20) throw new ProjectValidationError(`${path}.calibration`, 'must be an array of up to 20 measured points');
+  const calibration = source.calibration.map((value, i) => {
+    const point = record(value, `${path}.calibration[${i}]`);
+    return { speedMps: finiteNumber(point.speedMps, `${path}.calibration[${i}].speedMps`, 0, 100), signal: finiteNumber(point.signal, `${path}.calibration[${i}].signal`, 0.000001, 200) };
+  });
+  if (calibration.length && !(increasing === undefined ? validWindCalibration(calibration, true) || validWindCalibration(calibration, false) : validWindCalibration(calibration, increasing))) throw new ProjectValidationError(`${path}.calibration`, 'needs at least two ordered, strictly monotonic measured points');
+  return { nominalResistanceOhms: finiteNumber(source.nominalResistanceOhms, `${path}.nominalResistanceOhms`, 100, 1e6),
+    nominalTemperatureC: finiteNumber(source.nominalTemperatureC, `${path}.nominalTemperatureC`, -40, 100), betaK: finiteNumber(source.betaK, `${path}.betaK`, 1000, 6000),
+    ambientFixedResistanceOhms: finiteNumber(source.ambientFixedResistanceOhms, `${path}.ambientFixedResistanceOhms`, 100, 1e6),
+    heatedFixedResistanceOhms: finiteNumber(source.heatedFixedResistanceOhms, `${path}.heatedFixedResistanceOhms`, 100, 1e6),
+    heaterResistanceOhms: finiteNumber(source.heaterResistanceOhms, `${path}.heaterResistanceOhms`, 10, 100000),
+    driverOnResistanceOhms: finiteNumber(source.driverOnResistanceOhms, `${path}.driverOnResistanceOhms`, 0, 100),
+    targetDeltaC: finiteNumber(source.targetDeltaC, `${path}.targetDeltaC`, 1, 30), calibration };
+}
+
 function parseComponent(value: unknown, index: number): PlacedComponent {
   const path = `components[${index}]`;
   const source = record(value, path);
   const kind = enumValue(source.kind, `${path}.kind`, [
+    'ntc-thermistor', 'heater-resistor', 'oled-i2c',
     'voltage-source', 'ground', 'resistor', 'led', 'capacitor', 'switch', 'jumper-wire', 'ne555', 'tmp36',
     'diode-1n4148', 'bc547', 'bc557', '2n3904', '2n3906', 'potentiometer',
-    'seven-segment', 'four-digit-seven-segment', '74hc595', 'attiny85',
+    'seven-segment', 'four-digit-seven-segment', '74hc595', 'attiny85', 'arduino-nano',
     'lm358', '2n7000', '74hc00', 'zener-1n4733a',
   ] as const);
   const base = {
@@ -234,6 +256,21 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
   }
 
   switch (kind) {
+    case 'ntc-thermistor': return { ...base, kind,
+      nominalResistanceOhms: finiteNumber(source.nominalResistanceOhms, `${path}.nominalResistanceOhms`, 100, 1e6),
+      nominalTemperatureC: finiteNumber(source.nominalTemperatureC, `${path}.nominalTemperatureC`, -40, 100),
+      betaK: finiteNumber(source.betaK, `${path}.betaK`, 1000, 6000),
+      ...(source.heaterId === undefined ? {} : { heaterId: identifier(source.heaterId, `${path}.heaterId`) }),
+      terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['a', 'b']) };
+    case 'heater-resistor': return { ...base, kind, resistanceOhms: finiteNumber(source.resistanceOhms, `${path}.resistanceOhms`, 10, 100_000),
+      ratedPowerW: finiteNumber(source.ratedPowerW, `${path}.ratedPowerW`, 0.5, 10), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['a', 'b']) };
+    case 'oled-i2c': {
+      const address = finiteNumber(source.address, `${path}.address`, 60, 61);
+      if (address !== 60 && address !== 61) throw new ProjectValidationError(`${path}.address`, 'must be 60 or 61');
+      if (base.rotation !== 0 && base.rotation !== 180) throw new ProjectValidationError(`${path}.rotation`, 'OLED supports 0 or 180 degrees');
+      return { ...base, kind, controller: enumValue(source.controller, `${path}.controller`, ['sh1106', 'ssd1306'] as const), address,
+        terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, ['gnd', 'vcc', 'scl', 'sda']) };
+    }
     case 'voltage-source':
       return {
         ...base,
@@ -336,6 +373,18 @@ function parseComponent(value: unknown, index: number): PlacedComponent {
       return { ...base, kind, deviceId: '74hc595', packageId: 'DIP-16', firmwareState: 'electrical-pins', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 16 }, (_, i) => `pin${i + 1}`)) };
     case 'attiny85':
       return { ...base, kind, deviceId: 'attiny85', packageId: 'DIP-8', firmwareId: stringValue(source.firmwareId, `${path}.firmwareId`, 80), clockHz: finiteNumber(source.clockHz, `${path}.clockHz`, 1, 20_000_000), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 8 }, (_, i) => `pin${i + 1}`)) };
+    case 'arduino-nano': {
+      const programId = enumValue(source.programId, `${path}.programId`, [...NANO_PROGRAM_IDS, 'custom'] as const);
+      let firmware: NanoFirmware | undefined;
+      if (source.firmware !== undefined) {
+        const input = record(source.firmware, `${path}.firmware`);
+        firmware = { name: stringValue(input.name, `${path}.firmware.name`, 80), hex: stringValue(input.hex, `${path}.firmware.hex`, MAX_NANO_HEX_CHARACTERS) };
+        const parsed = parseNanoHex(firmware.hex);
+        if (!parsed.ok) throw new ProjectValidationError(`${path}.firmware.hex`, parsed.error);
+      }
+      if (programId === 'custom' && !firmware) throw new ProjectValidationError(`${path}.firmware`, 'custom programs need compiled Nano firmware');
+      return { ...base, kind, deviceId: enumValue(source.deviceId, `${path}.deviceId`, ['arduino-nano'] as const), packageId: enumValue(source.packageId, `${path}.packageId`, ['NANO-30'] as const), programId, ...(firmware ? { firmware } : {}), ...(source.windSettings === undefined ? {} : { windSettings: parseWindSettings(source.windSettings, `${path}.windSettings`, programId.startsWith('wind-') ? programId === 'wind-constant-temperature' : undefined) }), terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 30 }, (_, i) => `pin${i + 1}`)) };
+    }
     case 'lm358':
       return { ...base, kind, deviceId: 'lm358b', packageId: 'DIP-8', terminalHoleIds: terminals(source.terminalHoleIds, `${path}.terminalHoleIds`, Array.from({ length: 8 }, (_, i) => `pin${i + 1}`)) };
     case '74hc00':

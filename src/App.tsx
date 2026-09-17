@@ -38,6 +38,7 @@ import { Inspector } from './ui/Inspector';
 import { Palette } from './ui/Palette';
 import { EnvironmentPanel } from './ui/EnvironmentPanel';
 import { PcbDesigner } from './ui/PcbDesigner';
+import { SchematicDialog } from './ui/SchematicDialog';
 import { convertBreadboardToPcb, circuitFingerprint } from './domain/pcb/converter';
 import { routeRemainingConnections } from './domain/pcb/router';
 import { WorkbenchCanvas } from './workbench/scene/WorkbenchCanvas';
@@ -61,6 +62,7 @@ export default function App() {
   const [savedBaseline, setSavedBaseline] = useState<SavedBaseline>();
   const [notice, setNotice] = useState('Example loaded — the LED is powered through 220 Ω.');
   const [cameraResetKey, setCameraResetKey] = useState(0);
+  const [schematicOpen, setSchematicOpen] = useState(false);
   const [draggingComponentId, setDraggingComponentId] = useState<string>();
   const [dragCandidateHoleId, setDragCandidateHoleId] = useState<string>();
   const [transientResetKey, setTransientResetKey] = useState(0);
@@ -333,7 +335,7 @@ export default function App() {
       return;
     }
     updateComponent(rotated);
-    const rotationStep = selectedComponent.kind === 'ne555' ? 180 : 90;
+    const rotationStep = (rotated.rotation - selectedComponent.rotation + 360) % 360;
     setNotice(`${selectedComponent.label} rotated ${rotationStep}° and re-snapped.`);
   };
 
@@ -458,7 +460,7 @@ export default function App() {
     setProject(loaded);
     setSavedBaseline(undefined);
     setSaveState('idle');
-    setSelectedComponentId(loaded.components.find((component) => component.kind === 'resistor')?.id ?? loaded.components[0]?.id ?? '');
+    setSelectedComponentId(loaded.components.find((component) => component.kind === 'arduino-nano')?.id ?? loaded.components.find((component) => component.kind === 'resistor')?.id ?? loaded.components[0]?.id ?? '');
     setSelectedHoleId(undefined);
     cancelDrag();
     setCameraResetKey((key) => key + 1);
@@ -550,11 +552,13 @@ export default function App() {
           <section className="workbench-stage" aria-label="3D breadboard workbench">
             <div className="stage-toolbar">
               <div className="view-buttons"><button className={project.view.cameraPreset === 'top' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: 'top' } }))}>Top</button><button className={project.view.cameraPreset === '3d' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: '3d' } }))}>3D</button><button onClick={() => { applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: '3d' } })); setCameraResetKey((key) => key + 1); }}>Fit</button><button onClick={() => setCameraResetKey((key) => key + 1)}>Reset view</button></div>
+              <button type="button" className="schematic-launch" onClick={() => setSchematicOpen(true)}>Circuit drawing</button>
               <label className="learning-toggle" title="Highlights every hole joined by the breadboard's internal metal strip."><input type="checkbox" checked={project.view.showConnections} onChange={(event) => toggleConnectionLearning(event.target.checked)} /> Highlight connected holes</label>
             </div>
             <EnvironmentPanel environment={project.environment} onChange={(environment) => applyProject((current) => ({ ...current, environment }))} />
             <div className="canvas-wrap" data-reset-key={cameraResetKey}>
               <WorkbenchCanvas
+                powerOn={project.powerOn}
                 key={cameraResetKey}
                 board={board}
                 components={renderedComponents}
@@ -581,9 +585,13 @@ export default function App() {
             </div>
           </section>
           <Inspector
+            powerOn={project.powerOn}
+            key={project.id}
+            windReadings={selectedComponentId ? transientRuntime.frame?.state.digital?.nanos[selectedComponentId]?.wind : undefined}
             component={selectedComponent}
             board={board}
             measurement={selectedMeasurement}
+            nanoSerialOutput={selectedComponentId ? transientRuntime.frame?.state.digital?.nanos[selectedComponentId]?.avr?.serialOutput : undefined}
             onUpdate={updateComponent}
             onRotate={rotateSelected}
             onDelete={removeSelected}
@@ -604,6 +612,8 @@ export default function App() {
           onSwitchToBuild={() => applyProject((current) => ({ ...current, workspace: 'build' }))}
         />
       ) : project.pcb ? <PcbDesigner pcb={project.pcb} onChange={(pcb) => applyProject((current) => ({ ...current, pcb }))} onBack={() => applyProject((current) => ({ ...current, workspace: 'build' }))} /> : null}
+
+      {schematicOpen && <SchematicDialog project={project} onClose={() => setSchematicOpen(false)} />}
 
       <footer className={`status-bar status-${simulation.result.status}`}>
         <span className="status-dot" />
