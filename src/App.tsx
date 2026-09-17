@@ -558,6 +558,7 @@ export default function App() {
             <EnvironmentPanel environment={project.environment} onChange={(environment) => applyProject((current) => ({ ...current, environment }))} />
             <div className="canvas-wrap" data-reset-key={cameraResetKey}>
               <WorkbenchCanvas
+                powerOn={project.powerOn}
                 key={cameraResetKey}
                 board={board}
                 components={renderedComponents}
@@ -584,6 +585,7 @@ export default function App() {
             </div>
           </section>
           <Inspector
+            powerOn={project.powerOn}
             key={project.id}
             windReadings={selectedComponentId ? transientRuntime.frame?.state.digital?.nanos[selectedComponentId]?.wind : undefined}
             component={selectedComponent}

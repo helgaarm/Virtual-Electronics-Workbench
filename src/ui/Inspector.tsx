@@ -16,6 +16,7 @@ import { breadboardHoleOptionGroups } from './breadboardHoleOptions';
 import { formatCapacitance, formatCurrent, formatResistance, formatVoltage } from './format';
 
 interface Props {
+  powerOn: boolean;
   component?: PlacedComponent;
   board: BreadboardDefinition;
   measurement?: ComponentMeasurement;
@@ -32,6 +33,7 @@ function reading(value: MeasurementValue | undefined, formatter: (number: number
 }
 
 export function Inspector({
+  powerOn,
   component,
   board,
   measurement,
@@ -215,7 +217,14 @@ export function Inspector({
       {component.kind === 'diode-1n4148' && <section className="inspector-section"><div className="section-label">1N4148 · DO-35 glass diode</div><small>Nonlinear Shockley junction · cathode is identified by its band.</small></section>}
       {component.kind === '74hc595' && <section className="inspector-section"><div className="section-label">74HC595 · DIP-16</div><small>Serial data, shift/latch clocks, clear, output enable, cascade output, and eight finite-drive outputs.</small></section>}
       {component.kind === 'attiny85' && <section className="inspector-section"><div className="section-label">ATtiny85 · DIP-8</div><small>Firmware: {component.firmwareId} · {(component.clockHz / 1e6).toFixed(1)} MHz · ADC and mixed-signal GPIO</small></section>}
-      {component.kind === 'arduino-nano' && <NanoProgram key={component.id} component={component} serialOutput={nanoSerialOutput} windReadings={windReadings} onUpdate={onUpdate} />}
+      {component.kind === 'arduino-nano' && <>
+        <section className="inspector-section" aria-label="Nano USB power">
+          <div className="section-label">Power source</div>
+          <p role="status"><strong>{powerOn ? 'USB · 5 V DC · On' : 'USB · Output off'}</strong></p>
+          <small>The USB cable supplies the Nano. Use the workbench Output switch to turn its supply on or off. The green PWR light shows supply power; the other LED is controlled by the sketch.</small>
+        </section>
+        <NanoProgram key={component.id} component={component} serialOutput={nanoSerialOutput} windReadings={windReadings} onUpdate={onUpdate} />
+      </>}
       {(component.kind === 'seven-segment' || component.kind === 'four-digit-seven-segment') && <section className="inspector-section"><div className="section-label">{component.commonType} LED display</div><small>Segments illuminate from simulated junction current; multiplexed brightness uses visual persistence only.</small></section>}
 
       {component.kind === 'ne555' && (

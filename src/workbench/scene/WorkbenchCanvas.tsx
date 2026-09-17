@@ -11,13 +11,15 @@ import { ComponentMeshes } from '../components/ComponentMeshes';
 import { ProbeMeshes } from '../components/ProbeMeshes';
 import { BreadboardMesh } from './BreadboardMesh';
 import { dragCandidateHoleId } from './dragPlacement';
-import { topViewDistanceMm } from './boardFraming';
+import { workbenchCameraPose } from './boardFraming';
 import { sameVisibleComponentCurrents } from './visibleCurrents';
+import { workbenchFootprint } from './nanoUsbPower';
 
 interface Props {
   board: BreadboardDefinition;
   components: PlacedComponent[];
   result: SimulationResult;
+  powerOn: boolean;
   cameraPreset: '3d' | 'top';
   selectedComponentId?: string;
   selectedHoleId?: string;
@@ -36,16 +38,16 @@ interface Props {
   onCancelDrag?: () => void;
 }
 
-function CameraRig({ preset, board }: { preset: '3d' | 'top'; board: BreadboardDefinition }) {
+function CameraRig({ preset, board, components }: { preset: '3d' | 'top'; board: BreadboardDefinition; components: PlacedComponent[] }) {
   const { camera, controls, invalidate, size, scene } = useThree();
+  const { widthMm, depthMm, centerXmm, centerZmm } = useMemo(() => workbenchFootprint(board, components), [board, components]);
   useEffect(() => {
-    const framingDistanceMm = topViewDistanceMm(board.widthMm, board.depthMm,
+    const pose = workbenchCameraPose({ widthMm, depthMm, centerXmm, centerZmm }, preset,
       camera instanceof THREE.PerspectiveCamera ? camera.fov : 38, size.width / Math.max(size.height, 1));
-    const position = preset === 'top'
-      ? new THREE.Vector3(0, framingDistanceMm, 0.01)
-      : new THREE.Vector3(board.widthMm * 0.68, 70, board.depthMm * 0.9);
+    const framingDistanceMm = pose.distanceMm;
+    const position = new THREE.Vector3(pose.positionMm.x, pose.positionMm.y, pose.positionMm.z);
     camera.position.copy(position);
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(centerXmm, 0, centerZmm);
     applyProps(camera, { far: Math.max(600, framingDistanceMm * 4) });
     camera.updateProjectionMatrix();
     // A wider breadboard needs a farther camera; keep the circuit in front of the fog.
@@ -55,11 +57,11 @@ function CameraRig({ preset, board }: { preset: '3d' | 'top'; board: BreadboardD
     }
     if (controls && 'maxDistance' in controls) applyProps(controls, { maxDistance: Math.max(190, framingDistanceMm * 2) });
     if (controls && 'target' in controls) {
-      (controls.target as THREE.Vector3).set(0, 0, 0);
+      (controls.target as THREE.Vector3).set(centerXmm, 0, centerZmm);
       (controls as unknown as { update: () => void }).update();
     }
     invalidate();
-  }, [board.depthMm, board.widthMm, camera, controls, invalidate, preset, scene, size.width, size.height]);
+  }, [board.widthMm, widthMm, depthMm, centerXmm, centerZmm, camera, controls, invalidate, preset, scene, size.width, size.height]);
   return null;
 }
 
@@ -213,6 +215,7 @@ function WorkbenchCanvasView(props: Props) {
           board={props.board}
           components={props.components}
           result={props.result}
+          powerOn={props.powerOn}
           selectedComponentId={props.selectedComponentId}
           onSelect={props.onSelectComponent}
           onBeginDrag={props.onBeginDrag ? (id, hitPoint, pointerId) => {
@@ -246,7 +249,7 @@ function WorkbenchCanvasView(props: Props) {
         <ContactShadows position={[0, -3.66, 0]} opacity={0.38} scale={150} blur={2.5} far={18} frames={1} resolution={1024} color="#51483d" />
       </Suspense>
       <OrbitControls makeDefault enabled={!props.draggingComponentId} enableDamping dampingFactor={0.08} minDistance={45} maxDistance={190} maxPolarAngle={Math.PI / 2.05} />
-      <CameraRig preset={props.cameraPreset} board={props.board} />
+      <CameraRig preset={props.cameraPreset} board={props.board} components={props.components} />
     </Canvas>
   );
 }
@@ -260,6 +263,7 @@ export const WorkbenchCanvas = memo(WorkbenchCanvasView, (previous, next) => (
   previous.board === next.board
   && previous.components === next.components
   && previous.cameraPreset === next.cameraPreset
+  && previous.powerOn === next.powerOn
   && previous.selectedComponentId === next.selectedComponentId
   && previous.selectedHoleId === next.selectedHoleId
   && previous.highlightedHoleIds === next.highlightedHoleIds

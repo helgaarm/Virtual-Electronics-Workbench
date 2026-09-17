@@ -18,6 +18,7 @@ interface Props {
   board: BreadboardDefinition;
   components: PlacedComponent[];
   result: SimulationResult;
+  powerOn: boolean;
   selectedComponentId?: string;
   onSelect: (id: string) => void;
   onBeginDrag?: (id: string, point: THREE.Vector3, pointerId: number) => void;
@@ -941,7 +942,7 @@ function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: 
   );
 }
 
-export function ComponentMeshes({ board, components, result, selectedComponentId, onSelect, onBeginDrag }: Props) {
+export function ComponentMeshes({ board, components, result, powerOn, selectedComponentId, onSelect, onBeginDrag }: Props) {
   const jumperRoutes = useMemo(() => routeJumperWires(board, components), [board, components]);
   return (
     <>
@@ -969,7 +970,7 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         );
         if (component.kind === 'switch') return <TactileSwitchMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'ne555') return <Dip8Mesh key={component.id} component={component} {...common} />;
-        if (component.kind === 'arduino-nano') return <ArduinoNanoMesh key={component.id} component={component} current={result.componentCurrents[`${component.id}:led`] ?? 0} {...common} />;
+        if (component.kind === 'arduino-nano') return <ArduinoNanoMesh key={component.id} component={component} powerOn={powerOn} current={result.componentCurrents[`${component.id}:led`] ?? 0} {...common} />;
         if (component.kind === 'tmp36') return <Tmp36Mesh key={component.id} component={component} {...common} />;
         if (component.kind === 'diode-1n4148') return <AxialDiodeMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'zener-1n4733a') return <AxialDiodeMesh key={component.id} component={component} {...common} />;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Circuit, TransientSample } from '../domain/circuit/types';
 import type { SimulationSettings } from '../domain/project';
 import { advanceSimulationClock } from '../simulation/clock';
@@ -12,6 +12,7 @@ import {
   reconcileTransientRuntimeState,
   requiresTimeline,
   runTransientRuntimeSteps,
+  runtimeStepLimit,
   stepTransientRuntimeState,
   type RuntimeState,
 } from '../simulation/transient/runtime';
@@ -52,6 +53,13 @@ export function useTransientRuntime(
   const [runtime, setRuntime] = useState<RuntimeState>(
     () => createTransientRuntimeState(circuit, settings, true, sampleNodeIds),
   );
+  const runtimeRef = useRef(runtime);
+  // Run orchestration once, outside React's replayable state updater functions.
+  const updateRuntime = useCallback((update: (current: RuntimeState) => RuntimeState) => {
+    const next = update(runtimeRef.current);
+    runtimeRef.current = next;
+    setRuntime(next);
+  }, []);
   const captureBufferRef = useRef(new CircularBuffer<TransientSample>(
     MAX_CAPTURE_SAMPLES,
     runtime.samples,
@@ -65,7 +73,7 @@ export function useTransientRuntime(
       workerBusyRef.current = false;
       if (event.data.id !== workerRequestIdRef.current) return;
       const { batch } = event.data;
-      setRuntime((current) => {
+      updateRuntime((current) => {
         if (batch.singleCaptureComplete) singleCaptureEndRef.current = undefined;
         captureBufferRef.current.pushMany(batch.samples);
         return {
@@ -92,7 +100,7 @@ export function useTransientRuntime(
       workerRef.current = undefined;
       workerBusyRef.current = false;
     };
-  }, []);
+  }, [updateRuntime]);
 
   useEffect(() => {
     circuitRef.current = circuit;
@@ -111,7 +119,7 @@ export function useTransientRuntime(
     sampleNodeKeyRef.current = sampleNodeKey;
     singleCaptureEndRef.current = undefined;
     workerRequestIdRef.current += 1;
-    setRuntime((current) => {
+    updateRuntime((current) => {
       const next = reconcileTransientRuntimeState(
         current,
         circuitRef.current,
@@ -124,27 +132,27 @@ export function useTransientRuntime(
       captureBufferRef.current.replace(next.samples);
       return next;
     });
-  }, [circuitKey, resetKey, sampleNodeKey, settings, topologyKey]);
+  }, [circuitKey, resetKey, sampleNodeKey, settings, topologyKey, updateRuntime]);
 
   useEffect(() => {
     if (!hasTransientDevices || runtime.clock.status !== 'running') return undefined;
     let previousTime = performance.now();
     const timer = window.setInterval(() => {
       const now = performance.now();
-      const elapsedSeconds = Math.min(0.1, Math.max(0, (now - previousTime) / 1_000));
-      previousTime = now;
-      setRuntime((current) => {
-        if (workerBusyRef.current) return current;
-        // GPIO edges each require electrical settling; keep worker batches responsive.
-        const maximumSteps = circuitRef.current.digitalDevices?.length
-          ? Math.max(1, Math.min(8, Math.floor(0.008 / current.clock.timeStepSeconds))) : 4_000;
+      updateRuntime((current) => {
+        if (workerBusyRef.current || current.clock.status !== 'running') return current;
+        // Allow ordinary timer jitter without accumulating unbounded sleep catch-up.
+        const elapsedSeconds = Math.min(0.25, Math.max(0, (now - previousTime) / 1_000));
+        previousTime = now;
+        const maximumSteps = runtimeStepLimit(circuitRef.current, current.clock.timeStepSeconds);
         const advance = advanceSimulationClock(elapsedSeconds, current.clock, maximumSteps);
         if (advance.stepCount === 0) return { ...current, clock: advance.clock };
         if (workerRef.current) {
           workerBusyRef.current = true;
           const request: TransientWorkerRequest = {
             id: ++workerRequestIdRef.current,
-            current: { ...current, clock: advance.clock },
+            // Capture history stays on the UI thread; the worker needs only the latest frame.
+            current: { ...current, samples: [], clock: advance.clock },
             circuit: circuitRef.current,
             sampleNodeIds: [...sampleNodeIdsRef.current],
             stepCount: advance.stepCount,
@@ -153,12 +161,14 @@ export function useTransientRuntime(
           workerRef.current.postMessage(request);
           return { ...current, clock: advance.clock };
         }
+        const deadlineMs = performance.now() + 8;
         const batch = runTransientRuntimeSteps(
           current,
           circuitRef.current,
           sampleNodeIdsRef.current,
           advance.stepCount,
           singleCaptureEndRef.current,
+          () => performance.now() >= deadlineMs,
         );
         const { frame, samples, singleCaptureComplete } = batch;
         if (singleCaptureComplete) singleCaptureEndRef.current = undefined;
@@ -178,15 +188,17 @@ export function useTransientRuntime(
       });
     }, 100);
     return () => window.clearInterval(timer);
-  }, [hasTransientDevices, runtime.clock.status]);
+  }, [hasTransientDevices, runtime.clock.status, updateRuntime]);
 
   const toggleRunning = () => {
     singleCaptureEndRef.current = undefined;
-    setRuntime((current) => ({
+    workerRequestIdRef.current += 1;
+    updateRuntime((current) => ({
       ...current,
       clock: {
         ...current.clock,
         status: current.clock.status === 'running' ? 'paused' : 'running',
+        accumulatedSeconds: 0,
       },
     }));
   };
@@ -201,13 +213,13 @@ export function useTransientRuntime(
       sampleNodeIdsRef.current,
     );
     captureBufferRef.current.replace(next.samples);
-    setRuntime(next);
+    updateRuntime(() => next);
   };
 
   const hardResetCapacitor = (componentId: string) => {
     singleCaptureEndRef.current = undefined;
     workerRequestIdRef.current += 1;
-    setRuntime((current) => (
+    updateRuntime((current) => (
       hardResetCapacitorRuntimeState(
         current,
         circuitRef.current,
@@ -221,14 +233,14 @@ export function useTransientRuntime(
   const stepOnce = () => {
     singleCaptureEndRef.current = undefined;
     workerRequestIdRef.current += 1;
-    setRuntime((current) => stepTransientRuntimeState(
+    updateRuntime((current) => stepTransientRuntimeState(
       current,
       circuitRef.current,
       sampleNodeIdsRef.current,
     ));
   };
 
-  const captureOnce = (durationSeconds: number) => setRuntime((current) => {
+  const captureOnce = (durationSeconds: number) => updateRuntime((current) => {
     if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || !hasTransientDevices) {
       return current;
     }

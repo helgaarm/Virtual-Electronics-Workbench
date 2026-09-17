@@ -3,10 +3,11 @@ import * as THREE from 'three';
 import type { ArduinoNanoComponent } from '../../domain/components/types';
 import { NANO_PIN_NAMES } from '../../domain/components/arduinoNano';
 import type { BreadboardDefinition } from '../../domain/physical/breadboard';
-import { NANO_PACKAGE } from '../../domain/physical/arduinoNano';
+import { nanoMounting, NANO_PACKAGE } from '../../domain/physical/arduinoNano';
+import { NanoUsbPowerMesh } from './NanoUsbPowerMesh';
 
-export function ArduinoNanoMesh({ component, board, selected, current, onSelect, onBeginDrag }: {
-  component: ArduinoNanoComponent; board: BreadboardDefinition; selected: boolean; current: number;
+export function ArduinoNanoMesh({ component, board, selected, current, powerOn, onSelect, onBeginDrag }: {
+  component: ArduinoNanoComponent; board: BreadboardDefinition; selected: boolean; current: number; powerOn: boolean;
   onSelect: () => void; onBeginDrag?: (point: THREE.Vector3, pointerId: number) => void;
 }) {
   const marking = useMemo(() => {
@@ -20,16 +21,19 @@ export function ArduinoNanoMesh({ component, board, selected, current, onSelect,
     });
     ctx.font = 'bold 62px sans-serif'; ctx.fillText('NANO', 1020, 275);
     ctx.font = '28px sans-serif'; ctx.fillText('CLASSIC · 5V', 1020, 340);
+    ctx.font = 'bold 20px sans-serif'; ctx.fillText('PWR', 352, 164);
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
   }, []);
   useEffect(() => () => marking.dispose(), [marking]);
-  const holes = Array.from({ length: 30 }, (_, i) => board.holes.find((h) => h.id === component.terminalHoleIds[`pin${i + 1}`]));
-  if (holes.some((hole) => !hole)) return null;
-  const center = holes.reduce((sum, hole) => ({ x: sum.x + hole!.positionMm.x / 30, z: sum.z + hole!.positionMm.z / 30 }), { x: 0, z: 0 });
-  const pcbY = holes[0]!.positionMm.y + 4;
+  const mounting = nanoMounting(board, component);
+  if (!mounting) return null;
+  const { pins: holes, centerMm: center } = mounting;
+  const pcbY = center.y;
   const glow = Math.min(1, Math.max(0, current) / 0.003);
-  return <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
+  return <>
+    <NanoUsbPowerMesh board={board} centerMm={center} rotation={component.rotation} powerOn={powerOn} />
+    <group onClick={(event) => { event.stopPropagation(); onSelect(); }} onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}>
     {holes.map((hole, i) => <mesh key={i} position={[hole!.positionMm.x, pcbY - 2, hole!.positionMm.z]}><boxGeometry args={[0.64, 5, 0.64]} /><meshStandardMaterial color="#cbb879" metalness={0.7} roughness={0.3} /></mesh>)}
     <group position={[center.x, pcbY, center.z]} rotation={[0, component.rotation * Math.PI / 180, 0]}>
       <mesh castShadow><boxGeometry args={[NANO_PACKAGE.lengthMm, 1.6, NANO_PACKAGE.widthMm]} /><meshStandardMaterial color={selected ? '#277d91' : '#086d79'} /></mesh>
@@ -39,6 +43,7 @@ export function ArduinoNanoMesh({ component, board, selected, current, onSelect,
       <mesh position={[-22.36, 2.7, 0]}><boxGeometry args={[0.1, 2.3, 5.7]} /><meshStandardMaterial color="#263036" /></mesh>
       <mesh position={[-2, 1.5, 0]} rotation={[0, Math.PI / 4, 0]} castShadow><boxGeometry args={[7, 1.4, 7]} /><meshStandardMaterial color="#252b30" /></mesh>
       <mesh position={[-11.5, 1.2, 2]}><boxGeometry args={[1.7, 0.7, 1]} /><meshStandardMaterial color={glow > 0.1 ? '#ffe07a' : '#665329'} emissive="#ffbf24" emissiveIntensity={glow * 2} /></mesh>
+      <mesh position={[-11.5, 1.2, -2]}><boxGeometry args={[1.7, 0.7, 1]} /><meshStandardMaterial color={powerOn ? '#8fea9b' : '#34483c'} emissive="#58d475" emissiveIntensity={powerOn ? 1.4 : 0} /></mesh>
     </group>
-  </group>;
+  </group></>;
 }

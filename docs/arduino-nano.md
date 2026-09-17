@@ -35,6 +35,13 @@ Execution and electrical settling have separate work limits so imported firmware
 
 The module uses 30 breadboard holes in two rows: 15 pins per row at 2.54 mm pitch, with 15.24 mm between the headers. Its 45 × 18 mm PCB remains full size. The default placement uses rows D and H so free holes remain available on each connected strip. Unanchor the module to move it or rotate it 180 degrees; individual pins cannot be moved independently. A board needs enough vacant space for the complete module.
 
+A visible USB plug and cable connect the Nano to a labelled **USB 5 V DC** supply beside the
+breadboard. The camera includes that supply in its framing. Its indicator and the Nano's green
+**PWR** light follow the workbench Output switch; the separate sketch-controlled LED still follows
+solved current. The inspector also identifies USB as the power source. The cable stays plugged in
+when output is off and follows the Nano when moved or rotated. These procedural accessories
+illustrate the existing ideal USB supply; they add no terminals or saved project fields.
+
 ## Included programs
 
 These programs are inexpensive behavioral models and do not require compilation. Their equivalent Arduino sketches can be copied from the inspector.

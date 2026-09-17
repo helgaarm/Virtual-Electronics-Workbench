@@ -80,12 +80,21 @@ export interface RuntimeStepBatch {
   singleCaptureComplete: boolean;
 }
 
+/** Instruction-level firmware needs smaller batches than behavioural devices.
+ * The host also supplies a wall-time yield check between fixed electrical steps. */
+export function runtimeStepLimit(circuit: Circuit, timeStepSeconds: number): number {
+  const executesFirmware = circuit.digitalDevices?.some(device => device.kind === 'attiny85'
+    || (device.kind === 'arduino-nano' && device.programId === 'custom'));
+  return executesFirmware ? Math.max(1, Math.min(8, Math.floor(0.008 / timeStepSeconds))) : 4_000;
+}
+
 export function runTransientRuntimeSteps(
   current: RuntimeState,
   circuit: Circuit,
   sampleNodeIds: readonly string[],
   stepCount: number,
   singleCaptureEndTimeSeconds?: number,
+  shouldYield?: () => boolean,
 ): RuntimeStepBatch {
   let frame = current.frame ?? previewTransientFrame(
     circuit,
@@ -100,6 +109,7 @@ export function runTransientRuntimeSteps(
       singleCaptureEndTimeSeconds !== undefined
       && frame.state.timeSeconds >= singleCaptureEndTimeSeconds
     ) break;
+    if (shouldYield?.()) break;
   }
   return {
     frame,
