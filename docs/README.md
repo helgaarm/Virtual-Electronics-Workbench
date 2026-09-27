@@ -25,6 +25,8 @@ Start with the learning workflow before the optional, experimental PCB material.
 - [Component-authoring workflow](component-authoring.md)
 - [Contributing](../CONTRIBUTING.md)
 - [Project persistence, backup, and recovery](persistence-and-recovery.md)
+- [Sites and local editions: backend, databases, recovery, and publishing](sites.md)
+- [Email sign-in: Resend setup, approved addresses, and activation](email-sign-in.md)
 - [Roadmap](roadmap.md)
 
 ## Optional PCB workspace

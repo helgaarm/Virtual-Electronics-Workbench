@@ -16,7 +16,7 @@ import {
   type StarterProjectId,
 } from './domain/starterProjects';
 import { measureComponent } from './measurement/dcMeasurements';
-import { ApiProjectRepository } from './persistence/apiProjectRepository';
+import { createProjectStorage } from './persistence/projectStorage';
 import type { ProjectSummary } from './persistence/projectRepository';
 import { simulateProject } from './simulation';
 import { connectionLearningTarget } from './state/connectionLearning';
@@ -37,6 +37,7 @@ import { AnalysisWorkspace } from './ui/AnalysisWorkspace';
 import { Inspector } from './ui/Inspector';
 import { Palette } from './ui/Palette';
 import { EnvironmentPanel } from './ui/EnvironmentPanel';
+import { BrowserProjectImport } from './ui/BrowserProjectImport';
 import { PcbDesigner } from './ui/PcbDesigner';
 import { SchematicDialog } from './ui/SchematicDialog';
 import { convertBreadboardToPcb, circuitFingerprint } from './domain/pcb/converter';
@@ -50,8 +51,9 @@ function nextEditTimestamp(previous: string): string {
   return new Date(Math.max(Date.now(), Date.parse(previous) + 1)).toISOString();
 }
 
-export default function App() {
-  const repository = useMemo(() => new ApiProjectRepository(), []);
+export default function App({ accountEmail }: { accountEmail?: string } = {}) {
+  const storage = useMemo(() => createProjectStorage(undefined, accountEmail), [accountEmail]);
+  const { repository } = storage;
   const [project, setProject] = useState<WorkbenchProject>(() => createStarterProject('switched-led'));
   const [selectedComponentId, setSelectedComponentId] = useState<string>('R1');
   const [selectedHoleId, setSelectedHoleId] = useState<string>();
@@ -174,9 +176,9 @@ export default function App() {
       setProjects(list);
       if (list[0]) setOpenProjectId((current) => current || list[0].id);
     } catch {
-      setNotice('SQLite service is not reachable yet. Run npm run dev to enable Save and Open.');
+      setNotice(storage.unavailable);
     }
-  }, [repository]);
+  }, [repository, storage.unavailable]);
 
   useEffect(() => {
     let active = true;
@@ -185,10 +187,10 @@ export default function App() {
       setProjects(list);
       if (list[0]) setOpenProjectId((current) => current || list[0].id);
     }).catch(() => {
-      if (active) setNotice('SQLite service is not reachable yet. Run npm run dev to enable Save and Open.');
+      if (active) setNotice(storage.unavailable);
     });
     return () => { active = false; };
-  }, [repository]);
+  }, [repository, storage.unavailable]);
 
   const applyProject = useCallback((updater: (current: WorkbenchProject) => WorkbenchProject) => {
     setProject((current) => {
@@ -204,10 +206,10 @@ export default function App() {
     const name = rawName.trim() || 'Untitled workbench';
     if (name !== project.name) applyProject((current) => ({ ...current, name }));
     if (name !== projectNameAtFocusRef.current) {
-      setNotice(`Project renamed to “${name}”. Select Save to store the new name in SQLite.`);
+      setNotice(`Project renamed to “${name}”. Select Save to store the new name in ${storage.location}.`);
     }
     projectNameAtFocusRef.current = name;
-  }, [applyProject, project.name]);
+  }, [applyProject, project.name, storage.location]);
 
   const undo = useCallback(() => {
     const previous = past.current.at(-1);
@@ -389,7 +391,7 @@ export default function App() {
       future.current = future.current.map(advanceHistoryRevision);
       setSavedBaseline(projectBaseline(saved));
       setSaveState('idle');
-      setNotice(`Saved “${saved.name}” snapshot to SQLite.`);
+      setNotice(`Saved “${saved.name}” snapshot to ${storage.location}.`);
       await refreshProjects();
     } catch (error) {
       setSaveState('error');
@@ -429,7 +431,7 @@ export default function App() {
       setSelectedHoleId(undefined);
       cancelDrag();
       setTransientResetKey((key) => key + 1);
-      setNotice(`Opened “${loaded.name}” from SQLite.`);
+      setNotice(`Opened “${loaded.name}” from ${storage.location}.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Open failed.');
     }
@@ -508,7 +510,7 @@ export default function App() {
               maxLength={200}
               autoComplete="off"
               aria-invalid={!project.name.trim()}
-              title="Enter a project name, then select Save to persist it in SQLite."
+              title={`Enter a project name, then select Save to persist it in ${storage.location}.`}
               onFocus={() => { projectNameAtFocusRef.current = project.name; }}
               onChange={(event) => applyProject((current) => ({
                 ...current,
@@ -542,8 +544,9 @@ export default function App() {
             </select>
             <button onClick={loadStarterProject} disabled={saveState === 'saving'}>Load</button>
           </div>
-          <div className="open-project"><label htmlFor="saved-projects">SQLite projects</label><select id="saved-projects" value={openProjectId} onChange={(event) => setOpenProjectId(event.target.value)}><option value="">No saved projects</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button onClick={() => void openSaved()} disabled={!openProjectId || saveState === 'saving'}>Open</button></div>
+          <div className="open-project"><label htmlFor="saved-projects">{storage.label}</label><select id="saved-projects" value={openProjectId} onChange={(event) => setOpenProjectId(event.target.value)}><option value="">No saved projects</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button onClick={() => void openSaved()} disabled={!openProjectId || saveState === 'saving'}>Open</button></div>
         </div>
+        {storage.sites && <BrowserProjectImport target={repository} onImported={refreshProjects} />}
       </div>
 
       {project.workspace === 'build' ? (
@@ -677,7 +680,7 @@ export default function App() {
           </div>
         )}
         <span className="status-message">{statusText}</span>
-        <span className="sqlite-status">SQLite persistence</span>
+        <span className="sqlite-status" title={storage.description}>{storage.status}</span>
       </footer>
     </div>
   );

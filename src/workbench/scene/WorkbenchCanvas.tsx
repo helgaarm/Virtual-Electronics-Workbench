@@ -1,6 +1,6 @@
 import { memo, Suspense, useEffect, useMemo, useState } from 'react';
 import { applyProps, Canvas, useThree } from '@react-three/fiber';
-import { ContactShadows, OrbitControls } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type { BreadboardDefinition } from '../../domain/physical/breadboard';
 import type { ThreeEvent } from '@react-three/fiber';
@@ -100,6 +100,8 @@ function WorkSurface() {
   if (!texture) return null;
 
   return (
+    // Receive the directional light's shadows on the bench itself. A separate contact-shadow
+    // plane here overlaps the surface at millimetre scale and flickers when the camera moves.
     <mesh position={[0, -3.67, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow raycast={() => null}>
       <planeGeometry args={[360, 260]} />
       <meshStandardMaterial map={texture} color="#d8d1c4" roughness={0.88} metalness={0} />
@@ -246,7 +248,6 @@ function WorkbenchCanvasView(props: Props) {
             onCancel={props.onCancelDrag ?? props.onClearSelection}
           />
         )}
-        <ContactShadows position={[0, -3.66, 0]} opacity={0.38} scale={150} blur={2.5} far={18} frames={1} resolution={1024} color="#51483d" />
       </Suspense>
       <OrbitControls makeDefault enabled={!props.draggingComponentId} enableDamping dampingFactor={0.08} minDistance={45} maxDistance={190} maxPolarAngle={Math.PI / 2.05} />
       <CameraRig preset={props.cameraPreset} board={props.board} components={props.components} />

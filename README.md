@@ -91,6 +91,11 @@ Open <http://127.0.0.1:5173>. Vite proxies `/api` to the SQLite service at port 
 
 ## Run the production build
 
+For the privately hosted browser edition, see [Sites setup and storage](docs/sites.md).
+Email-code sign-in is prepared for Resend; see [setup and activation](docs/email-sign-in.md).
+Sites includes a backend and durable D1 database; the commands below use an independent local
+SQLite service and also work without internet after dependencies are installed.
+
 ```console
 npm run build
 npm start

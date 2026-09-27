@@ -59,4 +59,22 @@ describe('API project repository', () => {
     await expect(new ApiProjectRepository('/projects').save(project))
       .rejects.toThrow(/restart npm run dev/);
   });
+
+  it('gives Sites-specific recovery for expired sign-in and version mismatch', async () => {
+    const repository = new ApiProjectRepository('/projects', 'sites');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>Sign in</html>', { status: 401 })));
+    await expect(repository.list()).rejects.toThrow(/Sign in to this Site/);
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'Project version 20 is not supported by version 19.' }, 409)));
+    await expect(repository.save(createLedExampleProject())).rejects.toThrow(/Sites backend/);
+  });
+
+  it('binds every Sites operation to the account that opened the workbench', async () => {
+    const project = createLedExampleProject();
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse([])).mockResolvedValueOnce(jsonResponse(project))
+      .mockResolvedValueOnce(jsonResponse({ ...project, revision: 1 })).mockResolvedValueOnce(jsonResponse({ deleted: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const repository = new ApiProjectRepository('/projects', 'sites', 'owner@example.test');
+    await repository.list(); await repository.get(project.id); await repository.save(project); await repository.remove(project.id);
+    for (const call of fetchMock.mock.calls) expect(call[1]).toMatchObject({ headers: { 'x-workbench-account': 'owner@example.test' } });
+  });
 });

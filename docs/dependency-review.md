@@ -20,4 +20,10 @@ The full development graph also contains MPL-2.0 build tooling (`lightningcss` a
 
 ## Distribution guidance
 
+Sites test support added 2026-09-27: `fake-indexeddb@6.2.5` is a development-only Apache-2.0
+dependency with no runtime dependencies. It is maintained in
+[dumbmatter/fakeIndexedDB](https://github.com/dumbmatter/fakeIndexedDB) and was installed with
+lifecycle scripts disabled. The installation audit reported zero known vulnerabilities. It is
+used only for persistence regression tests and is not included in the deployed browser bundle.
+
 MIT is compatible with the current dependency set and fits a permissive open-source application. Keep the repository `LICENSE` and the generated `THIRD_PARTY_LICENSES.md` with distributions. Refresh that inventory with `npm run licenses:generate`, and re-run `npm outdated` plus `npm audit` before each release because installed packages, registry metadata, and advisories change.

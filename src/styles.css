@@ -277,3 +277,14 @@ button.palette-folder-heading:hover { border-color: #c8cfc6; background: #edf1e9
 .wind-sensor-controls input, .wind-sensor-controls textarea { width: 100%; min-width: 0; box-sizing: border-box; }
 .wind-sensor-controls textarea { resize: vertical; min-height: 100px; font: inherit; padding: 8px; }
 .wind-sensor-controls button { max-width: 100%; white-space: normal; }
+.browser-project-import { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 11px; width: 100%; flex-basis: 100%; }
+.browser-project-import button { white-space: normal; border: 1px solid #b8c8d0; background: #edf5fa; border-radius: 6px; padding: 6px 10px; color: #315b77; }
+.browser-project-import [role="status"] { flex-basis: 100%; overflow-wrap: anywhere; }
+.project-bar:has(.browser-project-import) { flex-wrap: wrap; padding-top: 8px; padding-bottom: 8px; row-gap: 8px; }
+@media (min-width: 761px) {
+  .app-shell:has(.browser-project-import) { grid-template-rows: 72px auto minmax(0, 1fr) 40px; }
+}
+@media (max-width: 760px) {
+  .project-bar:has(.browser-project-import) { flex-wrap: nowrap; }
+  .browser-project-import { flex-basis: auto; }
+}
