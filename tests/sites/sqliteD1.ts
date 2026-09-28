@@ -11,6 +11,7 @@ export class SqliteD1 implements D1Binding, D1Session {
     if (migrate) {
       this.database.exec(readFileSync(new URL('../../drizzle/0000_workbench.sql', import.meta.url), 'utf8'));
       this.database.exec(readFileSync(new URL('../../drizzle/0001_email_auth.sql', import.meta.url), 'utf8'));
+      this.database.exec(readFileSync(new URL('../../drizzle/0002_project_storage.sql', import.meta.url), 'utf8'));
     }
   }
   withSession(constraint: 'first-primary'): D1Session {

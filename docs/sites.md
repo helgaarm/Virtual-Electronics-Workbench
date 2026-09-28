@@ -7,7 +7,10 @@ The same codebase runs in two independent environments:
 | Sites | React / Three.js | Sites Worker, `/api/projects` | Sites-managed Cloudflare D1, binding `DB` |
 | Local | React / Three.js | Loopback Express, `/api/projects` | `data/workbench.sqlite` |
 
-The Site stays private with access enforced by the Sites gateway for both pages and API requests.
+The Site stays restricted. The Sites gateway protects pages, and the Worker independently requires
+an explicit authentication mode on every API request. In `sites` mode it checks the
+platform-authenticated email against `SITES_ALLOWED_EMAILS`; absent identity or configuration is
+denied even if the audience is later made public. Owner test access without identity is denied.
 Do not publish the Worker separately or change the audience without reviewing access to the
 database. The Site currently has one owner and one shared project collection for its authorized
 audience while gateway sign-in is active. Email sign-in with separate per-user projects is
@@ -62,6 +65,37 @@ Requests are limited to 2 MiB while streaming. Stored project JSON is limited to
 to leave room for summary columns within D1's 2,000,000-byte row limit. Oversized saves report an
 error; no project is truncated. API responses are not cached, cross-origin writes are rejected,
 and unexpected errors do not reveal SQL or provider diagnostics.
+
+### Capacity and browser protection
+
+`drizzle/0002_project_storage.sql` adds usage accounting without changing existing documents.
+The migration backfills counters once; indexed account lookups and transactional triggers maintain
+them afterwards, avoiding repeated document scans on saves. Conditional SQL writes atomically
+enforce 100 projects and 50,000,000 document bytes per account (or for the shared collection in
+`sites` mode), including simultaneous saves. UTF-8 bytes are counted, not JavaScript characters.
+Quota errors return 507 with an export/delete/reduce message. Existing collections above the limits
+remain readable and deletable; non-growing updates remain possible. The one-time legacy owner copy
+preserves the entire collection even above the quota, and updates counters transactionally.
+
+Project lists use 50-row keyset pages with an `x-next-project-cursor` header. The browser follows
+`?after=` cursors without changing the local API contract; repeated cursors and lists above 10,000
+entries produce an explicit error rather than a partial list. Administrative recovery of larger
+legacy collections should use paginated exports. Concurrent modifications can change list ordering;
+reload the list after saving on another device. Reads and writes share a per-account API limit of
+120 requests per minute; retry a 429 response after its `Retry-After` interval.
+
+All Worker responses include Content Security Policy, nosniff, no-referrer, Permissions Policy and
+HSTS. The Sites build embeds the compiled HTML in the Worker and removes the static index file,
+so the platform cannot serve the document without its security headers. JS/CSS remain static
+assets. Scripts and network requests are restricted to the same origin; inline scripts/eval are
+disallowed. Inline styles remain enabled for React/Three.js positioning, and data/blob images and
+same-origin/blob workers support schematics, exports and circuit work. Framing is allowed only by
+the same origin and `https://chatgpt.com` for the Sites preview, not arbitrary websites. If another
+official preview origin is needed, review it explicitly rather than adding a wildcard.
+
+For migration recovery, retain the original documents and repair counters forward if necessary.
+Do not drop tables or deploy the pre-hardening Worker as an authentication recovery mechanism.
+The local SQLite schema and offline behavior remain independent of these Sites limits.
 
 ## Build and publish
 

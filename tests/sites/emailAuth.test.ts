@@ -25,7 +25,7 @@ function setup() {
     EMAIL_AUTH_SECRET: 'synthetic-test-secret-'.repeat(3), RESEND_API_KEY: 'test-only-not-a-key', AUTH_EMAIL_FROM: 'login@example.test',
   };
   const call = (path: string, method = 'GET', body?: unknown, headers: Record<string, string> = {}) => worker.fetch(new Request(`https://workbench.test${path}`, {
-    method, headers: { origin: 'https://workbench.test', 'content-type': 'application/json', ...headers },
+    method, headers: { origin: 'https://workbench.test', 'content-type': 'application/json', 'cf-connecting-ip': '192.0.2.10', ...headers },
     body: body === undefined ? undefined : JSON.stringify(body),
   }), env);
   const requestCode = async (email = 'owner@example.test') => {
@@ -102,7 +102,7 @@ describe('email code authentication and project authorization', () => {
     }
     expect(send).toHaveBeenCalledTimes(5);
     database.database.exec("UPDATE auth_limits SET count = 1000 WHERE scope = 'send:global:day'");
-    expect((await call('/api/auth/request-code', 'POST', { email: 'guest@example.test' })).status).toBe(429);
+    expect((await call('/api/auth/request-code', 'POST', { email: 'guest@example.test' })).status).toBe(202);
     expect(send).toHaveBeenCalledTimes(5);
   });
 
@@ -145,7 +145,7 @@ describe('email code authentication and project authorization', () => {
     expect((await call('/api/auth/request-code', 'POST', { email: 'owner@example.test' }, { 'content-type': 'text/plain' })).status).toBe(400);
     expect((await call('/api/auth/request-code')).status).toBe(405);
     expect((await call('/api/auth/unknown')).status).toBe(404);
-    expect((await worker.fetch(new Request('https://workbench.test/api/auth/request-code', { method: 'POST', headers: { origin: 'https://workbench.test', 'content-type': 'application/json' }, body: '{broken' }), env)).status).toBe(400);
+    expect((await worker.fetch(new Request('https://workbench.test/api/auth/request-code', { method: 'POST', headers: { origin: 'https://workbench.test', 'content-type': 'application/json', 'cf-connecting-ip': '192.0.2.10' }, body: '{broken' }), env)).status).toBe(400);
   });
 
   it('isolates list/read/update/delete, including identical project IDs in different accounts', async () => {
@@ -195,21 +195,51 @@ describe('email code authentication and project authorization', () => {
     const response = await call('/api/projects'); expect(response.status).toBe(503);
     expect(await response.text()).not.toMatch(/SQL|table|schema/);
     env.AUTH_MODE = 'sites';
-    // The pre-activation private gateway mode also supports Sites' owner test access,
-    // which does not forward the optional ChatGPT identity headers.
-    expect((await call('/api/projects')).status).toBe(200);
-    expect(await (await call('/api/auth/session')).json()).toEqual({ mode: 'sites' });
+    expect((await call('/api/projects')).status).toBe(503);
   });
 
   it('applies the additive migration to populated old databases without changing their documents', async () => {
     const database = new SqliteD1(':memory:', false); databases.push(database);
     database.database.exec(readFileSync(new URL('../../drizzle/0000_workbench.sql', import.meta.url), 'utf8'));
-    const saved = await new D1ProjectRepository(database).save(createLedExampleProject());
+    const saved = { ...createLedExampleProject(), revision: 1 };
+    database.database.prepare('INSERT INTO projects VALUES (?, ?, ?, ?, ?)').run(saved.id, saved.name, saved.createdAt, saved.updatedAt, JSON.stringify(saved));
     const before = database.database.prepare('SELECT * FROM projects').all();
     database.database.exec(readFileSync(new URL('../../drizzle/0001_email_auth.sql', import.meta.url), 'utf8'));
+    database.database.exec(readFileSync(new URL('../../drizzle/0002_project_storage.sql', import.meta.url), 'utf8'));
     expect(database.database.prepare('SELECT * FROM projects').all()).toEqual(before);
     expect(await new D1ProjectRepository(database).get(saved.id)).toEqual(saved);
     await new AuthStore(database).importLegacyForOwner('owner@example.test');
     expect(await new D1ProjectRepository(database, 'owner@example.test').get(saved.id)).toEqual(saved);
+  });
+
+  it('does not let unapproved or duplicate requests exhaust other users sending budgets', async () => {
+    const { call, send, database } = setup();
+    for (let i = 0; i < 25; i++) {
+      expect((await call('/api/auth/request-code', 'POST', { email: `unknown-${i}@example.test` }, { 'cf-connecting-ip': `192.0.2.${i + 20}` })).status).toBe(202);
+    }
+    expect(database.database.prepare("SELECT count(*) AS count FROM auth_limits WHERE scope LIKE 'send:global:%'").get()?.count).toBe(0);
+    for (let i = 0; i < 25; i++) await call('/api/auth/request-code', 'POST', { email: 'owner@example.test' }, { 'cf-connecting-ip': `192.0.2.${i + 20}` });
+    expect(database.database.prepare("SELECT count FROM auth_limits WHERE scope = 'send:global:minute'").get()?.count).toBe(1);
+    expect((await call('/api/auth/request-code', 'POST', { email: 'guest@example.test' })).status).toBe(202);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('limits callers persistently without blocking another IP or trusting forwarded spoof headers', async () => {
+    const { call, database, send } = setup();
+    for (let i = 0; i < 20; i++) expect((await call('/api/auth/request-code', 'POST', { email: 'unknown@example.test' })).status).toBe(202);
+    const blocked = await call('/api/auth/request-code', 'POST', { email: 'owner@example.test' }, { 'x-forwarded-for': '192.0.2.99' });
+    expect(blocked.status).toBe(429); expect(blocked.headers.get('retry-after')).toBe('60');
+    expect((await call('/api/auth/request-code', 'POST', { email: 'owner@example.test' }, { 'cf-connecting-ip': '192.0.2.99' })).status).toBe(202);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect((await call('/api/auth/request-code', 'POST', { email: 'guest@example.test' }, { 'cf-connecting-ip': '', 'x-forwarded-for': '192.0.2.99' })).status).toBe(503);
+    expect(JSON.stringify(database.database.prepare('SELECT scope FROM auth_limits').all())).not.toContain('192.0.2.');
+  });
+
+  it('bounds project requests per authenticated account', async () => {
+    const { call, login } = setup();
+    const owner = await login(); const guest = await login('guest@example.test');
+    for (let i = 0; i < 120; i++) expect((await call('/api/projects', 'GET', undefined, owner)).status).toBe(200);
+    expect((await call('/api/projects', 'GET', undefined, owner)).status).toBe(429);
+    expect((await call('/api/projects', 'GET', undefined, guest)).status).toBe(200);
   });
 });

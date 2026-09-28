@@ -1,7 +1,7 @@
 import { PROJECT_SCHEMA_VERSION } from '../src/domain/project';
 import { ProjectValidationError, UnsupportedProjectVersionError } from '../src/persistence/migrations';
 import { ProjectConflictError } from '../src/persistence/projectErrors';
-import { D1ProjectRepository, ProjectTooLargeError } from './d1ProjectRepository';
+import { D1ProjectRepository, InvalidProjectCursorError, ProjectQuotaExceededError, ProjectTooLargeError } from './d1ProjectRepository';
 import type { D1Binding } from './d1Types';
 
 class RequestError extends Error {
@@ -59,7 +59,12 @@ export async function projectApi(request: Request, binding: D1Binding | undefine
       await repository.checkSchema();
       return json({ status: 'ok', storage: 'd1', projectSchemaVersion: PROJECT_SCHEMA_VERSION });
     }
-    if (url.pathname === '/api/projects' && request.method === 'GET') return json(await repository.list());
+    if (url.pathname === '/api/projects' && request.method === 'GET') {
+      const page = await repository.listPage(url.searchParams.get('after') ?? undefined);
+      const response = json(page.projects);
+      if (page.nextCursor) response.headers.set('x-next-project-cursor', page.nextCursor);
+      return response;
+    }
     const match = /^\/api\/projects\/([^/]+)$/.exec(url.pathname);
     if (!match) return json({ error: 'Not found.' }, 404);
     let id: string;
@@ -82,6 +87,8 @@ export async function projectApi(request: Request, binding: D1Binding | undefine
   } catch (error) {
     if (error instanceof RequestError) return json({ error: error.message }, error.status);
     if (error instanceof ProjectTooLargeError) return json({ error: error.message }, 413);
+    if (error instanceof ProjectQuotaExceededError) return json({ error: error.message }, 507);
+    if (error instanceof InvalidProjectCursorError) return json({ error: error.message }, 400);
     if (error instanceof ProjectConflictError) {
       return json({ error: error.message, ...(error.current ? { currentRevision: error.current.revision } : {}) }, 409);
     }

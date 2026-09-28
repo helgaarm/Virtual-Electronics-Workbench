@@ -22,6 +22,12 @@ describe('API project repository', () => {
       .rejects.toThrow(/Invalid project summary/);
   });
 
+  it('rejects repeated pagination cursors instead of looping forever or returning a partial list', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('[]', { headers: { 'x-next-project-cursor': 'repeated' } })));
+    await expect(new ApiProjectRepository('/api/projects', 'sites').list()).rejects.toThrow(/could not be completed/);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
   it('migrates project responses and returns undefined for 404', async () => {
     const project = createLedExampleProject();
     const fetchMock = vi.fn()

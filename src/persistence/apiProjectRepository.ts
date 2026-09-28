@@ -51,7 +51,21 @@ export class ApiProjectRepository implements ProjectRepository {
   }
 
   async list(): Promise<ProjectSummary[]> {
-    const body = await responseJson(await fetch(this.baseUrl, { headers: this.headers() }), this.deployment);
+    const projects: ProjectSummary[] = [];
+    const seen = new Set<string>();
+    let cursor: string | null = null;
+    do {
+      const url: string = cursor ? `${this.baseUrl}?after=${encodeURIComponent(cursor)}` : this.baseUrl;
+      const response = await fetch(url, { headers: this.headers() });
+      projects.push(...this.summaries(await responseJson(response, this.deployment)));
+      cursor = response.headers.get('x-next-project-cursor');
+      if (cursor && (cursor.length > 512 || seen.has(cursor) || projects.length >= 10_000)) throw new Error('Project list is too large or could not be completed. Please retry.');
+      if (cursor) seen.add(cursor);
+    } while (cursor);
+    return projects;
+  }
+
+  private summaries(body: unknown): ProjectSummary[] {
     if (!Array.isArray(body)) throw new Error('Invalid project list response.');
     return body.map((value, index) => {
       if (

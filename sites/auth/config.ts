@@ -1,5 +1,6 @@
 export interface EmailAuthEnvironment {
   AUTH_MODE?: string;
+  SITES_ALLOWED_EMAILS?: string;
   EMAIL_ALLOWED_ADDRESSES?: string;
   LEGACY_PROJECT_OWNER_EMAIL?: string;
   EMAIL_AUTH_SECRET?: string;
@@ -13,6 +14,12 @@ export interface EmailAuthConfig {
   secret: string;
   resendApiKey: string;
   from: string;
+}
+
+export function emailAllowlist(value: string | undefined): ReadonlySet<string> | undefined {
+  const emails = value?.split(',').map(normalizeEmail);
+  if (!emails?.length || emails.some((email) => !email)) return undefined;
+  return new Set(emails.filter((email): email is string => email !== undefined));
 }
 
 /** Canonical account identity; no display names, control characters or multiple recipients. */
