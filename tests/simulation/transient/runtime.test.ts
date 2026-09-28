@@ -7,6 +7,7 @@ import {
   hardResetCapacitorRuntimeState,
   reconcileTransientRuntimeState,
   runTransientRuntimeSteps,
+  runtimeStepLimit,
   stepTransientRuntimeState,
 } from '../../../src/simulation/transient/runtime';
 
@@ -263,5 +264,43 @@ describe('transient runtime state transitions', () => {
     expect(batch.singleCaptureComplete).toBe(true);
     expect(batch.frame.state.timeSeconds).toBeCloseTo(0.015, 10);
     expect(batch.samples).toHaveLength(3);
+  });
+
+  it('yields between complete steps and resumes with identical results and samples', () => {
+    const circuit = rcCircuit();
+    const initial = createTransientRuntimeState(circuit, settings, true, ['cap']);
+    const uninterrupted = runTransientRuntimeSteps(initial, circuit, ['cap'], 20);
+    let completed = 0;
+    const first = runTransientRuntimeSteps(initial, circuit, ['cap'], 20, undefined, () => ++completed >= 3);
+    expect(first.samples).toHaveLength(3);
+    expect(first.frame.state.timeSeconds).toBeCloseTo(3 * settings.timeStepSeconds, 10);
+    const rest = runTransientRuntimeSteps({ ...initial, frame: first.frame }, circuit, ['cap'], 17);
+    expect(rest.frame).toEqual(uninterrupted.frame);
+    expect([...first.samples, ...rest.samples]).toEqual(uninterrupted.samples);
+    expect(initial.frame?.state.timeSeconds).toBe(0);
+  });
+
+  it('makes one complete step of progress even if the host budget has expired', () => {
+    const circuit = rcCircuit();
+    const initial = createTransientRuntimeState(circuit, settings, true);
+    const batch = runTransientRuntimeSteps(initial, circuit, [], 100, undefined, () => true);
+    expect(batch.frame.state.timeSeconds).toBe(settings.timeStepSeconds);
+    expect(batch.samples).toHaveLength(1);
+  });
+
+  it('retains firmware work limits in mixed circuits without throttling behavioural devices', () => {
+    const circuit: Circuit = { ...rcCircuit(), digitalDevices: [
+      { id: 'Nano1', kind: 'arduino-nano', programId: 'wind-constant-temperature', pins: {} },
+      { id: 'U1', kind: '74hc595', pins: {} },
+    ] };
+    expect(runtimeStepLimit(circuit, 0.01)).toBeGreaterThanOrEqual(40);
+    for (const device of [
+      { id: 'Nano2', kind: 'arduino-nano' as const, programId: 'custom' as const, pins: {} },
+      { id: 'U2', kind: 'attiny85' as const, pins: {} },
+    ]) {
+      const firmwareCircuit = { ...circuit, digitalDevices: [...circuit.digitalDevices!, device] };
+      expect(runtimeStepLimit(firmwareCircuit, 0.001)).toBe(8);
+      expect(runtimeStepLimit(firmwareCircuit, 0.01)).toBe(1);
+    }
   });
 });

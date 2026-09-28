@@ -16,7 +16,7 @@ import {
   type StarterProjectId,
 } from './domain/starterProjects';
 import { measureComponent } from './measurement/dcMeasurements';
-import { ApiProjectRepository } from './persistence/apiProjectRepository';
+import { createProjectStorage } from './persistence/projectStorage';
 import type { ProjectSummary } from './persistence/projectRepository';
 import { simulateProject } from './simulation';
 import { connectionLearningTarget } from './state/connectionLearning';
@@ -37,7 +37,9 @@ import { AnalysisWorkspace } from './ui/AnalysisWorkspace';
 import { Inspector } from './ui/Inspector';
 import { Palette } from './ui/Palette';
 import { EnvironmentPanel } from './ui/EnvironmentPanel';
+import { BrowserProjectImport } from './ui/BrowserProjectImport';
 import { PcbDesigner } from './ui/PcbDesigner';
+import { SchematicDialog } from './ui/SchematicDialog';
 import { convertBreadboardToPcb, circuitFingerprint } from './domain/pcb/converter';
 import { routeRemainingConnections } from './domain/pcb/router';
 import { WorkbenchCanvas } from './workbench/scene/WorkbenchCanvas';
@@ -49,8 +51,9 @@ function nextEditTimestamp(previous: string): string {
   return new Date(Math.max(Date.now(), Date.parse(previous) + 1)).toISOString();
 }
 
-export default function App() {
-  const repository = useMemo(() => new ApiProjectRepository(), []);
+export default function App({ accountEmail }: { accountEmail?: string } = {}) {
+  const storage = useMemo(() => createProjectStorage(undefined, accountEmail), [accountEmail]);
+  const { repository } = storage;
   const [project, setProject] = useState<WorkbenchProject>(() => createStarterProject('switched-led'));
   const [selectedComponentId, setSelectedComponentId] = useState<string>('R1');
   const [selectedHoleId, setSelectedHoleId] = useState<string>();
@@ -61,6 +64,7 @@ export default function App() {
   const [savedBaseline, setSavedBaseline] = useState<SavedBaseline>();
   const [notice, setNotice] = useState('Example loaded — the LED is powered through 220 Ω.');
   const [cameraResetKey, setCameraResetKey] = useState(0);
+  const [schematicOpen, setSchematicOpen] = useState(false);
   const [draggingComponentId, setDraggingComponentId] = useState<string>();
   const [dragCandidateHoleId, setDragCandidateHoleId] = useState<string>();
   const [transientResetKey, setTransientResetKey] = useState(0);
@@ -172,9 +176,9 @@ export default function App() {
       setProjects(list);
       if (list[0]) setOpenProjectId((current) => current || list[0].id);
     } catch {
-      setNotice('SQLite service is not reachable yet. Run npm run dev to enable Save and Open.');
+      setNotice(storage.unavailable);
     }
-  }, [repository]);
+  }, [repository, storage.unavailable]);
 
   useEffect(() => {
     let active = true;
@@ -183,10 +187,10 @@ export default function App() {
       setProjects(list);
       if (list[0]) setOpenProjectId((current) => current || list[0].id);
     }).catch(() => {
-      if (active) setNotice('SQLite service is not reachable yet. Run npm run dev to enable Save and Open.');
+      if (active) setNotice(storage.unavailable);
     });
     return () => { active = false; };
-  }, [repository]);
+  }, [repository, storage.unavailable]);
 
   const applyProject = useCallback((updater: (current: WorkbenchProject) => WorkbenchProject) => {
     setProject((current) => {
@@ -202,10 +206,10 @@ export default function App() {
     const name = rawName.trim() || 'Untitled workbench';
     if (name !== project.name) applyProject((current) => ({ ...current, name }));
     if (name !== projectNameAtFocusRef.current) {
-      setNotice(`Project renamed to “${name}”. Select Save to store the new name in SQLite.`);
+      setNotice(`Project renamed to “${name}”. Select Save to store the new name in ${storage.location}.`);
     }
     projectNameAtFocusRef.current = name;
-  }, [applyProject, project.name]);
+  }, [applyProject, project.name, storage.location]);
 
   const undo = useCallback(() => {
     const previous = past.current.at(-1);
@@ -333,7 +337,7 @@ export default function App() {
       return;
     }
     updateComponent(rotated);
-    const rotationStep = selectedComponent.kind === 'ne555' ? 180 : 90;
+    const rotationStep = (rotated.rotation - selectedComponent.rotation + 360) % 360;
     setNotice(`${selectedComponent.label} rotated ${rotationStep}° and re-snapped.`);
   };
 
@@ -387,7 +391,7 @@ export default function App() {
       future.current = future.current.map(advanceHistoryRevision);
       setSavedBaseline(projectBaseline(saved));
       setSaveState('idle');
-      setNotice(`Saved “${saved.name}” snapshot to SQLite.`);
+      setNotice(`Saved “${saved.name}” snapshot to ${storage.location}.`);
       await refreshProjects();
     } catch (error) {
       setSaveState('error');
@@ -427,7 +431,7 @@ export default function App() {
       setSelectedHoleId(undefined);
       cancelDrag();
       setTransientResetKey((key) => key + 1);
-      setNotice(`Opened “${loaded.name}” from SQLite.`);
+      setNotice(`Opened “${loaded.name}” from ${storage.location}.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Open failed.');
     }
@@ -458,7 +462,7 @@ export default function App() {
     setProject(loaded);
     setSavedBaseline(undefined);
     setSaveState('idle');
-    setSelectedComponentId(loaded.components.find((component) => component.kind === 'resistor')?.id ?? loaded.components[0]?.id ?? '');
+    setSelectedComponentId(loaded.components.find((component) => component.kind === 'arduino-nano')?.id ?? loaded.components.find((component) => component.kind === 'resistor')?.id ?? loaded.components[0]?.id ?? '');
     setSelectedHoleId(undefined);
     cancelDrag();
     setCameraResetKey((key) => key + 1);
@@ -506,7 +510,7 @@ export default function App() {
               maxLength={200}
               autoComplete="off"
               aria-invalid={!project.name.trim()}
-              title="Enter a project name, then select Save to persist it in SQLite."
+              title={`Enter a project name, then select Save to persist it in ${storage.location}.`}
               onFocus={() => { projectNameAtFocusRef.current = project.name; }}
               onChange={(event) => applyProject((current) => ({
                 ...current,
@@ -540,8 +544,9 @@ export default function App() {
             </select>
             <button onClick={loadStarterProject} disabled={saveState === 'saving'}>Load</button>
           </div>
-          <div className="open-project"><label htmlFor="saved-projects">SQLite projects</label><select id="saved-projects" value={openProjectId} onChange={(event) => setOpenProjectId(event.target.value)}><option value="">No saved projects</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button onClick={() => void openSaved()} disabled={!openProjectId || saveState === 'saving'}>Open</button></div>
+          <div className="open-project"><label htmlFor="saved-projects">{storage.label}</label><select id="saved-projects" value={openProjectId} onChange={(event) => setOpenProjectId(event.target.value)}><option value="">No saved projects</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button onClick={() => void openSaved()} disabled={!openProjectId || saveState === 'saving'}>Open</button></div>
         </div>
+        {storage.sites && <BrowserProjectImport target={repository} onImported={refreshProjects} />}
       </div>
 
       {project.workspace === 'build' ? (
@@ -550,11 +555,13 @@ export default function App() {
           <section className="workbench-stage" aria-label="3D breadboard workbench">
             <div className="stage-toolbar">
               <div className="view-buttons"><button className={project.view.cameraPreset === 'top' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: 'top' } }))}>Top</button><button className={project.view.cameraPreset === '3d' ? 'active' : ''} onClick={() => applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: '3d' } }))}>3D</button><button onClick={() => { applyProject((current) => ({ ...current, view: { ...current.view, cameraPreset: '3d' } })); setCameraResetKey((key) => key + 1); }}>Fit</button><button onClick={() => setCameraResetKey((key) => key + 1)}>Reset view</button></div>
+              <button type="button" className="schematic-launch" onClick={() => setSchematicOpen(true)}>Circuit drawing</button>
               <label className="learning-toggle" title="Highlights every hole joined by the breadboard's internal metal strip."><input type="checkbox" checked={project.view.showConnections} onChange={(event) => toggleConnectionLearning(event.target.checked)} /> Highlight connected holes</label>
             </div>
             <EnvironmentPanel environment={project.environment} onChange={(environment) => applyProject((current) => ({ ...current, environment }))} />
             <div className="canvas-wrap" data-reset-key={cameraResetKey}>
               <WorkbenchCanvas
+                powerOn={project.powerOn}
                 key={cameraResetKey}
                 board={board}
                 components={renderedComponents}
@@ -581,9 +588,13 @@ export default function App() {
             </div>
           </section>
           <Inspector
+            powerOn={project.powerOn}
+            key={project.id}
+            windReadings={selectedComponentId ? transientRuntime.frame?.state.digital?.nanos[selectedComponentId]?.wind : undefined}
             component={selectedComponent}
             board={board}
             measurement={selectedMeasurement}
+            nanoSerialOutput={selectedComponentId ? transientRuntime.frame?.state.digital?.nanos[selectedComponentId]?.avr?.serialOutput : undefined}
             onUpdate={updateComponent}
             onRotate={rotateSelected}
             onDelete={removeSelected}
@@ -604,6 +615,8 @@ export default function App() {
           onSwitchToBuild={() => applyProject((current) => ({ ...current, workspace: 'build' }))}
         />
       ) : project.pcb ? <PcbDesigner pcb={project.pcb} onChange={(pcb) => applyProject((current) => ({ ...current, pcb }))} onBack={() => applyProject((current) => ({ ...current, workspace: 'build' }))} /> : null}
+
+      {schematicOpen && <SchematicDialog project={project} onClose={() => setSchematicOpen(false)} />}
 
       <footer className={`status-bar status-${simulation.result.status}`}>
         <span className="status-dot" />
@@ -667,7 +680,7 @@ export default function App() {
           </div>
         )}
         <span className="status-message">{statusText}</span>
-        <span className="sqlite-status">SQLite persistence</span>
+        <span className="sqlite-status" title={storage.description}>{storage.status}</span>
       </footer>
     </div>
   );

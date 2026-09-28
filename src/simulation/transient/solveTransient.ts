@@ -18,6 +18,7 @@ import {
 import { nonlinearTerminalCurrents, solveNonlinearCircuit } from '../nonlinear';
 import { flattenCircuit } from '../subcircuits';
 import { createDigitalState, stepDigitalCircuit } from './digitalRuntime';
+import { thermalResistances, withThermalResult } from '../models/thermalSensor';
 
 const MAX_LED_ITERATIONS = 12;
 const MAX_RUN_STEPS = 1_000_000;
@@ -36,6 +37,7 @@ export function createTransientState(
   const expandedCircuit = flattenCircuit(circuit);
   return {
     timeSeconds: previous?.timeSeconds ?? 0,
+    ...(circuit.thermal ? { sensorTemperaturesC: Object.fromEntries(circuit.thermal.sensors.map(sensor => [sensor.id, previous?.sensorTemperaturesC?.[sensor.id] ?? circuit.thermal!.ambientTemperatureC])) } : {}),
     capacitorVoltages: Object.fromEntries(
       capacitors(expandedCircuit).map((capacitor) => [
         capacitor.id,
@@ -233,7 +235,7 @@ export function stepTransient(
 ): TransientFrame {
   if (circuit.digitalDevices?.length) return stepDigitalCircuit(circuit, state, timeStepSeconds,
     (analog, previous, dt) => stepTransientAttempt(analog, previous, dt, MAX_NONLINEAR_STEP_RETRIES));
-  return stepTransientAttempt(circuit, state, timeStepSeconds, MAX_NONLINEAR_STEP_RETRIES);
+  return withThermalResult(circuit, state, stepTransientAttempt(thermalResistances(circuit, state), state, timeStepSeconds, MAX_NONLINEAR_STEP_RETRIES), timeStepSeconds);
 }
 
 export interface TransientRunOptions {

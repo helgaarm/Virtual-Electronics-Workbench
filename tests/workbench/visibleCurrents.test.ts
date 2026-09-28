@@ -17,3 +17,15 @@ it('redraws when a multiplexed segment changes even if ordinary LED currents do 
   expect(sameVisibleComponentCurrents([display], lit, result)).toBe(false);
   expect(sameVisibleComponentCurrents([display], lit, { ...lit, status: 'error' })).toBe(false);
 });
+
+it('redraws changing OLED pixels and power while avoiding redraws for identical cloned frames', () => {
+  const oled: PlacedComponent = { id: 'OLED1', label: 'OLED', kind: 'oled-i2c', controller: 'sh1106', address: 60, rotation: 0,
+    terminalHoleIds: { gnd: 'a', vcc: 'b', scl: 'c', sda: 'd' } };
+  const a = { ...result, oledDisplays: { OLED1: { powered: true, pixels: new Uint8Array(1024) } } };
+  const b = structuredClone(a); b.oledDisplays.OLED1.pixels[200] = 32;
+  expect(sameVisibleComponentCurrents([oled], a, b)).toBe(false);
+  expect(sameVisibleComponentCurrents([oled], b, structuredClone(b))).toBe(true);
+  const off = structuredClone(b); off.oledDisplays.OLED1.powered = false;
+  expect(sameVisibleComponentCurrents([oled], b, off)).toBe(false);
+  expect(sameVisibleComponentCurrents([oled], b, result)).toBe(false);
+});

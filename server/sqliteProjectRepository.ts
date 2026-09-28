@@ -4,6 +4,8 @@ import { DatabaseSync } from 'node:sqlite';
 import type { WorkbenchProject } from '../src/domain/project';
 import { migrateProjectDocument } from '../src/persistence/migrations';
 import type { ProjectSummary } from '../src/persistence/projectRepository';
+import { ProjectConflictError } from '../src/persistence/projectErrors';
+export { ProjectConflictError } from '../src/persistence/projectErrors';
 
 interface ProjectRow {
   id: string;
@@ -11,12 +13,6 @@ interface ProjectRow {
   created_at: string;
   updated_at: string;
   document: string;
-}
-
-export class ProjectConflictError extends Error {
-  constructor(public readonly current?: WorkbenchProject) {
-    super('The project has changed since it was opened. Reload it or save a copy.');
-  }
 }
 
 export class SqliteProjectRepository {

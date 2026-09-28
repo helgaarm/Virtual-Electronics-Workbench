@@ -1,0 +1,25 @@
+.sites-sign-in { height: 100dvh; overflow-y: auto; display: grid; align-items: safe center; justify-items: center; padding: 32px 20px; background: #eeece6; }
+.sites-sign-in-card { width: min(100%, 430px); padding: 32px; border: 1px solid #d9d7d0; border-radius: 16px; background: #faf9f6; box-shadow: 0 12px 32px rgba(52, 50, 43, .08); }
+.sites-sign-in-card h1 { margin: 24px 0 12px; font-size: 27px; line-height: 1.2; letter-spacing: -.03em; }
+.sites-sign-in-card p { color: #5c6560; line-height: 1.55; font-size: 14px; overflow-wrap: anywhere; }
+.sites-sign-in-card .sign-in-brand { color: #26302f; font-weight: 700; }
+.sites-sign-in-card form { display: grid; gap: 10px; margin-top: 24px; }
+.sites-sign-in-card label { font-size: 14px; font-weight: 650; }
+.sites-sign-in-card input { width: 100%; min-width: 0; height: 44px; margin-bottom: 8px; padding: 10px 12px; border: 1px solid #aaaFA8; border-radius: 8px; background: white; color: #232a29; font-size: 16px; }
+.sites-sign-in-card small { color: #5c6560; line-height: 1.5; }
+.sites-sign-in-card button { min-height: 44px; padding: 10px 14px; border: 1px solid #b9bdb6; border-radius: 8px; background: #faf9f6; cursor: pointer; }
+.sites-sign-in-card .sign-in-primary { margin-top: 8px; border-color: #26302f; background: #26302f; color: white; font-weight: 700; }
+.sign-in-secondary { display: flex; flex-wrap: wrap; gap: 8px; }
+.sites-sign-in-card .sign-in-error { color: #9c2d28; }
+.sites-sign-in-card .sign-in-footnote { margin-top: 24px; font-size: 12px; }
+.sites-account-bar { min-height: 44px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 4px 22px; border-bottom: 1px solid #d9d7d0; background: #e6ede7; font-size: 12px; }
+.sites-account-bar span { min-width: 0; overflow-wrap: anywhere; }
+.sites-account-bar button { flex-shrink: 0; min-height: 34px; padding: 6px 12px; border: 1px solid #a6b4a8; border-radius: 7px; background: #faf9f6; cursor: pointer; }
+.signed-in-sites { height: 100dvh; display: flex; flex-direction: column; }
+.signed-in-sites > .app-shell { flex: 1; height: auto; min-height: 0; }
+@media (max-width: 720px) {
+  .sites-sign-in { padding: 20px 12px; }
+  .sites-sign-in-card { padding: 24px; }
+  .sites-account-bar { padding-inline: 12px; }
+  .signed-in-sites { height: auto; min-height: 100dvh; }
+}

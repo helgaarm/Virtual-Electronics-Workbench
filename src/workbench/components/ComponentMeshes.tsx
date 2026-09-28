@@ -9,13 +9,16 @@ import type { SimulationResult } from '../../domain/circuit/types';
 import { routeJumperWires } from '../../domain/physical/wireRouting';
 import type { Point3Mm } from '../../domain/physical/geometry';
 import { CylinderBetween, SmoothTube } from '../scene/geometry';
-import { createJumperCurve } from '../scene/wireGeometry';
+import { createJumperGeometry } from '../scene/wireGeometry';
 import { DIP_8_PACKAGE, DIP_14_PACKAGE, DIP_16_PACKAGE, type DipPackageDefinition } from '../../domain/physical/dipPackages';
+import { ArduinoNanoMesh } from './ArduinoNanoMesh';
+import { ThermalPartMesh, OledMesh } from './WindSensorMeshes';
 
 interface Props {
   board: BreadboardDefinition;
   components: PlacedComponent[];
   result: SimulationResult;
+  powerOn: boolean;
   selectedComponentId?: string;
   onSelect: (id: string) => void;
   onBeginDrag?: (id: string, point: THREE.Vector3, pointerId: number) => void;
@@ -443,22 +446,27 @@ function WireMesh({ component, route, selected, onSelect, onBeginDrag }: {
       const [x, y, z] = entry.split(',').map(Number);
       return { x, y, z };
     });
-    const curve = createJumperCurve(stableRoute);
-    return curve
-      ? new THREE.TubeGeometry(curve, Math.max(72, stableRoute.length * 18), selected ? 0.58 : 0.48, 16, false)
-      : undefined;
+    return createJumperGeometry(stableRoute, selected);
   }, [routeSignature, selected]);
-  useEffect(() => () => geometry?.dispose(), [geometry]);
+  useEffect(() => () => {
+    geometry?.conductor.dispose();
+    geometry?.insulation.forEach((section) => section.dispose());
+  }, [geometry]);
   if (!geometry) return null;
   return (
-    <mesh
-      geometry={geometry}
+    <group
       onClick={(event) => { event.stopPropagation(); onSelect(); }}
       onPointerDown={(event) => { event.stopPropagation(); onSelect(); onBeginDrag?.(event.point, event.pointerId); }}
-      castShadow
     >
-      <meshStandardMaterial color={component.color} roughness={0.68} emissive={selected ? '#2e76d0' : '#000000'} emissiveIntensity={0.2} />
-    </mesh>
+      <mesh geometry={geometry.conductor} castShadow>
+        <meshStandardMaterial color="#b8bec0" roughness={0.35} metalness={0.8} />
+      </mesh>
+      {geometry.insulation.map((section, index) => (
+        <mesh key={index} geometry={section} castShadow>
+          <meshStandardMaterial color={component.color} roughness={0.68} emissive={selected ? '#2e76d0' : '#000000'} emissiveIntensity={0.2} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
@@ -934,7 +942,7 @@ function SimpleComponent({ component, board, selected, onSelect, onBeginDrag }: 
   );
 }
 
-export function ComponentMeshes({ board, components, result, selectedComponentId, onSelect, onBeginDrag }: Props) {
+export function ComponentMeshes({ board, components, result, powerOn, selectedComponentId, onSelect, onBeginDrag }: Props) {
   const jumperRoutes = useMemo(() => routeJumperWires(board, components), [board, components]);
   return (
     <>
@@ -948,6 +956,8 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
             : undefined,
         };
         if (component.kind === 'resistor') return <AxialResistor key={component.id} component={component} {...common} />;
+        if (component.kind === 'ntc-thermistor' || component.kind === 'heater-resistor') return <ThermalPartMesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'oled-i2c') return <OledMesh key={component.id} component={component} pixels={result.oledDisplays?.[component.id]?.pixels} {...common} />;
         if (component.kind === 'led') return <LedMesh key={component.id} component={component} current={result.componentCurrents[component.id] ?? 0} {...common} />;
         if (component.kind === 'capacitor') return <RadialCapacitorMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'jumper-wire') return (
@@ -960,6 +970,7 @@ export function ComponentMeshes({ board, components, result, selectedComponentId
         );
         if (component.kind === 'switch') return <TactileSwitchMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'ne555') return <Dip8Mesh key={component.id} component={component} {...common} />;
+        if (component.kind === 'arduino-nano') return <ArduinoNanoMesh key={component.id} component={component} powerOn={powerOn} current={result.componentCurrents[`${component.id}:led`] ?? 0} {...common} />;
         if (component.kind === 'tmp36') return <Tmp36Mesh key={component.id} component={component} {...common} />;
         if (component.kind === 'diode-1n4148') return <AxialDiodeMesh key={component.id} component={component} {...common} />;
         if (component.kind === 'zener-1n4733a') return <AxialDiodeMesh key={component.id} component={component} {...common} />;

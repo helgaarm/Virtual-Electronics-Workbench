@@ -9,6 +9,8 @@ describe('physical package lead spans', () => {
     'led',
     'capacitor',
     'switch',
+    'ntc-thermistor',
+    'heater-resistor',
   ] as ComponentKind[])('enforces realistic minimum and maximum spans for %s', (kind) => {
     const limits = PHYSICAL_PACKAGES[kind].leadSpanMm!;
 
@@ -22,5 +24,11 @@ describe('physical package lead spans', () => {
     expect(PHYSICAL_PACKAGES['jumper-wire'].leadSpanMm).toBeUndefined();
     expect(PHYSICAL_PACKAGES.ground.leadSpanMm).toBeUndefined();
     expect(leadSpanViolation('jumper-wire', 100)).toBeUndefined();
+  });
+
+  it('accepts a thermistor at exact board pitch despite coordinate subtraction roundoff', () => {
+    expect(leadSpanViolation('ntc-thermistor', 60.96 - 58.42)).toBeUndefined();
+    expect(leadSpanViolation('ntc-thermistor', 2.53)).toBe('too-short');
+    expect(leadSpanViolation('heater-resistor', 7.62)).toBe('too-short');
   });
 });

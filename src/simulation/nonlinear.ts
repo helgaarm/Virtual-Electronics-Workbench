@@ -89,7 +89,7 @@ export function evaluateNonlinearDevice(
     const controlNegativeV = nodeVoltage(nodeVoltages, component.controlNegativeNodeId);
     const normalizedControl = Math.max(
       -20,
-      Math.min(20, (controlPositiveV - controlNegativeV) / component.transitionVoltageV),
+      Math.min(20, (controlPositiveV - controlNegativeV - (component.controlThresholdV ?? 0)) / component.transitionVoltageV),
     );
     const hyperbolic = Math.tanh(normalizedControl);
     const fraction = (1 + hyperbolic) / 2;
@@ -209,7 +209,7 @@ export function evaluateNonlinearDevice(
 
 function invalidDeviceMessage(component: NonlinearComponent): SimulationMessage | undefined {
   if (component.kind === 'smooth-switch') {
-    if (![component.onResistanceOhms, component.transitionVoltageV]
+    if (!Number.isFinite(component.controlThresholdV ?? 0) || ![component.onResistanceOhms, component.transitionVoltageV]
       .every((value) => Number.isFinite(value) && value > 0)) {
       return {
         code: 'INVALID_SEMICONDUCTOR_PARAMETERS',

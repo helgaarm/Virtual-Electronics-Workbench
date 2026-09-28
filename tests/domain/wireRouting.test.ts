@@ -3,7 +3,8 @@ import { terminalEntries, type CapacitorComponent, type GroundComponent, type Ju
 import { createBreadboardDefinition, terminalHoleId } from '../../src/domain/physical/breadboard';
 import { PHYSICAL_PACKAGES } from '../../src/domain/physical/packages';
 import { routeJumperWire, routeJumperWires } from '../../src/domain/physical/wireRouting';
-import { createJumperCurve } from '../../src/workbench/scene/wireGeometry';
+import { createJumperCurve, createJumperCurves } from '../../src/workbench/scene/wireGeometry';
+import { arduinoNanoProject } from '../../src/domain/starters/arduinoNano';
 
 function distanceFromLineMm(point: { x: number; z: number }, start: { x: number; z: number }, end: { x: number; z: number }): number {
   const dx = end.x - start.x;
@@ -16,7 +17,7 @@ function expectCurveToClearComponent(
   route: ReturnType<typeof routeJumperWire>,
   component: Exclude<PlacedComponent, JumperWireComponent>,
 ) {
-  const curve = createJumperCurve(route)!;
+  const curves = createJumperCurves(route)!;
   const componentHoles = terminalEntries(component)
     .map(([, holeId]) => holeId)
     .map((holeId) => board.holes.find((hole) => hole.id === holeId)!);
@@ -29,13 +30,19 @@ function expectCurveToClearComponent(
   const bodyRadius = Math.max(packageDefinition.dimensionsMm.x, packageDefinition.dimensionsMm.z) / 2;
   const bodyBottom = center.y + packageDefinition.mountingHeightMm - packageDefinition.dimensionsMm.y / 2;
   const bodyTop = center.y + packageDefinition.mountingHeightMm + packageDefinition.dimensionsMm.y / 2;
-  const wireRadius = 0.58;
-
-  for (let index = 0; index <= 300; index += 1) {
-    const sample = curve.getPoint(index / 300);
-    const overlapsFootprint = Math.hypot(sample.x - center.x, sample.z - center.z) < bodyRadius + wireRadius;
-    const overlapsHeight = sample.y + wireRadius > bodyBottom && sample.y - wireRadius < bodyTop;
-    expect(overlapsFootprint && overlapsHeight).toBe(false);
+  // Check the actual conductor and selected insulation separately: stripped
+  // ends fit under low packages, but insulation must still clear their bodies.
+  const sections = [
+    { curve: curves.conductor, wireRadius: PHYSICAL_PACKAGES['jumper-wire'].leadDiameterMm / 2 },
+    ...curves.insulation.map((curve) => ({ curve, wireRadius: 0.58 })),
+  ];
+  for (const { curve, wireRadius } of sections) {
+    for (let index = 0; index <= 300; index += 1) {
+      const sample = curve.getPoint(index / 300);
+      const overlapsFootprint = Math.hypot(sample.x - center.x, sample.z - center.z) < bodyRadius + wireRadius;
+      const overlapsHeight = sample.y + wireRadius > bodyBottom && sample.y - wireRadius < bodyTop;
+      expect(overlapsFootprint && overlapsHeight).toBe(false);
+    }
   }
 }
 
@@ -68,6 +75,12 @@ describe('jumper wire routing', () => {
     expect(route[3].x).toBeCloseTo((route[0].x + route.at(-1)!.x) / 2);
     expect(route[3].z).toBeCloseTo(route[0].z);
     expect(route[3].y).toBeGreaterThan(route[0].y);
+  });
+
+  it.each(['C', 'I'] as const)('leaves the accessible %s row beside the Nano clear for normal jumper tips', (row) => {
+    const nano = arduinoNanoProject('blink').components.find((component) => component.kind === 'arduino-nano')!;
+    const adjacent = { ...wire, terminalHoleIds: { a: terminalHoleId(board.id, row, 6), b: terminalHoleId(board.id, row, 14) } };
+    expect(routeJumperWire(board, adjacent, [nano, adjacent])).toEqual(routeJumperWire(board, adjacent, [adjacent]));
   });
 
   it('moves laterally and above a component crossing the direct route', () => {

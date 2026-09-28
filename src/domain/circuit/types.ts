@@ -1,4 +1,6 @@
 import type { DigitalDevice, DigitalState } from './digital';
+import type { ThermalCircuit } from './thermal';
+import type { OledDevice } from './oled';
 
 export interface ElectricalNode {
   id: string;
@@ -91,6 +93,7 @@ export interface ElectricalSmoothTransconductance {
 }
 
 export interface ElectricalSmoothSwitch {
+  controlThresholdV?: number;
   id: string;
   kind: 'smooth-switch';
   positiveNodeId: string;
@@ -129,6 +132,8 @@ export type ElectricalComponent =
   | ElectricalSubcircuit;
 
 export interface Circuit {
+  thermal?: ThermalCircuit;
+  oleds?: OledDevice[];
   nodes: ElectricalNode[];
   groundNodeId: string;
   components: ElectricalComponent[];
@@ -142,6 +147,8 @@ export interface SimulationMessage {
 }
 
 export interface SimulationResult {
+  oledDisplays?: Record<string, { pixels: Uint8Array; powered: boolean }>;
+  sensorTemperaturesC?: Record<string, number>;
   status: 'ok' | 'warning' | 'error';
   nodeVoltages: Record<string, number>;
   componentCurrents: Record<string, number>;
@@ -163,6 +170,7 @@ export interface SimulationEngine {
 }
 
 export interface TransientState {
+  sensorTemperaturesC?: Record<string, number>;
   timeSeconds: number;
   capacitorVoltages: Record<string, number>;
   /** Last converged solution, used only as a Newton initial estimate. */
